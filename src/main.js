@@ -4,127 +4,106 @@ import "./style.css";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
+const peerCache = new Map();
+const MANUAL_KEY = "duovoice.manualIps";
+
+function setDetails(text) { $("details").textContent = text; }
+function renderPeers(preferred = "") {
+  const select = $("peer");
+  const current = preferred || select.value;
+  select.innerHTML = "";
+  const list = [...peerCache.values()].sort((a,b) => a.name.localeCompare(b.name));
+  if (!list.length) select.add(new Option("Aucun PC détecté — ajoutez une IP", ""));
+  for (const p of list) select.add(new Option(`${p.name} — ${p.address}`, p.address));
+  if (current && [...select.options].some(o => o.value === current)) select.value = current;
+}
 
 async function loadAutostart() {
-  const checkbox = $("autostart");
-  const details = $("autostartDetails");
-  if (!checkbox || !details) return;
-  try {
-    checkbox.checked = await isAutostartEnabled();
-  } catch (e) {
-    details.textContent = `Autostart indisponible : ${e}`;
-  }
+  try { $("autostart").checked = await isAutostartEnabled(); }
+  catch (e) { $("autostartDetails").textContent = `Autostart indisponible : ${e}`; }
 }
 
 async function loadDevices() {
   try {
     const devices = await invoke("list_devices");
-    $("input").innerHTML = "";
-    $("output").innerHTML = "";
-    for (const d of devices.inputs) $("input").add(new Option(d, d));
-    for (const d of devices.outputs) $("output").add(new Option(d, d));
+    const input = $("input"), output = $("output");
+    input.innerHTML = ""; output.innerHTML = "";
+    for (const d of devices.inputs) input.add(new Option(d, d));
+    for (const d of devices.outputs) output.add(new Option(d, d));
     const savedInput = localStorage.getItem("duovoice.input");
     const savedOutput = localStorage.getItem("duovoice.output");
-    if (savedInput && [...$("input").options].some(o=>o.value===savedInput)) $("input").value=savedInput;
-    if (savedOutput && [...$("output").options].some(o=>o.value===savedOutput)) $("output").value=savedOutput;
-  } catch (e) {
-    $("details").textContent = `Audio indisponible : ${e}`;
-  }
+    if (savedInput && [...input.options].some(o => o.value === savedInput)) input.value = savedInput;
+    if (savedOutput && [...output.options].some(o => o.value === savedOutput)) output.value = savedOutput;
+  } catch (e) { setDetails(`Audio indisponible : ${e}`); }
 }
 
-const peerCache = new Map();
-async function loadPeers(manual=false) {
+async function loadPeers(manual = false) {
   const refresh = $("refresh");
+  if (manual) { refresh.disabled = true; refresh.textContent = "…"; setDetails("Recherche des ordinateurs…"); }
   try {
-    if (manual) { refresh.classList.add("refreshing"); refresh.textContent = "…"; $("details").textContent = "Recherche des ordinateurs sur le réseau…"; }
     const peers = await invoke("list_peers");
     const now = Date.now();
-    for (const p of peers) peerCache.set(p.address, {...p, seenAt: now});
-    for (const [address, p] of peerCache) if (now - p.seenAt > 8000) peerCache.delete(address);
-    const select = $("peer"); const previous = select.value; select.innerHTML = "";
-    const list = [...peerCache.values()].sort((a,b)=>a.name.localeCompare(b.name));
-    if (!list.length) select.add(new Option("Aucun autre PC détecté", ""));
-    for (const p of list) { const opt=new Option(`${p.name} — ${p.address}`,p.address); opt.dataset.port=p.port; select.add(opt); }
-    if (previous && [...select.options].some(o=>o.value===previous)) select.value=previous;
-    if (manual) $("details").textContent = list.length ? `${list.length} ordinateur(s) détecté(s).` : "Aucun autre PC détecté.";
-  } catch(e) { $("details").textContent=`Découverte réseau : ${e}`; }
-  finally { if(manual){refresh.classList.remove("refreshing"); refresh.textContent="↻";} }
+    for (const p of peers) peerCache.set(p.address, { ...p, seenAt: now });
+    for (const [address, p] of peerCache) if (!p.manual && now - p.seenAt > 15000) peerCache.delete(address);
+    renderPeers();
+    if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
+  } catch (e) { setDetails(`Détection réseau : ${e}`); }
+  finally { if (manual) { refresh.disabled = false; refresh.textContent = "↻"; } }
+}
+
+function loadManualIps() {
+  try {
+    const ips = JSON.parse(localStorage.getItem(MANUAL_KEY) || "[]");
+    for (const address of ips) {
+      peerCache.set(address, { name: `PC — ${address}`, address, port: 39472, seenAt: Date.now(), manual: true });
+    }
+  } catch {}
+}
+
+async function addManualIp() {
+  const address = $("manualIp").value.trim();
+  if (!address) return;
+  try {
+    const p = await invoke("add_manual_peer", { address });
+    peerCache.set(p.address, { ...p, manual: true, seenAt: Date.now() });
+    const ips = new Set(JSON.parse(localStorage.getItem(MANUAL_KEY) || "[]"));
+    ips.add(p.address); localStorage.setItem(MANUAL_KEY, JSON.stringify([...ips]));
+    renderPeers(p.address); $("manualIp").value = ""; setDetails(`IP ${p.address} ajoutée.`);
+  } catch (e) { setDetails(`IP invalide : ${e}`); }
 }
 
 async function connect() {
   const peer = $("peer").value;
-  if (!peer) return;
+  if (!peer) { setDetails("Sélectionnez un ordinateur ou ajoutez une IP."); return; }
+  const button = $("connect"); button.disabled = true;
   try {
     if (!connected) {
-      await invoke("start_audio", {
-        remote: peer,
-        input: $("input").value || null,
-        output: $("output").value || null
-      });
-      connected = true;
-      $("connect").textContent = "Se déconnecter";
-      $("status").textContent = "Connecté";
-      $("status").className = "status online";
-      $("details").textContent = "Audio bidirectionnel actif.";
+      setDetails(`Connexion à ${peer}…`);
+      await invoke("start_audio", { remote: peer, input: $("input").value || null, output: $("output").value || null });
+      connected = true; button.textContent = "Se déconnecter"; $("status").textContent = "Connecté"; $("status").className = "status online"; setDetails("Audio bidirectionnel actif.");
     } else {
       await invoke("stop_audio");
-      connected = false;
-      $("connect").textContent = "Se connecter";
-      $("status").textContent = "Hors ligne";
-      $("status").className = "status offline";
-      $("details").textContent = "Déconnecté.";
+      connected = false; button.textContent = "Se connecter"; $("status").textContent = "Hors ligne"; $("status").className = "status offline"; setDetails("Déconnecté.");
     }
-  } catch (e) {
-    $("details").textContent = `Erreur audio : ${e}`;
-  }
+  } catch (e) { setDetails(`Connexion impossible : ${e}`); }
+  finally { button.disabled = false; }
 }
 
 $("connect").addEventListener("click", connect);
 $("refresh").addEventListener("click", () => loadPeers(true));
-$("volume").addEventListener("input", async (e) => {
-  $("volumeValue").textContent = `${e.target.value}%`;
-  if (connected) await invoke("set_volume", { volume: Number(e.target.value) / 100 });
-});
-$("mute").addEventListener("click", async () => {
-  if (!connected) return;
-  const muted = await invoke("toggle_mute");
-  $("mute").textContent = muted ? "🔇 Unmute" : "🎙️ Mute";
-});
-$("input").addEventListener("change", async () => {
-  localStorage.setItem("duovoice.input", $("input").value);
-  if (connected) $("details").textContent = "Le nouveau micro sera utilisé à la prochaine connexion.";
-});
-$("output").addEventListener("change", async () => {
-  localStorage.setItem("duovoice.output", $("output").value);
-  if (connected) $("details").textContent = "La nouvelle sortie sera utilisée à la prochaine connexion.";
-});
+$("addIp").addEventListener("click", addManualIp);
+$("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
+$("volume").addEventListener("input", async e => { $("volumeValue").textContent = `${e.target.value}%`; if (connected) await invoke("set_volume", { volume: Number(e.target.value) / 100 }); });
+$("mute").addEventListener("click", async () => { if (!connected) return; const muted = await invoke("toggle_mute"); $("mute").textContent = muted ? "🔇 Unmute" : "🎙️ Mute"; });
+$("input").addEventListener("change", () => localStorage.setItem("duovoice.input", $("input").value));
+$("output").addEventListener("change", () => localStorage.setItem("duovoice.output", $("output").value));
 
-const autostart = $("autostart");
-if (autostart) {
-  autostart.addEventListener("change", async (e) => {
-    const details = $("autostartDetails");
-    try {
-      if (e.target.checked) await enableAutostart();
-      else await disableAutostart();
-      if (details) details.textContent = e.target.checked
-        ? "DuoVoice démarrera avec Windows/Linux et restera dans le tray."
-        : "Démarrage automatique désactivé.";
-    } catch (err) {
-      e.target.checked = await isAutostartEnabled().catch(() => false);
-      if (details) details.textContent = `Impossible de modifier le démarrage automatique : ${err}`;
-    }
-  });
-}
+$("settingsBtn").addEventListener("click", () => { $("mainView").classList.add("hidden"); $("settingsView").classList.remove("hidden"); });
+$("backBtn").addEventListener("click", () => { $("settingsView").classList.add("hidden"); $("mainView").classList.remove("hidden"); });
+$("autostart").addEventListener("change", async e => { try { if (e.target.checked) await enableAutostart(); else await disableAutostart(); $("autostartDetails").textContent = e.target.checked ? "Démarrage automatique activé." : "Démarrage automatique désactivé."; } catch (err) { e.target.checked = await isAutostartEnabled().catch(() => false); $("autostartDetails").textContent = `Impossible de modifier l'autostart : ${err}`; } });
+$("startHidden").checked = localStorage.getItem("duovoice.startHidden") !== "false";
+$("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
+$("startHidden").addEventListener("change", () => localStorage.setItem("duovoice.startHidden", String($("startHidden").checked)));
+$("closeAction").addEventListener("change", async () => { const value = $("closeAction").value; localStorage.setItem("duovoice.closeAction", value); try { await invoke("set_close_action", { action: value }); } catch (e) { setDetails(`Réglage fermeture : ${e}`); } });
 
-loadDevices();
-loadAutostart();
-
-
-const startHidden = $("startHidden");
-const closeAction = $("closeAction");
-startHidden.checked = localStorage.getItem("duovoice.startHidden") !== "false";
-closeAction.value = localStorage.getItem("duovoice.closeAction") || "tray";
-startHidden.addEventListener("change", ()=>localStorage.setItem("duovoice.startHidden", String(startHidden.checked)));
-closeAction.addEventListener("change", async ()=>{ localStorage.setItem("duovoice.closeAction", closeAction.value); try { await invoke("set_close_action", { action: closeAction.value }); } catch(e) { $("details").textContent=`Réglage fermeture : ${e}`; } });
-loadPeers();
-setInterval(()=>loadPeers(false), 3000);
+loadManualIps(); loadDevices(); loadAutostart(); loadPeers(); setInterval(() => loadPeers(false), 3000);

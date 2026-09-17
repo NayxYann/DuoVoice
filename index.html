@@ -8,50 +8,55 @@
 <body>
   <main class="app">
     <header>
-      <div>
-        <h1>DuoVoice</h1>
-        <p>Intercom local</p>
+      <div><h1>DuoVoice</h1><p>Intercom local</p></div>
+      <div class="header-actions">
+        <button id="settingsBtn" class="icon-btn" title="Paramètres">⚙</button>
+        <span id="status" class="status offline">Hors ligne</span>
       </div>
-      <span id="status" class="status offline">Hors ligne</span>
     </header>
 
-    <section class="card">
-      <label>Ordinateur distant</label>
-      <div class="row">
-        <select id="peer"><option value="">Recherche d'un PC…</option></select>
-        <button id="refresh" title="Actualiser">↻</button>
-      </div>
-      <button id="connect" class="primary">Se connecter</button>
+    <section id="mainView">
+      <section class="card">
+        <label>Ordinateur distant</label>
+        <div class="row">
+          <select id="peer"><option value="">Recherche d'un PC…</option></select>
+          <button id="refresh" class="icon-btn" title="Actualiser la détection">↻</button>
+        </div>
+        <div class="manual-row">
+          <input id="manualIp" type="text" inputmode="decimal" placeholder="IP du PC, ex. 192.168.1.25">
+          <button id="addIp">+</button>
+        </div>
+        <p class="hint">Vous pouvez aussi ajouter directement l'adresse IP.</p>
+        <button id="connect" class="primary">Se connecter</button>
+      </section>
+
+      <section class="card">
+        <label>Microphone</label>
+        <select id="input"></select>
+        <label>Sortie audio</label>
+        <select id="output"></select>
+        <div class="volume-line"><label for="volume">Volume distant</label><span id="volumeValue">100%</span></div>
+        <input id="volume" type="range" min="0" max="100" value="100">
+        <button id="mute" class="secondary">🎙️ Mute</button>
+      </section>
+
+      <section class="card small"><strong>État</strong><p id="details">Recherche des ordinateurs sur le réseau local…</p></section>
     </section>
 
-    <section class="card">
-      <label>Microphone</label>
-      <select id="input"></select>
-
-      <label>Sortie audio</label>
-      <select id="output"></select>
-
-      <div class="volume-line">
-        <label for="volume">Volume distant</label>
-        <span id="volumeValue">100%</span>
-      </div>
-      <input id="volume" type="range" min="0" max="100" value="100">
-
-      <button id="mute" class="secondary">🎙️ Mute</button>
-    </section>
-
-    <section class="card small">
-      <strong>État</strong>
-      <p id="details">Les deux PC doivent être sur le même réseau local.</p>
-    </section>
-
-    <section class="card small">
-      <div class="setting-title">Paramètres</div>
-      <label class="check-row"><input id="autostart" type="checkbox"><span>Démarrer DuoVoice avec Windows/Linux</span></label>
-      <label class="check-row"><input id="startHidden" type="checkbox"><span>Démarrer minimisé dans le tray</span></label>
-      <label>À la fermeture</label>
-      <select id="closeAction"><option value="tray">Réduire dans le tray</option><option value="quit">Quitter DuoVoice</option></select>
-      <p id="autostartDetails">Les réglages sont enregistrés automatiquement.</p>
+    <section id="settingsView" class="hidden">
+      <div class="settings-head"><button id="backBtn" class="secondary small-btn">← Retour</button><h2>Paramètres</h2></div>
+      <section class="card">
+        <h3>Démarrage</h3>
+        <label class="check-row"><input id="autostart" type="checkbox"><span>Démarrer DuoVoice avec Windows/Linux</span></label>
+        <label class="check-row"><input id="startHidden" type="checkbox"><span>Démarrer minimisé dans le tray</span></label>
+        <p id="autostartDetails" class="hint">Les réglages sont enregistrés automatiquement.</p>
+      </section>
+      <section class="card">
+        <h3>Fermeture</h3>
+        <label>Action du bouton fermer</label>
+        <select id="closeAction"><option value="tray">Réduire dans le tray</option><option value="quit">Quitter DuoVoice</option></select>
+        <p class="hint">En mode tray, la fenêtre disparaît aussi de la barre des tâches.</p>
+      </section>
     </section>
   </main>
   <script type="module" src="/src/main.js"></script>

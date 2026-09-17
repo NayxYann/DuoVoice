@@ -5,7 +5,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream, StreamConfig};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
     sync::{Arc, Mutex},
@@ -42,6 +42,16 @@ struct AudioState {
     close_to_tray: std::sync::atomic::AtomicBool,
 }
 
+#[derive(Clone)]
+struct DiscoveredPeer {
+    peer: Peer,
+    last_seen: Instant,
+}
+
+struct DiscoveryState {
+    peers: Mutex<HashMap<String, DiscoveredPeer>>,
+}
+
 struct AudioEngine {
     stop: Arc<std::sync::atomic::AtomicBool>,
     volume: Arc<Mutex<f32>>,
@@ -72,38 +82,68 @@ fn list_devices() -> DeviceLists {
 }
 
 #[tauri::command]
-fn list_peers() -> Vec<Peer> {
-    let Ok(socket) = UdpSocket::bind(("0.0.0.0", DISCOVERY_PORT)) else { return vec![] };
-    let _ = socket.set_read_timeout(Some(Duration::from_millis(120)));
-    let hostname = hostname::get().ok().and_then(|h| h.into_string().ok()).unwrap_or_else(|| "DuoVoice".into());
-    let msg = format!("DUOVOICE|{}|{}", hostname, AUDIO_PORT);
-    let _ = socket.set_broadcast(true);
-    let _ = socket.send_to(msg.as_bytes(), SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
+fn list_peers(state: State<'_, Arc<DiscoveryState>>) -> Vec<Peer> {
+    let now = Instant::now();
+    let mut peers = state.peers.lock().unwrap();
+    peers.retain(|_, p| now.duration_since(p.last_seen) < Duration::from_secs(15));
+    peers.values().map(|p| p.peer.clone()).collect()
+}
 
-    let start = Instant::now();
-    let mut peers = HashMap::<String, Peer>::new();
-    let mut buf = [0u8; 512];
-    while start.elapsed() < Duration::from_millis(250) {
-        match socket.recv_from(&mut buf) {
-            Ok((n, addr)) => {
-                if let Ok(s) = std::str::from_utf8(&buf[..n]) {
-                    let p: Vec<&str> = s.split('|').collect();
-                    if p.len() == 3 && p[0] == "DUOVOICE" && p[1] != hostname {
-                        if let Ok(port) = p[2].parse::<u16>() {
-                            peers.insert(addr.ip().to_string(), Peer {
-                                name: p[1].to_string(),
-                                address: addr.ip().to_string(),
-                                port,
-                            });
+fn start_discovery(app_state: Arc<DiscoveryState>) {
+    thread::spawn(move || {
+        let hostname = hostname::get().ok()
+            .and_then(|h| h.into_string().ok())
+            .unwrap_or_else(|| "DuoVoice".into());
+
+        let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT)) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let _ = socket.set_broadcast(true);
+        let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
+
+        let mut last_broadcast = Instant::now() - Duration::from_secs(10);
+        let mut buf = [0u8; 512];
+
+        loop {
+            if last_broadcast.elapsed() >= Duration::from_secs(2) {
+                let msg = format!("DUOVOICE|{}|{}", hostname, AUDIO_PORT);
+                let _ = socket.send_to(&msg, SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
+                last_broadcast = Instant::now();
+            }
+
+            match socket.recv_from(&mut buf) {
+                Ok((n, addr)) => {
+                    if let Ok(text) = std::str::from_utf8(&buf[..n]) {
+                        let parts: Vec<&str> = text.split('|').collect();
+                        if parts.len() == 3 && parts[0] == "DUOVOICE" && parts[1] != hostname {
+                            if let Ok(port) = parts[2].parse::<u16>() {
+                                let ip = addr.ip().to_string();
+                                app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
+                                    peer: Peer { name: parts[1].to_string(), address: ip, port },
+                                    last_seen: Instant::now(),
+                                });
+                            }
                         }
                     }
                 }
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock => {}
+                Err(_) => break,
             }
-            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => break,
-            Err(_) => break,
         }
+    });
+}
+
+#[tauri::command]
+fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Result<Peer, String> {
+    let address = address.trim().to_string();
+    let ip: Ipv4Addr = address.parse().map_err(|_| "Adresse IPv4 invalide".to_string())?;
+    if ip.is_unspecified() || ip.is_multicast() || ip.is_broadcast() {
+        return Err("Cette adresse IPv4 ne peut pas être utilisée".into());
     }
-    peers.into_values().collect()
+    let peer = Peer { name: format!("PC — {}", ip), address: ip.to_string(), port: AUDIO_PORT };
+    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600) });
+    Ok(peer)
 }
 
 fn choose_device(host: &cpal::Host, name: Option<&str>, input: bool) -> Result<cpal::Device, String> {
@@ -226,21 +266,29 @@ fn start_audio(
 
     let output_config: StreamConfig = out_cfg.clone().into();
     let output_channels = output_config.channels as usize;
-    let rx_buf = Arc::new(Mutex::new(Vec::<i16>::new()));
-    let rx_buf_thread = Arc::clone(&rx_buf);
+    let rx_queue = Arc::new(Mutex::new(VecDeque::<i16>::with_capacity(FRAME_SAMPLES * 40)));
+    let rx_queue_net = Arc::clone(&rx_queue);
     let stop_net = Arc::clone(&stop);
     let network = thread::spawn(move || {
         let mut buf = [0u8; 4096];
+        let mut last_seq: Option<u32> = None;
         while !stop_net.load(std::sync::atomic::Ordering::Relaxed) {
             match rx.recv_from(&mut buf) {
                 Ok((n, _)) => {
                     if let Some(packet) = read_packet(&buf[..n]) {
-                        let mut q = rx_buf_thread.lock().unwrap();
-                        q.extend(packet.samples);
-                        if q.len() > FRAME_SAMPLES * 24 { q.drain(..FRAME_SAMPLES * 8); }
+                        if let Some(prev) = last_seq {
+                            let delta = packet.seq.wrapping_sub(prev);
+                            if delta == 0 || delta > u32::MAX / 2 { continue; }
+                        }
+                        last_seq = Some(packet.seq);
+                        if let Ok(mut q) = rx_queue_net.try_lock() {
+                            q.extend(packet.samples);
+                            let max_samples = FRAME_SAMPLES * 40;
+                            while q.len() > max_samples { q.pop_front(); }
+                        }
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(2)),
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(1)),
                 Err(_) => break,
             }
         }
@@ -248,33 +296,59 @@ fn start_audio(
 
     let output_volume = Arc::clone(&volume);
     let output_stop = Arc::clone(&stop);
-    let output_queue = Arc::clone(&rx_buf);
     let output_stream = match out_cfg.sample_format() {
-        SampleFormat::F32 => output_device.build_output_stream(output_config, move |data: &mut [f32], _| {
-            let vol = *output_volume.lock().unwrap();
-            let mut q = output_queue.lock().unwrap();
-            for frame in data.chunks_mut(output_channels.max(1)) {
-                let v = q.pop().unwrap_or(0) as f32 / 32768.0 * vol;
-                for s in frame { *s = v; }
-            }
-            if output_stop.load(std::sync::atomic::Ordering::Relaxed) { for s in data { *s = 0.0; } }
-        }, |_| {}, None),
-        SampleFormat::I16 => output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
-            let vol = *output_volume.lock().unwrap();
-            let mut q = output_queue.lock().unwrap();
-            for frame in data.chunks_mut(output_channels.max(1)) {
-                let v = (q.pop().unwrap_or(0) as f32 * vol).clamp(-32768.0, 32767.0) as i16;
-                for s in frame { *s = v; }
-            }
-        }, |_| {}, None),
-        SampleFormat::U16 => output_device.build_output_stream(output_config, move |data: &mut [u16], _| {
-            let vol = *output_volume.lock().unwrap();
-            let mut q = output_queue.lock().unwrap();
-            for frame in data.chunks_mut(output_channels.max(1)) {
-                let v = (q.pop().unwrap_or(0) as f32 * vol + 32768.0).clamp(0.0, 65535.0) as u16;
-                for s in frame { *s = v; }
-            }
-        }, |_| {}, None),
+        SampleFormat::F32 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(output_config, move |data: &mut [f32], _| {
+                let vol = *output_volume.lock().unwrap();
+                if let Ok(mut queue) = q.try_lock() {
+                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
+                    for frame in data.chunks_mut(output_channels.max(1)) {
+                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
+                        let value = sample as f32 / 32768.0 * vol;
+                        for s in frame { *s = value; }
+                    }
+                } else {
+                    for s in data.iter_mut() { *s = 0.0; }
+                }
+                if output_stop.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0.0; } }
+            }, |_| {}, None)
+        },
+        SampleFormat::I16 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
+                let vol = *output_volume.lock().unwrap();
+                if let Ok(mut queue) = q.try_lock() {
+                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
+                    for frame in data.chunks_mut(output_channels.max(1)) {
+                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
+                        let value = (sample as f32 * vol).clamp(-32768.0, 32767.0) as i16;
+                        for s in frame { *s = value; }
+                    }
+                } else {
+                    for s in data.iter_mut() { *s = 0; }
+                }
+            }, |_| {}, None)
+        },
+        SampleFormat::U16 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(output_config, move |data: &mut [u16], _| {
+                let vol = *output_volume.lock().unwrap();
+                if let Ok(mut queue) = q.try_lock() {
+                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
+                    for frame in data.chunks_mut(output_channels.max(1)) {
+                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
+                        let value = (sample as f32 * vol + 32768.0).clamp(0.0, 65535.0) as u16;
+                        for s in frame { *s = value; }
+                    }
+                } else {
+                    for s in data.iter_mut() { *s = 32768; }
+                }
+            }, |_| {}, None)
+        },
         _ => return Err("Format de sortie non pris en charge".into()),
     }.map_err(|e| format!("Ouverture de la sortie impossible: {e}"))?;
 
@@ -353,12 +427,13 @@ fn main() {
 
     let result = tauri::Builder::default()
         .manage(AudioState { engine: Mutex::new(None), close_to_tray: std::sync::atomic::AtomicBool::new(true) })
+        .manage(Arc::new(DiscoveryState { peers: Mutex::new(HashMap::new()) }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, start_audio, stop_audio, set_volume, toggle_mute, set_input, set_output, set_close_action
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_input, set_output, set_close_action
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -374,6 +449,8 @@ fn main() {
         })
         .setup(move |app| {
             startup_log("Tauri setup entered");
+            let discovery = app.state::<Arc<DiscoveryState>>().inner().clone();
+            start_discovery(discovery);
 
             let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
