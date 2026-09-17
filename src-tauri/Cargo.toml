@@ -1,6 +1,6 @@
 [package]
 name = "duovoice"
-version = "2.0.0"
+version = "3.0.0"
 description = "Simple low-latency LAN intercom"
 authors = ["DuoVoice"]
 edition = "2021"
@@ -18,4 +18,6 @@ serde_json = "1"
 hostname = "0.4"
 crossbeam-channel = "0.5"
 tauri-plugin-autostart = "2.5.1"
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"
 nnnoiseless = "0.5.2"

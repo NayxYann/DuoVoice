@@ -1,5 +1,7 @@
 # DuoVoice
 
+Version actuelle : **3.0.0**
+
 DuoVoice is a small local-network intercom for Windows and Linux.
 
 ## V1 test build
@@ -67,8 +69,32 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 
 ## Réduction de bruit
 
-La version 1.0 conserve les améliorations de la version 2.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
+La version 3.0 conserve les améliorations de la version 2.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
 
 Le signal sec est retardé du même bloc de 10 ms que le traitement RNNoise avant le mélange d'intensité. Cela évite de mélanger un signal direct avec sa version retardée, ce qui produirait un effet de voix doublée.
 
 La fonction est désactivable à chaud. Son état ON/OFF et son intensité sont sauvegardés localement. Le réglage d'intensité agit comme un mixage entre le signal brut et le signal traité, avec trois préréglages : Naturel, Équilibré et Agressif.
+
+## v3.0 — mise à jour automatique
+
+DuoVoice 3.0 intègre le plugin officiel Tauri Updater. L'application vérifie au lancement si une version plus récente est disponible. La page principale affiche l'état de mise à jour en haut et une version disponible est cliquable pour lancer le téléchargement et l'installation. Les paramètres affichent également la version installée.
+
+### Publication GitHub
+
+Le workflow `.github/workflows/release.yml` publie Windows puis Linux sur une GitHub Release lorsqu'un tag `vX.Y.Z` est poussé. Il génère aussi `latest.json` pour l'updater et les signatures nécessaires.
+
+Avant la première publication :
+
+1. Générer une paire de clés Tauri :
+   `npm run tauri signer generate -- -w ~/.tauri/duovoice.key`
+2. Conserver la clé privée **hors du dépôt**.
+3. Ajouter dans les secrets GitHub du dépôt :
+   - `TAURI_SIGNING_PRIVATE_KEY` : contenu de la clé privée.
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : mot de passe de la clé si utilisé.
+   - `TAURI_SIGNING_PUBLIC_KEY` : clé publique affichée lors de la génération.
+4. Créer un tag, par exemple `v3.0.0`, puis le pousser :
+   `git tag v3.0.0 && git push origin v3.0.0`
+
+Le workflow remplace automatiquement les placeholders de `src-tauri/tauri.release.conf.json` par l'URL GitHub Releases du dépôt et la clé publique. La clé privée reste uniquement dans les secrets GitHub. Tauri exige une signature pour les mises à jour et le fichier `.sig` doit correspondre exactement à l'artefact publié.
+
+> Important : ne commit jamais la clé privée. Si elle est perdue, les versions déjà installées ne pourront plus vérifier les futures mises à jour avec cette clé.

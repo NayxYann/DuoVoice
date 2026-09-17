@@ -1,0 +1,118 @@
+name: Release DuoVoice
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to release (example: v3.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+  TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Configure updater
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
+          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
+          sed -i "s|__TAURI_UPDATER_PUBKEY__|${TAURI_SIGNING_PUBLIC_KEY}|g" src-tauri/tauri.release.conf.json
+
+      - name: Publish Windows release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          releaseBody: 'DuoVoice update release.'
+          releaseDraft: false
+          prerelease: false
+          projectPath: .
+          args: --config src-tauri/tauri.release.conf.json
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+
+  linux:
+    needs: windows
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libasound2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Configure updater
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
+          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
+          sed -i "s|__TAURI_UPDATER_PUBKEY__|${TAURI_SIGNING_PUBLIC_KEY}|g" src-tauri/tauri.release.conf.json
+
+      - name: Publish Linux release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          releaseDraft: false
+          prerelease: false
+          projectPath: .
+          args: --config src-tauri/tauri.release.conf.json
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true

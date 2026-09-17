@@ -1,10 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
+let disconnecting = false;
+let updateState = { status: "checking", update: null };
 const peerCache = new Map();
 const MANUAL_KEY = "duovoice.manualIps";
 const VOLUME_KEY = "duovoice.volume";
@@ -14,8 +18,8 @@ const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
+const APP_VERSION = "3.0.0";
 let connectedPeer = "";
-let paused = false;
 
 
 
@@ -105,25 +109,16 @@ function renderFavorites() {
     const peer = peerCache.get(favorite.address);
     const available = !!peer;
     const isActive = connected && connectedPeer === favorite.address;
-    const isPaused = isActive && paused;
     const item = document.createElement("div");
     item.className = `favorite-item${available ? " available" : " unavailable"}${isActive ? " active" : ""}`;
 
     const connectBtn = document.createElement("button");
     connectBtn.type = "button";
     connectBtn.className = "favorite-action favorite-connect";
-    connectBtn.textContent = "▶";
+    connectBtn.textContent = "↗";
     connectBtn.title = isActive ? "Déjà connecté" : "Se connecter";
     connectBtn.disabled = !available || isActive;
     connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
-
-    const pauseBtn = document.createElement("button");
-    pauseBtn.type = "button";
-    pauseBtn.className = "favorite-action favorite-pause";
-    pauseBtn.textContent = isPaused ? "▶" : "Ⅱ";
-    pauseBtn.title = isPaused ? "Reprendre" : "Mettre en pause";
-    pauseBtn.disabled = !isActive;
-    pauseBtn.addEventListener("click", () => togglePauseFor(favorite.address));
 
     const disconnectBtn = document.createElement("button");
     disconnectBtn.type = "button";
@@ -131,16 +126,20 @@ function renderFavorites() {
     disconnectBtn.textContent = "×";
     disconnectBtn.title = "Se déconnecter";
     disconnectBtn.disabled = !isActive;
-    disconnectBtn.addEventListener("click", () => disconnect());
+    disconnectBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      disconnectFromFavorite(favorite.address);
+    });
 
     item.innerHTML = `
       <span class="favorite-dot"></span>
       <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
-      <span class="favorite-status">${isActive ? (isPaused ? "En pause" : "Connecté") : (available ? "Disponible" : "Indisponible")}</span>
+      <span class="favorite-status">${isActive ? "Connecté" : (available ? "Disponible" : "Indisponible")}</span>
     `;
     const actions = document.createElement("span");
     actions.className = "favorite-actions";
-    actions.append(connectBtn, pauseBtn, disconnectBtn);
+    actions.append(connectBtn, disconnectBtn);
     item.appendChild(actions);
     box.appendChild(item);
   }
@@ -311,6 +310,7 @@ async function updateLatency() {
 }
 
 async function connectToAddress(address) {
+  if (!address || disconnecting) return;
   const button = $("connect");
   button.disabled = true;
   try {
@@ -321,54 +321,52 @@ async function connectToAddress(address) {
     await applyVolume();
     connected = true;
     connectedPeer = address;
-    paused = false;
     $("peer").value = address;
     button.textContent = "Se déconnecter";
     $("status").innerHTML = '<span class="status-dot"></span>Connecté';
     $("status").className = "status online";
     setDetails("Audio bidirectionnel actif.");
     renderFavorites();
+    await updateLatency();
+checkForUpdates();
   } catch (e) {
     connected = false;
     connectedPeer = "";
-    paused = false;
     button.textContent = "Se connecter";
     $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
     $("status").className = "status offline";
     setDetails(`Connexion impossible : ${e}`);
     renderFavorites();
-  } finally { button.disabled = false; }
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function disconnect() {
+  if (disconnecting) return;
+  disconnecting = true;
+  const oldPeer = connectedPeer;
+  connected = false;
+  connectedPeer = "";
+  $("connect").textContent = "Se connecter";
+  $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+  $("status").className = "status offline";
+  $("latency").textContent = "— ms";
+  renderFavorites();
   try {
     await invoke("stop_audio");
-    connected = false;
-    connectedPeer = "";
-    paused = false;
-    $("connect").textContent = "Se connecter";
-    $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
-    $("status").className = "status offline";
-    setDetails("Déconnecté.");
+    setDetails(oldPeer ? "Déconnecté." : "Audio arrêté.");
   } catch (e) {
-    setDetails(`Déconnexion impossible : ${e}`);
-    throw e;
+    setDetails(`Déconnexion : ${e}`);
   } finally {
+    disconnecting = false;
     renderFavorites();
   }
 }
 
-async function togglePauseFor(address) {
+async function disconnectFromFavorite(address) {
   if (!connected || connectedPeer !== address) return;
-  try {
-    paused = !paused;
-    await invoke("set_paused", { paused });
-    setDetails(paused ? "Communication audio en pause." : "Audio bidirectionnel actif.");
-    renderFavorites();
-  } catch (e) {
-    paused = !paused;
-    setDetails(`Pause audio : ${e}`);
-  }
+  await disconnect();
 }
 
 async function connect() {
@@ -385,6 +383,67 @@ async function connect() {
   await connectToAddress(peer);
 }
 
+
+async function setUpdateBanner(status, update = null, error = "") {
+  updateState = { status, update };
+  const banner = $("updateBanner");
+  if (!banner) return;
+  banner.className = `update-banner ${status}`;
+  banner.disabled = false;
+  banner.onclick = null;
+  if (status === "checking") {
+    banner.textContent = "↻ Vérification des mises à jour…";
+  } else if (status === "current") {
+    banner.textContent = `✓ DuoVoice est à jour · v${APP_VERSION}`;
+  } else if (status === "available") {
+    banner.textContent = `↑ Mise à jour disponible · v${update.version} — cliquer pour installer`;
+    banner.onclick = installUpdate;
+  } else {
+    banner.textContent = `⚠ Mises à jour indisponibles · v${APP_VERSION}`;
+    banner.title = error || "Vérification impossible";
+  }
+}
+
+async function checkForUpdates() {
+  await setUpdateBanner("checking");
+  try {
+    const update = await check();
+    if (update) {
+      await setUpdateBanner("available", update);
+    } else {
+      await setUpdateBanner("current");
+    }
+  } catch (e) {
+    await setUpdateBanner("error", null, String(e));
+  }
+}
+
+async function installUpdate() {
+  const update = updateState.update;
+  if (!update || updateState.status !== "available") return;
+  const banner = $("updateBanner");
+  banner.disabled = true;
+  banner.textContent = `Téléchargement de v${update.version}…`;
+  try {
+    await update.downloadAndInstall((event) => {
+      if (event.event === "Started") {
+        const total = event.data.contentLength || 0;
+        banner.textContent = total ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`;
+      } else if (event.event === "Progress") {
+        const total = event.data.contentLength || 0;
+        const downloaded = event.data.chunkLength || 0;
+        if (total > 0) banner.textContent = `Téléchargement de v${update.version}…`;
+      } else if (event.event === "Finished") {
+        banner.textContent = "Installation terminée. Redémarrage…";
+      }
+    });
+    try { await relaunch(); } catch { window.location.reload(); }
+  } catch (e) {
+    banner.disabled = false;
+    await setUpdateBanner("available", update);
+    setDetails(`Mise à jour impossible : ${e}`);
+  }
+}
 
 $("connect").addEventListener("click", connect);
 $("refresh").addEventListener("click", () => loadPeers(true));
@@ -446,6 +505,8 @@ $("output").addEventListener("change", () => localStorage.setItem("duovoice.outp
 
 $("settingsBtn").addEventListener("click", showSettings);
 $("backBtn").addEventListener("click", showMain);
+$("checkUpdateBtn").addEventListener("click", checkForUpdates);
+$("appVersion").textContent = `v${APP_VERSION}`;
 
 $("autostart").addEventListener("change", async e => {
   try {

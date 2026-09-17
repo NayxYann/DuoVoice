@@ -119,9 +119,27 @@ input[type=range]{width:100%;margin:3px 0 9px;accent-color:var(--accent)}
 .favorite-action:disabled{opacity:.22}
 .favorite-connect{background:#123b28;border-color:#1f7a4d;color:#63e49b}
 .favorite-connect:hover:not(:disabled){background:#175336}
-.favorite-pause{background:#343a44;border-color:#59616e;color:#d3d8e0}
-.favorite-pause:hover:not(:disabled){background:#424a56}
 .favorite-disconnect{background:#421f26;border-color:#8a3544;color:#ff8191}
 .favorite-disconnect:hover:not(:disabled){background:#5a2731}
 .favorite-item.active .favorite-dot{background:#45e695;box-shadow:0 0 8px #45e69577}
 @media(min-width:761px){.app{min-height:720px}.main-grid{min-height:440px}}
+
+/* v3.0 — update status, settings rhythm and refined favorite actions */
+.update-banner{width:100%;min-height:36px;margin:0 0 13px;padding:0 13px;border-radius:10px;border:1px solid #2b313b;background:#171b22;color:#aeb7c5;font-size:12px;font-weight:700;text-align:left;display:flex;align-items:center;justify-content:flex-start;transition:background .15s ease,border-color .15s ease,color .15s ease}
+.update-banner.checking{cursor:default}
+.update-banner.current{background:#102e20;border-color:#1f6c47;color:#70dfa0}
+.update-banner.available{background:var(--accent-soft);border-color:var(--accent);color:#f3f5f8;cursor:pointer}
+.update-banner.error{background:#2c171d;border-color:#71313c;color:#ff9eaa;cursor:default}
+.update-banner:disabled{opacity:1}
+.update-banner.available:hover{filter:brightness(1.12)}
+#settingsView{display:flex;flex-direction:column;gap:13px}
+#settingsView.hidden{display:none!important}
+#settingsView>.card{margin:0}
+.favorite-actions{gap:6px}
+.favorite-action{width:32px;height:32px;min-width:32px;padding:0;display:grid;place-items:center;align-content:center;justify-content:center;border-radius:8px;border:1px solid transparent;font-weight:800;font-size:17px;line-height:1;font-family:system-ui,sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 2px 6px rgba(0,0,0,.18)}
+.favorite-connect{font-size:15px;background:#123b28;border-color:#1f7a4d;color:#63e49b}
+.favorite-connect::first-letter{transform:translateY(-1px)}
+.favorite-disconnect{font-size:19px;background:#421f26;border-color:#8a3544;color:#ff8191}
+.favorite-action:disabled{opacity:.2;filter:saturate(.45)}
+.favorite-connect:hover:not(:disabled){background:#175336}
+.favorite-disconnect:hover:not(:disabled){background:#5a2731}
