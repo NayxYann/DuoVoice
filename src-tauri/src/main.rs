@@ -1,3 +1,4 @@
+// Keep the Windows console disabled for normal release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -322,10 +323,27 @@ fn set_output(_state: State<'_, AudioState>, _name: String) -> Result<(), String
     Err("Le changement de périphérique à chaud sera ajouté après la V1 de test.".into())
 }
 
-fn main() {
-    let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
+fn startup_log(message: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(base) = std::env::var("LOCALAPPDATA") {
+            let dir = std::path::PathBuf::from(base).join("DuoVoice");
+            let _ = std::fs::create_dir_all(&dir);
+            let path = dir.join("startup.log");
+            use std::io::Write;
+            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                let _ = writeln!(file, "{}", message);
+            }
+        }
+    }
+}
 
-    tauri::Builder::default()
+fn main() {
+    startup_log("=== DuoVoice starting ===");
+    let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
+    startup_log(&format!("autostart={launched_from_autostart}"));
+
+    let result = tauri::Builder::default()
         .manage(AudioState { engine: Mutex::new(None) })
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -341,11 +359,18 @@ fn main() {
             }
         })
         .setup(move |app| {
+            startup_log("Tauri setup entered");
+
             let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
+
+            // Do not unwrap default_window_icon(): a missing icon must not crash the whole app.
+            let icon = app.default_window_icon().cloned()
+                .ok_or_else(|| tauri::Error::AssetNotFound("DuoVoice tray icon".into()))?;
+
             let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(icon)
                 .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_menu_event(|app, event| {
@@ -363,12 +388,22 @@ fn main() {
                 .build(app)?;
 
             if launched_from_autostart {
+                startup_log("Hiding window because of autostart");
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
                 }
+            } else if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
             }
+
+            startup_log("Tauri setup completed");
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .unwrap_or_else(|e| eprintln!("DuoVoice startup error: {e}"));
+        .run(tauri::generate_context!());
+
+    match result {
+        Ok(()) => startup_log("DuoVoice exited normally"),
+        Err(e) => startup_log(&format!("DuoVoice startup error: {e}")),
+    }
 }

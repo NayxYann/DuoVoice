@@ -33,3 +33,7 @@ DuoVoice inclut le plugin officiel Tauri Autostart. Depuis **Réglages**, cochez
 Le bouton `X` masque également la fenêtre dans le tray au lieu de quitter l'application. Pour quitter complètement, utilisez **Quitter** dans le menu du tray.
 
 Le plugin officiel Tauri documente le support Windows/Linux et les commandes enable/disable/is-enabled : https://v2.tauri.app/plugin/autostart/
+
+
+## Diagnostic Windows
+En cas de problème de démarrage, DuoVoice écrit le journal de démarrage dans `%LOCALAPPDATA%\DuoVoice\startup.log`.
