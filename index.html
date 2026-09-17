@@ -46,11 +46,12 @@
     </section>
 
     <section class="card small">
-      <label class="check-row">
-        <input id="autostart" type="checkbox">
-        <span>Démarrer DuoVoice avec Windows/Linux</span>
-      </label>
-      <p id="autostartDetails">DuoVoice démarrera dans le tray.</p>
+      <div class="setting-title">Paramètres</div>
+      <label class="check-row"><input id="autostart" type="checkbox"><span>Démarrer DuoVoice avec Windows/Linux</span></label>
+      <label class="check-row"><input id="startHidden" type="checkbox"><span>Démarrer minimisé dans le tray</span></label>
+      <label>À la fermeture</label>
+      <select id="closeAction"><option value="tray">Réduire dans le tray</option><option value="quit">Quitter DuoVoice</option></select>
+      <p id="autostartDetails">Les réglages sont enregistrés automatiquement.</p>
     </section>
   </main>
   <script type="module" src="/src/main.js"></script>

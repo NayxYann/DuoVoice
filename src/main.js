@@ -23,30 +23,32 @@ async function loadDevices() {
     $("output").innerHTML = "";
     for (const d of devices.inputs) $("input").add(new Option(d, d));
     for (const d of devices.outputs) $("output").add(new Option(d, d));
+    const savedInput = localStorage.getItem("duovoice.input");
+    const savedOutput = localStorage.getItem("duovoice.output");
+    if (savedInput && [...$("input").options].some(o=>o.value===savedInput)) $("input").value=savedInput;
+    if (savedOutput && [...$("output").options].some(o=>o.value===savedOutput)) $("output").value=savedOutput;
   } catch (e) {
     $("details").textContent = `Audio indisponible : ${e}`;
   }
 }
 
-async function loadPeers() {
+const peerCache = new Map();
+async function loadPeers(manual=false) {
+  const refresh = $("refresh");
   try {
+    if (manual) { refresh.classList.add("refreshing"); refresh.textContent = "…"; $("details").textContent = "Recherche des ordinateurs sur le réseau…"; }
     const peers = await invoke("list_peers");
-    const select = $("peer");
-    const previous = select.value;
-    select.innerHTML = "";
-    if (!peers.length) {
-      select.add(new Option("Aucun autre PC détecté", ""));
-      return;
-    }
-    for (const p of peers) {
-      const opt = new Option(`${p.name} — ${p.address}`, p.address);
-      opt.dataset.port = p.port;
-      select.add(opt);
-    }
-    if (previous) select.value = previous;
-  } catch (e) {
-    $("details").textContent = `Découverte réseau : ${e}`;
-  }
+    const now = Date.now();
+    for (const p of peers) peerCache.set(p.address, {...p, seenAt: now});
+    for (const [address, p] of peerCache) if (now - p.seenAt > 8000) peerCache.delete(address);
+    const select = $("peer"); const previous = select.value; select.innerHTML = "";
+    const list = [...peerCache.values()].sort((a,b)=>a.name.localeCompare(b.name));
+    if (!list.length) select.add(new Option("Aucun autre PC détecté", ""));
+    for (const p of list) { const opt=new Option(`${p.name} — ${p.address}`,p.address); opt.dataset.port=p.port; select.add(opt); }
+    if (previous && [...select.options].some(o=>o.value===previous)) select.value=previous;
+    if (manual) $("details").textContent = list.length ? `${list.length} ordinateur(s) détecté(s).` : "Aucun autre PC détecté.";
+  } catch(e) { $("details").textContent=`Découverte réseau : ${e}`; }
+  finally { if(manual){refresh.classList.remove("refreshing"); refresh.textContent="↻";} }
 }
 
 async function connect() {
@@ -78,7 +80,7 @@ async function connect() {
 }
 
 $("connect").addEventListener("click", connect);
-$("refresh").addEventListener("click", loadPeers);
+$("refresh").addEventListener("click", () => loadPeers(true));
 $("volume").addEventListener("input", async (e) => {
   $("volumeValue").textContent = `${e.target.value}%`;
   if (connected) await invoke("set_volume", { volume: Number(e.target.value) / 100 });
@@ -89,10 +91,12 @@ $("mute").addEventListener("click", async () => {
   $("mute").textContent = muted ? "🔇 Unmute" : "🎙️ Mute";
 });
 $("input").addEventListener("change", async () => {
-  if (connected) await invoke("set_input", { name: $("input").value });
+  localStorage.setItem("duovoice.input", $("input").value);
+  if (connected) $("details").textContent = "Le nouveau micro sera utilisé à la prochaine connexion.";
 });
 $("output").addEventListener("change", async () => {
-  if (connected) await invoke("set_output", { name: $("output").value });
+  localStorage.setItem("duovoice.output", $("output").value);
+  if (connected) $("details").textContent = "La nouvelle sortie sera utilisée à la prochaine connexion.";
 });
 
 const autostart = $("autostart");
@@ -113,6 +117,14 @@ if (autostart) {
 }
 
 loadDevices();
-loadPeers();
 loadAutostart();
-setInterval(loadPeers, 2000);
+
+
+const startHidden = $("startHidden");
+const closeAction = $("closeAction");
+startHidden.checked = localStorage.getItem("duovoice.startHidden") !== "false";
+closeAction.value = localStorage.getItem("duovoice.closeAction") || "tray";
+startHidden.addEventListener("change", ()=>localStorage.setItem("duovoice.startHidden", String(startHidden.checked)));
+closeAction.addEventListener("change", async ()=>{ localStorage.setItem("duovoice.closeAction", closeAction.value); try { await invoke("set_close_action", { action: closeAction.value }); } catch(e) { $("details").textContent=`Réglage fermeture : ${e}`; } });
+loadPeers();
+setInterval(()=>loadPeers(false), 3000);

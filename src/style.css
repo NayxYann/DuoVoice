@@ -16,3 +16,5 @@
 .switch span:before { content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; border-radius:50%; background:white; transition:.18s; }
 .switch input:checked + span { background:#5b7cfa; }
 .switch input:checked + span:before { transform:translateX(20px); }
+
+.check-row{display:flex;align-items:center;gap:9px;margin:9px 0;color:#d6dae1}.check-row input{width:auto;margin:0}.setting-title{font-size:14px;font-weight:650;margin-bottom:10px}.row{align-items:center}.refreshing{opacity:.65;pointer-events:none}

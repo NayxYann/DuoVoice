@@ -14,7 +14,7 @@ use std::{
 };
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     Manager, State,
 };
 
@@ -39,6 +39,7 @@ struct Peer {
 
 struct AudioState {
     engine: Mutex<Option<AudioEngine>>,
+    close_to_tray: std::sync::atomic::AtomicBool,
 }
 
 struct AudioEngine {
@@ -237,7 +238,7 @@ fn start_audio(
                     if let Some(packet) = read_packet(&buf[..n]) {
                         let mut q = rx_buf_thread.lock().unwrap();
                         q.extend(packet.samples);
-                        if q.len() > FRAME_SAMPLES * 12 { q.drain(..FRAME_SAMPLES * 4); }
+                        if q.len() > FRAME_SAMPLES * 24 { q.drain(..FRAME_SAMPLES * 8); }
                     }
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(2)),
@@ -294,6 +295,12 @@ fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), String> {
+    state.close_to_tray.store(action != "quit", std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
 fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> { stop_audio_inner(&state) }
 
 #[tauri::command]
@@ -344,18 +351,24 @@ fn main() {
     startup_log(&format!("autostart={launched_from_autostart}"));
 
     let result = tauri::Builder::default()
-        .manage(AudioState { engine: Mutex::new(None) })
+        .manage(AudioState { engine: Mutex::new(None), close_to_tray: std::sync::atomic::AtomicBool::new(true) })
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, start_audio, stop_audio, set_volume, toggle_mute, set_input, set_output
+            list_devices, list_peers, start_audio, stop_audio, set_volume, toggle_mute, set_input, set_output, set_close_action
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                let to_tray = window.state::<AudioState>().close_to_tray.load(std::sync::atomic::Ordering::Relaxed);
+                if to_tray {
+                    api.prevent_close();
+                    let _ = window.set_skip_taskbar(true);
+                    let _ = window.hide();
+                } else {
+                    let _ = window.close();
+                }
             }
         })
         .setup(move |app| {
@@ -373,10 +386,20 @@ fn main() {
                 .icon(icon)
                 .menu(&menu)
                 .tooltip("DuoVoice")
+                .on_tray_icon_event(|app, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.set_skip_taskbar(false);
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {
                         "show" => {
                             if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.set_skip_taskbar(false);
                                 let _ = w.show();
                                 let _ = w.set_focus();
                             }
@@ -390,6 +413,7 @@ fn main() {
             if launched_from_autostart {
                 startup_log("Hiding window because of autostart");
                 if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_skip_taskbar(true);
                     let _ = w.hide();
                 }
             } else if let Some(w) = app.get_webview_window("main") {
