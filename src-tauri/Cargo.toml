@@ -1,0 +1,20 @@
+[package]
+name = "duovoice"
+version = "0.1.1"
+description = "Simple low-latency LAN intercom"
+authors = ["DuoVoice"]
+edition = "2021"
+rust-version = "1.90"
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+tauri = { version = "2.11", features = ["tray-icon"] }
+cpal = "0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hostname = "0.4"
+crossbeam-channel = "0.5"
+tauri-plugin-autostart = "2.5.1"

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuoVoice</title>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1>DuoVoice</h1>
+        <p>Intercom local</p>
+      </div>
+      <span id="status" class="status offline">Hors ligne</span>
+    </header>
+
+    <section class="card">
+      <label>Ordinateur distant</label>
+      <div class="row">
+        <select id="peer"><option value="">Recherche d'un PC…</option></select>
+        <button id="refresh" title="Actualiser">↻</button>
+      </div>
+      <button id="connect" class="primary">Se connecter</button>
+    </section>
+
+    <section class="card">
+      <label>Microphone</label>
+      <select id="input"></select>
+
+      <label>Sortie audio</label>
+      <select id="output"></select>
+
+      <div class="volume-line">
+        <label for="volume">Volume distant</label>
+        <span id="volumeValue">100%</span>
+      </div>
+      <input id="volume" type="range" min="0" max="100" value="100">
+
+      <button id="mute" class="secondary">🎙️ Mute</button>
+    </section>
+
+    <section class="card small">
+      <label class="check-row">
+        <input id="autostart" type="checkbox">
+        <span>Démarrer DuoVoice avec Windows/Linux</span>
+      </label>
+      <p id="autostartDetails">Le démarrage automatique lancera DuoVoice dans le tray.</p>
+    </section>
+
+    <section class="card small">
+      <strong>État</strong>
+      <p id="details">Les deux PC doivent être sur le même réseau local.</p>
+    </section>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
