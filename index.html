@@ -7,55 +7,142 @@
 </head>
 <body>
   <main class="app">
-    <header>
-      <div><h1>DuoVoice</h1><p>Intercom local</p></div>
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark">D</div>
+        <div>
+          <h1>DuoVoice</h1>
+          <p>Intercom local</p>
+        </div>
+      </div>
       <div class="header-actions">
-        <button id="settingsBtn" class="icon-btn" title="Paramètres">⚙</button>
-        <span id="status" class="status offline">Hors ligne</span>
+        <span id="status" class="status offline"><span class="status-dot"></span>Hors ligne</span>
+        <button id="settingsBtn" class="icon-btn" title="Paramètres" aria-label="Paramètres">⚙</button>
       </div>
     </header>
 
     <section id="mainView">
       <section class="card">
-        <label>Ordinateur distant</label>
-        <div class="row">
-          <select id="peer"><option value="">Recherche d'un PC…</option></select>
-          <button id="refresh" class="icon-btn" title="Actualiser la détection">↻</button>
+        <div class="section-title">
+          <div>
+            <h2>Connexion</h2>
+            <p>Choisissez le PC avec lequel communiquer.</p>
+          </div>
+          <button id="refresh" class="icon-btn compact" title="Actualiser la détection" aria-label="Actualiser la détection">↻</button>
         </div>
+
+        <label for="peer">Ordinateur distant</label>
+        <select id="peer"><option value="">Recherche d'un PC…</option></select>
+
         <div class="manual-row">
-          <input id="manualIp" type="text" inputmode="decimal" placeholder="IP du PC, ex. 192.168.1.25">
-          <button id="addIp">+</button>
+          <input id="manualIp" type="text" inputmode="decimal" placeholder="Adresse IP, ex. 192.168.1.25">
+          <button id="addIp" class="add-btn" title="Ajouter cette IP" aria-label="Ajouter cette IP">+</button>
         </div>
-        <p class="hint">Vous pouvez aussi ajouter directement l'adresse IP.</p>
+        <p class="hint">Vous pouvez aussi ajouter directement une adresse IP.</p>
+
         <button id="connect" class="primary">Se connecter</button>
       </section>
 
       <section class="card">
-        <label>Microphone</label>
+        <div class="section-title">
+          <div>
+            <h2>Audio</h2>
+            <p>Microphone et sortie du PC.</p>
+          </div>
+        </div>
+
+        <label for="input">Microphone</label>
         <select id="input"></select>
-        <label>Sortie audio</label>
+
+        <label for="output">Sortie audio</label>
         <select id="output"></select>
-        <div class="volume-line"><label for="volume">Volume distant</label><span id="volumeValue">100%</span></div>
-        <input id="volume" type="range" min="0" max="100" value="100">
-        <button id="mute" class="secondary">🎙️ Mute</button>
+
+        <div class="volume-line">
+          <label for="volume">Volume distant</label>
+          <strong id="volumeValue">100%</strong>
+        </div>
+        <input id="volume" type="range" min="0" max="200" step="1" value="100">
+
+        <label class="switch-row">
+          <input id="boostVolume" type="checkbox">
+          <span class="switch"></span>
+          <span>Autoriser le volume au-dessus de 100%</span>
+        </label>
+
+        <button id="mute" class="secondary mute-btn" type="button">
+          <span class="mute-icon">🎙</span><span id="muteText">Muet</span>
+        </button>
       </section>
 
-      <section class="card small"><strong>État</strong><p id="details">Recherche des ordinateurs sur le réseau local…</p></section>
+      <section class="card state-card">
+        <div class="section-title">
+          <div>
+            <h2>État</h2>
+            <p id="details">Recherche des ordinateurs sur le réseau local…</p>
+          </div>
+        </div>
+        <div class="state-grid">
+          <div class="state-item">
+            <span>Latence audio</span>
+            <strong id="latency">≈ 40 ms</strong>
+          </div>
+          <div class="state-item">
+            <span>Mode</span>
+            <strong id="mode">LAN direct</strong>
+          </div>
+        </div>
+      </section>
     </section>
 
     <section id="settingsView" class="hidden">
-      <div class="settings-head"><button id="backBtn" class="secondary small-btn">← Retour</button><h2>Paramètres</h2></div>
+      <div class="settings-head">
+        <button id="backBtn" class="secondary small-btn">← Retour</button>
+        <div>
+          <h2>Paramètres</h2>
+          <p>Préférences de DuoVoice</p>
+        </div>
+      </div>
+
       <section class="card">
-        <h3>Démarrage</h3>
-        <label class="check-row"><input id="autostart" type="checkbox"><span>Démarrer DuoVoice avec Windows/Linux</span></label>
-        <label class="check-row"><input id="startHidden" type="checkbox"><span>Démarrer minimisé dans le tray</span></label>
+        <div class="card-heading">
+          <h3>Démarrage</h3>
+          <p>Contrôlez le comportement au lancement.</p>
+        </div>
+        <label class="switch-row">
+          <input id="autostart" type="checkbox">
+          <span class="switch"></span>
+          <span>Démarrer DuoVoice avec Windows/Linux</span>
+        </label>
+        <label class="switch-row">
+          <input id="startHidden" type="checkbox">
+          <span class="switch"></span>
+          <span>Démarrer minimisé dans le tray</span>
+        </label>
         <p id="autostartDetails" class="hint">Les réglages sont enregistrés automatiquement.</p>
       </section>
+
       <section class="card">
-        <h3>Fermeture</h3>
-        <label>Action du bouton fermer</label>
-        <select id="closeAction"><option value="tray">Réduire dans le tray</option><option value="quit">Quitter DuoVoice</option></select>
-        <p class="hint">En mode tray, la fenêtre disparaît aussi de la barre des tâches.</p>
+        <div class="card-heading">
+          <h3>Fermeture</h3>
+          <p>Choisissez ce que fait le bouton X.</p>
+        </div>
+        <label for="closeAction">Action du bouton fermer</label>
+        <select id="closeAction">
+          <option value="tray">Réduire dans le tray</option>
+          <option value="quit">Quitter DuoVoice</option>
+        </select>
+        <p class="hint">En mode tray, DuoVoice disparaît aussi de la barre des tâches.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <h3>Audio</h3>
+          <p>Les périphériques et le volume sont conservés entre les lancements.</p>
+        </div>
+        <div class="settings-info">
+          <span>Volume enregistré</span>
+          <strong id="savedVolume">100%</strong>
+        </div>
       </section>
     </section>
   </main>

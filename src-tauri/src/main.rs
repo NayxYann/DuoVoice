@@ -15,7 +15,7 @@ use std::{
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
-    Manager, State,
+    Emitter, Manager, State,
 };
 
 const DISCOVERY_PORT: u16 = 39471;
@@ -40,6 +40,8 @@ struct Peer {
 struct AudioState {
     engine: Mutex<Option<AudioEngine>>,
     close_to_tray: std::sync::atomic::AtomicBool,
+    volume: Arc<Mutex<f32>>,
+    muted: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -213,8 +215,10 @@ fn start_audio(
     rx.set_nonblocking(true).ok();
 
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let volume = Arc::new(Mutex::new(1.0f32));
-    let muted = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // Keep volume/mute state alive even while disconnected so the controls
+    // remain functional and the chosen values are reused on the next call.
+    let volume = Arc::clone(&state.volume);
+    let muted = Arc::clone(&state.muted);
 
     let input_samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(FRAME_SAMPLES * 2)));
     let tx_buf = Arc::clone(&input_samples);
@@ -378,19 +382,22 @@ fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> { stop_audio_i
 
 #[tauri::command]
 fn set_volume(state: State<'_, AudioState>, volume: f32) -> Result<(), String> {
+    let value = volume.clamp(0.0, 2.0);
+    *state.volume.lock().unwrap() = value;
     if let Some(e) = state.engine.lock().unwrap().as_ref() {
-        *e.volume.lock().unwrap() = volume.clamp(0.0, 1.0);
+        *e.volume.lock().unwrap() = value;
     }
     Ok(())
 }
 
 #[tauri::command]
 fn toggle_mute(state: State<'_, AudioState>) -> Result<bool, String> {
+    let next = !state.muted.load(std::sync::atomic::Ordering::Relaxed);
+    state.muted.store(next, std::sync::atomic::Ordering::Relaxed);
     if let Some(e) = state.engine.lock().unwrap().as_ref() {
-        let next = !e.muted.load(std::sync::atomic::Ordering::Relaxed);
         e.muted.store(next, std::sync::atomic::Ordering::Relaxed);
-        Ok(next)
-    } else { Ok(false) }
+    }
+    Ok(next)
 }
 
 #[tauri::command]
@@ -426,7 +433,12 @@ fn main() {
     startup_log(&format!("autostart={launched_from_autostart}"));
 
     let result = tauri::Builder::default()
-        .manage(AudioState { engine: Mutex::new(None), close_to_tray: std::sync::atomic::AtomicBool::new(true) })
+        .manage(AudioState {
+            engine: Mutex::new(None),
+            close_to_tray: std::sync::atomic::AtomicBool::new(true),
+            volume: Arc::new(Mutex::new(1.0)),
+            muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        })
         .manage(Arc::new(DiscoveryState { peers: Mutex::new(HashMap::new()) }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -453,8 +465,9 @@ fn main() {
             start_discovery(discovery);
 
             let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
+            let settings = MenuItem::with_id(app, "settings", "Paramètres", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &settings, &quit])?;
 
             // Do not unwrap default_window_icon(): a missing icon must not crash the whole app.
             let icon = app.default_window_icon().cloned()
@@ -481,6 +494,14 @@ fn main() {
                                 let _ = w.set_skip_taskbar(false);
                                 let _ = w.show();
                                 let _ = w.set_focus();
+                            }
+                        }
+                        "settings" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.set_skip_taskbar(false);
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                                let _ = app.emit("open-settings", ());
                             }
                         }
                         "quit" => app.exit(0),

@@ -39,3 +39,6 @@ Le plugin officiel Tauri documente le support Windows/Linux et les commandes ena
 En cas de problème de démarrage, DuoVoice écrit le journal de démarrage dans `%LOCALAPPDATA%\DuoVoice\startup.log`.
 ## v0.2.3
 Stability pass: discovery traffic/churn reduced and startup/runtime behavior kept conservative. Audio transport remains PCM/UDP in this build.
+
+## v0.3.0
+Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préférences de volume persistantes, affichage de la latence audio estimée et accès Paramètres depuis le tray.
