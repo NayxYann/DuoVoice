@@ -108,7 +108,7 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
         loop {
             if last_broadcast.elapsed() >= Duration::from_secs(2) {
                 let msg = format!("DUOVOICE|{}|{}", hostname, AUDIO_PORT);
-                let _ = socket.send_to(&msg, SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
+                let _ = socket.send_to(msg.as_bytes(), SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
                 last_broadcast = Instant::now();
             }
 
