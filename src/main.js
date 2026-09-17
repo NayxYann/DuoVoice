@@ -15,6 +15,7 @@ const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 let connectedPeer = "";
+let paused = false;
 
 
 
@@ -99,20 +100,48 @@ function renderFavorites() {
     box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis cliquez sur ☆.</div>';
     return;
   }
+
   for (const favorite of favorites) {
     const peer = peerCache.get(favorite.address);
     const available = !!peer;
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `favorite-item${available ? " available" : " unavailable"}`;
-    item.disabled = !available;
+    const isActive = connected && connectedPeer === favorite.address;
+    const isPaused = isActive && paused;
+    const item = document.createElement("div");
+    item.className = `favorite-item${available ? " available" : " unavailable"}${isActive ? " active" : ""}`;
+
+    const connectBtn = document.createElement("button");
+    connectBtn.type = "button";
+    connectBtn.className = "favorite-action favorite-connect";
+    connectBtn.textContent = "▶";
+    connectBtn.title = isActive ? "Déjà connecté" : "Se connecter";
+    connectBtn.disabled = !available || isActive;
+    connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
+
+    const pauseBtn = document.createElement("button");
+    pauseBtn.type = "button";
+    pauseBtn.className = "favorite-action favorite-pause";
+    pauseBtn.textContent = isPaused ? "▶" : "Ⅱ";
+    pauseBtn.title = isPaused ? "Reprendre" : "Mettre en pause";
+    pauseBtn.disabled = !isActive;
+    pauseBtn.addEventListener("click", () => togglePauseFor(favorite.address));
+
+    const disconnectBtn = document.createElement("button");
+    disconnectBtn.type = "button";
+    disconnectBtn.className = "favorite-action favorite-disconnect";
+    disconnectBtn.textContent = "×";
+    disconnectBtn.title = "Se déconnecter";
+    disconnectBtn.disabled = !isActive;
+    disconnectBtn.addEventListener("click", () => disconnect());
+
     item.innerHTML = `
       <span class="favorite-dot"></span>
       <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
-      <span class="favorite-status">${available ? "Disponible" : "Indisponible"}</span>
+      <span class="favorite-status">${isActive ? (isPaused ? "En pause" : "Connecté") : (available ? "Disponible" : "Indisponible")}</span>
     `;
-    item.title = available ? `Se connecter à ${favorite.name}` : `${favorite.name} est indisponible`;
-    item.addEventListener("click", () => connectToAddress(favorite.address));
+    const actions = document.createElement("span");
+    actions.className = "favorite-actions";
+    actions.append(connectBtn, pauseBtn, disconnectBtn);
+    item.appendChild(actions);
     box.appendChild(item);
   }
 }
@@ -286,29 +315,60 @@ async function connectToAddress(address) {
   button.disabled = true;
   try {
     if (connected && connectedPeer === address) return;
-    if (connected) {
-      await invoke("stop_audio");
-      connected = false;
-      connectedPeer = "";
-    }
+    if (connected) await disconnect();
     setDetails(`Connexion à ${address}…`);
     await invoke("start_audio", { remote: address, input: $("input").value || null, output: $("output").value || null });
     await applyVolume();
     connected = true;
     connectedPeer = address;
+    paused = false;
     $("peer").value = address;
     button.textContent = "Se déconnecter";
     $("status").innerHTML = '<span class="status-dot"></span>Connecté';
     $("status").className = "status online";
     setDetails("Audio bidirectionnel actif.");
+    renderFavorites();
   } catch (e) {
     connected = false;
     connectedPeer = "";
+    paused = false;
     button.textContent = "Se connecter";
     $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
     $("status").className = "status offline";
     setDetails(`Connexion impossible : ${e}`);
+    renderFavorites();
   } finally { button.disabled = false; }
+}
+
+async function disconnect() {
+  try {
+    await invoke("stop_audio");
+    connected = false;
+    connectedPeer = "";
+    paused = false;
+    $("connect").textContent = "Se connecter";
+    $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+    $("status").className = "status offline";
+    setDetails("Déconnecté.");
+  } catch (e) {
+    setDetails(`Déconnexion impossible : ${e}`);
+    throw e;
+  } finally {
+    renderFavorites();
+  }
+}
+
+async function togglePauseFor(address) {
+  if (!connected || connectedPeer !== address) return;
+  try {
+    paused = !paused;
+    await invoke("set_paused", { paused });
+    setDetails(paused ? "Communication audio en pause." : "Audio bidirectionnel actif.");
+    renderFavorites();
+  } catch (e) {
+    paused = !paused;
+    setDetails(`Pause audio : ${e}`);
+  }
 }
 
 async function connect() {
@@ -317,15 +377,8 @@ async function connect() {
   if (connected) {
     const button = $("connect");
     button.disabled = true;
-    try {
-      await invoke("stop_audio");
-      connected = false;
-      connectedPeer = "";
-      button.textContent = "Se connecter";
-      $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
-      $("status").className = "status offline";
-      setDetails("Déconnecté.");
-    } catch (e) { setDetails(`Déconnexion impossible : ${e}`); }
+    try { await disconnect(); }
+    catch (_) {}
     finally { button.disabled = false; }
     return;
   }

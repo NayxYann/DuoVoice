@@ -52,7 +52,7 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 - Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
 
 
-## v1.0
+## v2.0
 
 ### Mise à jour UI 1.0
 - Ajout des favoris de machines/IP directement depuis le sélecteur avec l’icône étoile.
@@ -67,7 +67,7 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 
 ## Réduction de bruit
 
-La version 1.0 conserve les améliorations de la version 1.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
+La version 1.0 conserve les améliorations de la version 2.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
 
 Le signal sec est retardé du même bloc de 10 ms que le traitement RNNoise avant le mélange d'intensité. Cela évite de mélanger un signal direct avec sa version retardée, ce qui produirait un effet de voix doublée.
 

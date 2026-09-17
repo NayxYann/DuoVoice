@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, Stream, StreamConfig};
+use cpal::{SampleFormat, Stream, StreamConfig, SupportedStreamConfig};
 use serde::Serialize;
 use std::{
     collections::{HashMap, VecDeque},
@@ -47,6 +47,7 @@ struct AudioState {
     noise_enabled: Arc<std::sync::atomic::AtomicBool>,
     noise_intensity: Arc<Mutex<f32>>,
     remote: Arc<Mutex<Option<SocketAddr>>>,
+    paused: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -169,6 +170,47 @@ fn choose_device(host: &cpal::Host, name: Option<&str>, input: bool) -> Result<c
         .ok_or_else(|| "Périphérique audio introuvable".into())
 }
 
+fn choose_stream_config(device: &cpal::Device, input: bool) -> Result<SupportedStreamConfig, String> {
+    let default = if input {
+        device.default_input_config()
+    } else {
+        device.default_output_config()
+    }.map_err(|e| e.to_string())?;
+
+    // Keep DuoVoice's internal transport at 48 kHz while explicitly selecting
+    // a format that our callbacks support. This avoids relying on CPAL's
+    // default-format priority, which changed in CPAL 0.18.2 on Windows.
+    let preferred = [default.sample_format(), SampleFormat::F32, SampleFormat::I16, SampleFormat::U16];
+    for format in preferred {
+        if input {
+            if let Ok(configs) = device.supported_input_configs() {
+                for range in configs {
+                    if range.sample_format() == format
+                        && range.min_sample_rate() <= SAMPLE_RATE
+                        && range.max_sample_rate() >= SAMPLE_RATE
+                    {
+                        return Ok(range.with_sample_rate(SAMPLE_RATE));
+                    }
+                }
+            }
+        } else if let Ok(configs) = device.supported_output_configs() {
+            for range in configs {
+                if range.sample_format() == format
+                    && range.min_sample_rate() <= SAMPLE_RATE
+                    && range.max_sample_rate() >= SAMPLE_RATE
+                {
+                    return Ok(range.with_sample_rate(SAMPLE_RATE));
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "Aucun format audio compatible en 48 kHz pour ce périphérique (format par défaut: {:?})",
+        default.sample_format()
+    ))
+}
+
 fn push_packet(socket: &UdpSocket, remote: SocketAddr, seq: &mut u32, samples: &[i16]) {
     let mut data = Vec::with_capacity(12 + samples.len() * 2);
     data.extend_from_slice(MAGIC);
@@ -247,13 +289,9 @@ fn start_audio(
     let host = cpal::default_host();
     let input_device = choose_device(&host, input.as_deref(), true)?;
     let output_device = choose_device(&host, output.as_deref(), false)?;
-    let in_cfg = input_device.default_input_config().map_err(|e| e.to_string())?;
-    let out_cfg = output_device.default_output_config().map_err(|e| e.to_string())?;
-    let in_rate = in_cfg.sample_rate();
-    let out_rate = out_cfg.sample_rate();
-    if in_rate != SAMPLE_RATE || out_rate != SAMPLE_RATE {
-        return Err(format!("Pour cette V1, les périphériques doivent être en 48 kHz (entrée {} Hz / sortie {} Hz).", in_rate, out_rate));
-    }
+    let in_cfg = choose_stream_config(&input_device, true)?;
+    let out_cfg = choose_stream_config(&output_device, false)?;
+    app_log(&format!("Audio config: input={} {:?} {}ch, output={} {:?} {}ch", input_device.description().ok().map(|d| d.name().to_string()).unwrap_or_default(), in_cfg.sample_format(), in_cfg.channels(), output_device.description().ok().map(|d| d.name().to_string()).unwrap_or_default(), out_cfg.sample_format(), out_cfg.channels()));
 
     let remote_addr: SocketAddr = format!("{}:{}", remote, AUDIO_PORT).parse().map_err(|e| format!("Adresse distante invalide: {e}"))?;
     *state.remote.lock().unwrap() = Some(remote_addr);
@@ -269,6 +307,7 @@ fn start_audio(
     let muted = Arc::clone(&state.muted);
     let noise_enabled = Arc::clone(&state.noise_enabled);
     let noise_intensity = Arc::clone(&state.noise_intensity);
+    let paused = Arc::clone(&state.paused);
 
     let input_samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(FRAME_SAMPLES * 2)));
     let tx_buf = Arc::clone(&input_samples);
@@ -282,10 +321,14 @@ fn start_audio(
         SampleFormat::F32 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
+            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[f32], _| {
-                if muted_in.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                    tx_buf.lock().unwrap().clear();
+                    return;
+                }
                 let mut b = tx_buf.lock().unwrap();
                 for frame in data.chunks(input_channels.max(1)) {
                     let avg = frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32;
@@ -307,10 +350,14 @@ fn start_audio(
         SampleFormat::I16 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
+            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[i16], _| {
-                if muted_in.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                    tx_buf.lock().unwrap().clear();
+                    return;
+                }
                 let mut b = tx_buf.lock().unwrap();
                 for frame in data.chunks(input_channels.max(1)) {
                     let avg = frame.iter().map(|&x| x as i32).sum::<i32>() / frame.len().max(1) as i32;
@@ -332,10 +379,14 @@ fn start_audio(
         SampleFormat::U16 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
+            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[u16], _| {
-                if muted_in.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                    tx_buf.lock().unwrap().clear();
+                    return;
+                }
                 let mut b = tx_buf.lock().unwrap();
                 for frame in data.chunks(input_channels.max(1)) {
                     let avg = frame.iter().map(|&x| x as i32 - 32768).sum::<i32>() / frame.len().max(1) as i32;
@@ -362,6 +413,7 @@ fn start_audio(
     let rx_queue = Arc::new(Mutex::new(VecDeque::<i16>::with_capacity(FRAME_SAMPLES * 40)));
     let rx_queue_net = Arc::clone(&rx_queue);
     let stop_net = Arc::clone(&stop);
+    let paused_net = Arc::clone(&paused);
     let network = thread::spawn(move || {
         let mut buf = [0u8; 4096];
         let mut last_seq: Option<u32> = None;
@@ -373,6 +425,10 @@ fn start_audio(
                         pong.extend_from_slice(PONG_MAGIC);
                         pong.extend_from_slice(&buf[4..n.min(12)]);
                         let _ = rx.send_to(&pong, sender);
+                        continue;
+                    }
+                    if paused_net.load(std::sync::atomic::Ordering::Relaxed) {
+                        if let Ok(mut q) = rx_queue_net.try_lock() { q.clear(); }
                         continue;
                     }
                     if let Some(packet) = read_packet(&buf[..n]) {
@@ -396,11 +452,13 @@ fn start_audio(
 
     let output_volume = Arc::clone(&volume);
     let output_stop = Arc::clone(&stop);
+    let output_paused = Arc::clone(&paused);
     let output_stream = match out_cfg.sample_format() {
         SampleFormat::F32 => {
             let q = Arc::clone(&rx_queue);
             let mut ready = false;
             output_device.build_output_stream(output_config, move |data: &mut [f32], _| {
+                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0.0; } return; }
                 let vol = *output_volume.lock().unwrap();
                 if let Ok(mut queue) = q.try_lock() {
                     if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
@@ -419,6 +477,7 @@ fn start_audio(
             let q = Arc::clone(&rx_queue);
             let mut ready = false;
             output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
+                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0; } return; }
                 let vol = *output_volume.lock().unwrap();
                 if let Ok(mut queue) = q.try_lock() {
                     if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
@@ -436,6 +495,7 @@ fn start_audio(
             let q = Arc::clone(&rx_queue);
             let mut ready = false;
             output_device.build_output_stream(output_config, move |data: &mut [u16], _| {
+                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 32768; } return; }
                 let vol = *output_volume.lock().unwrap();
                 if let Ok(mut queue) = q.try_lock() {
                     if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
@@ -455,11 +515,13 @@ fn start_audio(
     input_stream.play().map_err(|e| e.to_string())?;
     output_stream.play().map_err(|e| e.to_string())?;
 
+    state.paused.store(false, std::sync::atomic::Ordering::Relaxed);
     *state.engine.lock().unwrap() = Some(AudioEngine { stop, volume, muted, _input: input_stream, _output: output_stream, _network: network });
     Ok(())
 }
 
 fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
+    state.paused.store(false, std::sync::atomic::Ordering::Relaxed);
     *state.remote.lock().unwrap() = None;
     if let Some(engine) = state.engine.lock().unwrap().take() {
         engine.stop.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -468,6 +530,15 @@ fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
     Ok(())
 }
 
+
+#[tauri::command]
+fn set_paused(state: State<'_, AudioState>, paused: bool) -> Result<(), String> {
+    if state.engine.lock().unwrap().is_none() {
+        return Err("Aucune connexion audio active".into());
+    }
+    state.paused.store(paused, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
 
 #[tauri::command]
 fn measure_latency(state: State<'_, AudioState>) -> Result<f64, String> {
@@ -633,6 +704,7 @@ fn main() {
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
             volume: Arc::new(Mutex::new(1.0)),
             muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_intensity: Arc::new(Mutex::new(0.65)),
             remote: Arc::new(Mutex::new(None)),
@@ -643,7 +715,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, measure_latency, set_noise_reduction, set_input, set_output, set_close_action
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
