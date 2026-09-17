@@ -13,7 +13,6 @@ async function loadAutostart() {
     checkbox.checked = await isAutostartEnabled();
   } catch (e) {
     details.textContent = `Autostart indisponible : ${e}`;
-    checkbox.disabled = true;
   }
 }
 
@@ -96,18 +95,19 @@ $("output").addEventListener("change", async () => {
   if (connected) await invoke("set_output", { name: $("output").value });
 });
 
-const autostartCheckbox = $("autostart");
-if (autostartCheckbox) {
-  autostartCheckbox.addEventListener("change", async (e) => {
+const autostart = $("autostart");
+if (autostart) {
+  autostart.addEventListener("change", async (e) => {
+    const details = $("autostartDetails");
     try {
       if (e.target.checked) await enableAutostart();
       else await disableAutostart();
-      $("autostartDetails").textContent = e.target.checked
+      if (details) details.textContent = e.target.checked
         ? "DuoVoice démarrera avec Windows/Linux et restera dans le tray."
         : "Démarrage automatique désactivé.";
     } catch (err) {
       e.target.checked = await isAutostartEnabled().catch(() => false);
-      $("autostartDetails").textContent = `Impossible de modifier le démarrage automatique : ${err}`;
+      if (details) details.textContent = `Impossible de modifier le démarrage automatique : ${err}`;
     }
   });
 }

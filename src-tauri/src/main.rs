@@ -345,6 +345,7 @@ fn main() {
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
             let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_menu_event(|app, event| {
@@ -369,5 +370,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running DuoVoice");
+        .unwrap_or_else(|e| eprintln!("DuoVoice startup error: {e}"));
 }
