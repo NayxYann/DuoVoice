@@ -50,7 +50,14 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 - Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
 
 
-## v0.3.2
+## v0.4.0
 - Mesure RTT réseau réelle en temps réel pendant une connexion.
 - Palette de couleurs douces persistante.
 - Barre de volume 0–100 %, extension à 200 % lorsque l’amplification est activée.
+
+
+## Réduction de bruit
+
+La version 0.4.0 intègre RNNoise côté Rust pour traiter le microphone localement avant l'envoi UDP. RNNoise travaille sur des trames de 480 échantillons à 48 kHz, ce qui correspond au pipeline audio actuel de DuoVoice. citeturn0search5turn0search2
+
+La fonction est désactivable à chaud. Son état ON/OFF et son intensité sont sauvegardés localement. Le réglage d'intensité agit comme un mixage entre le signal brut et le signal traité, avec trois préréglages : Naturel, Équilibré et Agressif.

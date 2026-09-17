@@ -11,6 +11,8 @@ const VOLUME_KEY = "duovoice.volume";
 const BOOST_KEY = "duovoice.boostVolume";
 const MUTE_KEY = "duovoice.muted";
 const COLOR_KEY = "duovoice.color";
+const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
+const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 
 
 
@@ -89,6 +91,37 @@ function updateVolumeUi() {
   const value = Number($("volume").value);
   $("volumeValue").textContent = `${value}%`;
   $("savedVolume").textContent = `${value}%`;
+}
+
+function loadNoisePreferences() {
+  const enabled = localStorage.getItem(NOISE_ENABLED_KEY) === "true";
+  const intensity = Math.max(0, Math.min(100, Number(localStorage.getItem(NOISE_INTENSITY_KEY) ?? 65)));
+  $("noiseEnabled").checked = enabled;
+  $("noiseIntensity").value = intensity;
+  updateNoiseUi();
+  applyNoiseSettings();
+}
+
+function updateNoiseUi() {
+  const enabled = $("noiseEnabled").checked;
+  const intensity = Number($("noiseIntensity").value);
+  $("noiseIntensityValue").textContent = `${intensity}%`;
+  $("noiseStatus").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
+  $("savedNoise").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
+  $("noiseSettings").classList.toggle("active", enabled);
+}
+
+async function applyNoiseSettings() {
+  const enabled = $("noiseEnabled").checked;
+  const intensity = Number($("noiseIntensity").value) / 100;
+  localStorage.setItem(NOISE_ENABLED_KEY, String(enabled));
+  localStorage.setItem(NOISE_INTENSITY_KEY, String(Math.round(intensity * 100)));
+  updateNoiseUi();
+  try {
+    await invoke("set_noise_reduction", { enabled, intensity });
+  } catch (e) {
+    setDetails(`Réduction de bruit : ${e}`);
+  }
 }
 
 async function applyVolume() {
@@ -222,6 +255,30 @@ $("mute").addEventListener("click", async () => {
   } catch (e) { setDetails(`Muet : ${e}`); }
 });
 
+$("noiseEnabled").addEventListener("change", applyNoiseSettings);
+$("noiseIntensity").addEventListener("input", () => {
+  updateNoiseUi();
+  applyNoiseSettings();
+});
+
+$("noiseSettings").addEventListener("click", (event) => {
+  event.stopPropagation();
+  $("noisePopover").classList.toggle("hidden");
+});
+
+document.querySelectorAll("[data-noise-preset]").forEach(button => {
+  button.addEventListener("click", () => {
+    $("noiseIntensity").value = Math.round(Number(button.dataset.noisePreset) * 100);
+    $("noiseEnabled").checked = true;
+    applyNoiseSettings();
+  });
+});
+
+document.addEventListener("click", event => {
+  const popover = $("noisePopover");
+  if (!popover.classList.contains("hidden") && !event.target.closest(".noise-control")) popover.classList.add("hidden");
+});
+
 $("input").addEventListener("change", () => localStorage.setItem("duovoice.input", $("input").value));
 $("output").addEventListener("change", () => localStorage.setItem("duovoice.output", $("output").value));
 
@@ -254,6 +311,7 @@ loadManualIps();
 loadDevices();
 loadAutostart();
 loadAudioPreferences();
+loadNoisePreferences();
 initColors();
 loadPeers();
 setInterval(() => loadPeers(false), 3000);

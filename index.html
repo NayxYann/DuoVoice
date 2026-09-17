@@ -60,6 +60,43 @@
         <label for="output">Sortie audio</label>
         <select id="output"></select>
 
+        <div class="noise-control">
+          <div class="noise-line">
+            <div>
+              <strong>Réduction de bruit</strong>
+              <span id="noiseStatus" class="noise-status">Désactivée</span>
+            </div>
+            <div class="noise-actions">
+              <label class="switch-row noise-switch-row">
+                <input id="noiseEnabled" type="checkbox">
+                <span class="switch"></span>
+                <span class="sr-only">Activer la réduction de bruit</span>
+              </label>
+              <button id="noiseSettings" class="icon-btn compact" type="button" title="Réglages de la réduction de bruit" aria-label="Réglages de la réduction de bruit">⚙</button>
+            </div>
+          </div>
+          <div id="noisePopover" class="noise-popover hidden">
+            <div class="popover-heading">
+              <div>
+                <strong>Réglages</strong>
+                <span>RNNoise · traitement local</span>
+              </div>
+              <strong id="noiseIntensityValue">65%</strong>
+            </div>
+            <div class="volume-line">
+              <label for="noiseIntensity">Intensité</label>
+              <span class="subtle">Plus fort = suppression plus marquée</span>
+            </div>
+            <input id="noiseIntensity" type="range" min="0" max="100" step="1" value="65">
+            <div class="noise-presets">
+              <button type="button" data-noise-preset="0.35">Naturel</button>
+              <button type="button" data-noise-preset="0.65">Équilibré</button>
+              <button type="button" data-noise-preset="0.9">Agressif</button>
+            </div>
+            <p class="hint">La réduction est appliquée au micro avant l'envoi réseau. Le curseur dose le mélange entre le signal brut et le signal traité.</p>
+          </div>
+        </div>
+
         <div class="volume-line">
           <label for="volume">Volume distant</label>
           <strong id="volumeValue">100%</strong>
@@ -148,11 +185,15 @@
       <section class="card">
         <div class="card-heading">
           <h3>Audio</h3>
-          <p>Les périphériques et le volume sont conservés entre les lancements.</p>
+          <p>Les périphériques, le volume et la réduction de bruit sont conservés entre les lancements.</p>
         </div>
         <div class="settings-info">
           <span>Volume enregistré</span>
           <strong id="savedVolume">100%</strong>
+        </div>
+        <div class="settings-info">
+          <span>Réduction de bruit</span>
+          <strong id="savedNoise">Désactivée</strong>
         </div>
       </section>
     </section>
