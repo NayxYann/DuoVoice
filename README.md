@@ -42,3 +42,9 @@ Stability pass: discovery traffic/churn reduced and startup/runtime behavior kep
 
 ## v0.3.0
 Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préférences de volume persistantes, affichage de la latence audio estimée et accès Paramètres depuis le tray.
+
+
+## v0.3.1
+- Finitions UI : volume adaptatif 0–100 % / 0–200 % et sauvegarde.
+- Palette de couleurs douces personnalisable.
+- Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
