@@ -13,19 +13,21 @@ const MUTE_KEY = "duovoice.muted";
 const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
+const FAVORITES_KEY = "duovoice.favorites";
+let connectedPeer = "";
 
 
 
 
 const PALETTE = {
-  violet: "#8f86b8",
-  rose: "#b88499",
-  bleu: "#7d9bb8",
-  vert: "#7fa18b",
-  jaune: "#b2a06f",
-  orange: "#b78d70",
-  cyan: "#72a3a3",
-  ardoise: "#858b99"
+  violet: "#a78bfa",
+  rose: "#f472b6",
+  bleu: "#60a5fa",
+  vert: "#4ade80",
+  jaune: "#facc15",
+  orange: "#fb923c",
+  cyan: "#22d3ee",
+  ardoise: "#94a3b8"
 };
 
 function applyAppColor(name) {
@@ -62,6 +64,63 @@ function showMain() {
   $("mainView").classList.remove("hidden");
 }
 
+function loadFavorites() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter(f => f && f.address) : [];
+  } catch { return []; }
+}
+
+function saveFavorites(favorites) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+}
+
+function favoriteFor(address) {
+  return loadFavorites().find(f => f.address === address);
+}
+
+function updateFavoriteButton() {
+  const button = $("favoriteBtn");
+  if (!button) return;
+  const favorite = favoriteFor($("peer").value);
+  button.textContent = favorite ? "★" : "☆";
+  button.classList.toggle("active", !!favorite);
+  button.title = favorite ? "Retirer des favoris" : "Ajouter aux favoris";
+  button.setAttribute("aria-label", button.title);
+  button.disabled = !$("peer").value;
+}
+
+function renderFavorites() {
+  const box = $("favoritesList");
+  if (!box) return;
+  const favorites = loadFavorites().sort((a, b) => a.name.localeCompare(b.name));
+  box.innerHTML = "";
+  if (!favorites.length) {
+    box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis cliquez sur ☆.</div>';
+    return;
+  }
+  for (const favorite of favorites) {
+    const peer = peerCache.get(favorite.address);
+    const available = !!peer;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `favorite-item${available ? " available" : " unavailable"}`;
+    item.disabled = !available;
+    item.innerHTML = `
+      <span class="favorite-dot"></span>
+      <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
+      <span class="favorite-status">${available ? "Disponible" : "Indisponible"}</span>
+    `;
+    item.title = available ? `Se connecter à ${favorite.name}` : `${favorite.name} est indisponible`;
+    item.addEventListener("click", () => connectToAddress(favorite.address));
+    box.appendChild(item);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;"}[c]));
+}
+
 function renderPeers(preferred = "") {
   const select = $("peer");
   const current = preferred || select.value;
@@ -70,6 +129,28 @@ function renderPeers(preferred = "") {
   if (!list.length) select.add(new Option("Aucun PC détecté — ajoutez une IP", ""));
   for (const p of list) select.add(new Option(`${p.name} — ${p.address}`, p.address));
   if (current && [...select.options].some(o => o.value === current)) select.value = current;
+  updateFavoriteButton();
+  renderFavorites();
+}
+
+function toggleFavorite() {
+  const address = $("peer").value;
+  if (!address) return;
+  const favorites = loadFavorites();
+  const index = favorites.findIndex(f => f.address === address);
+  if (index >= 0) {
+    favorites.splice(index, 1);
+    saveFavorites(favorites);
+    setDetails("Favori retiré.");
+  } else {
+    const peer = peerCache.get(address);
+    const name = peer?.name || `PC — ${address}`;
+    favorites.push({ name, address });
+    saveFavorites(favorites);
+    setDetails(`${name} ajouté aux favoris.`);
+  }
+  updateFavoriteButton();
+  renderFavorites();
 }
 
 async function loadAutostart() {
@@ -200,34 +281,62 @@ async function updateLatency() {
   }
 }
 
+async function connectToAddress(address) {
+  const button = $("connect");
+  button.disabled = true;
+  try {
+    if (connected && connectedPeer === address) return;
+    if (connected) {
+      await invoke("stop_audio");
+      connected = false;
+      connectedPeer = "";
+    }
+    setDetails(`Connexion à ${address}…`);
+    await invoke("start_audio", { remote: address, input: $("input").value || null, output: $("output").value || null });
+    await applyVolume();
+    connected = true;
+    connectedPeer = address;
+    $("peer").value = address;
+    button.textContent = "Se déconnecter";
+    $("status").innerHTML = '<span class="status-dot"></span>Connecté';
+    $("status").className = "status online";
+    setDetails("Audio bidirectionnel actif.");
+  } catch (e) {
+    connected = false;
+    connectedPeer = "";
+    button.textContent = "Se connecter";
+    $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+    $("status").className = "status offline";
+    setDetails(`Connexion impossible : ${e}`);
+  } finally { button.disabled = false; }
+}
+
 async function connect() {
   const peer = $("peer").value;
   if (!peer) { setDetails("Sélectionnez un ordinateur ou ajoutez une IP."); return; }
-  const button = $("connect"); button.disabled = true;
-  try {
-    if (!connected) {
-      setDetails(`Connexion à ${peer}…`);
-      await invoke("start_audio", { remote: peer, input: $("input").value || null, output: $("output").value || null });
-      await applyVolume();
-      connected = true;
-      button.textContent = "Se déconnecter";
-      $("status").innerHTML = '<span class="status-dot"></span>Connecté';
-      $("status").className = "status online";
-      setDetails("Audio bidirectionnel actif.");
-    } else {
+  if (connected) {
+    const button = $("connect");
+    button.disabled = true;
+    try {
       await invoke("stop_audio");
       connected = false;
+      connectedPeer = "";
       button.textContent = "Se connecter";
       $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
       $("status").className = "status offline";
       setDetails("Déconnecté.");
-    }
-  } catch (e) { setDetails(`Connexion impossible : ${e}`); }
-  finally { button.disabled = false; }
+    } catch (e) { setDetails(`Déconnexion impossible : ${e}`); }
+    finally { button.disabled = false; }
+    return;
+  }
+  await connectToAddress(peer);
 }
+
 
 $("connect").addEventListener("click", connect);
 $("refresh").addEventListener("click", () => loadPeers(true));
+$("favoriteBtn").addEventListener("click", toggleFavorite);
+$("peer").addEventListener("change", updateFavoriteButton);
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
 
@@ -308,6 +417,7 @@ $("closeAction").addEventListener("change", async () => {
 listen("open-settings", showSettings).catch(() => {});
 
 loadManualIps();
+renderFavorites();
 loadDevices();
 loadAutostart();
 loadAudioPreferences();

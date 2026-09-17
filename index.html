@@ -26,7 +26,7 @@
 
     <section id="mainView">
       <div class="main-grid">
-      <section class="card">
+      <section class="card connection-card">
         <div class="section-title">
           <div>
             <h2>Connexion</h2>
@@ -36,7 +36,15 @@
         </div>
 
         <label for="peer">Ordinateur distant</label>
-        <select id="peer"><option value="">Recherche d'un PC…</option></select>
+        <div class="peer-row">
+          <select id="peer"><option value="">Recherche d'un PC…</option></select>
+          <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled>☆</button>
+        </div>
+
+        <div class="favorites-panel">
+          <div class="favorites-title"><span>☆ Favoris</span><span class="favorites-hint">Cliquez pour vous connecter</span></div>
+          <div id="favoritesList"></div>
+        </div>
 
         <div class="manual-row">
           <input id="manualIp" type="text" inputmode="decimal" placeholder="Adresse IP, ex. 192.168.1.25">
@@ -47,7 +55,7 @@
         <button id="connect" class="primary">Se connecter</button>
       </section>
 
-      <section class="card">
+      <section class="card audio-card">
         <div class="section-title">
           <div>
             <h2>Audio</h2>

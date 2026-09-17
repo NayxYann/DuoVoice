@@ -53,6 +53,12 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 
 
 ## v1.0
+
+### Mise à jour UI 1.0
+- Ajout des favoris de machines/IP directement depuis le sélecteur avec l’icône étoile.
+- Les favoris affichent leur disponibilité en temps réel ; un favori disponible est cliquable pour se connecter directement.
+- Les panneaux Connexion et Audio sont alignés à la même hauteur sur la vue large/carrée.
+- Palette d’apparence légèrement plus saturée tout en conservant le thème sombre.
 - Mesure RTT réseau réelle en temps réel pendant une connexion.
 - Palette de couleurs douces persistante.
 - Barre de volume 0–100 %, extension à 200 % lorsque l’amplification est activée.
