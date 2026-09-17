@@ -36,7 +36,9 @@ Le plugin officiel Tauri documente le support Windows/Linux et les commandes ena
 
 
 ## Diagnostic Windows
-En cas de problème de démarrage, DuoVoice écrit le journal de démarrage dans `%LOCALAPPDATA%\DuoVoice\startup.log`.
+### Journal de diagnostic
+
+DuoVoice conserve un journal technique optionnel dans `duovoice.log` pour faciliter le diagnostic des problèmes de démarrage, audio ou réseau. Le fichier est automatiquement limité à **2 Mo**, avec au maximum **une archive** (`duovoice.log.1`) afin d'éviter l'accumulation de fichiers.
 ## v0.2.3
 Stability pass: discovery traffic/churn reduced and startup/runtime behavior kept conservative. Audio transport remains PCM/UDP in this build.
 
@@ -50,14 +52,17 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 - Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
 
 
-## v0.4.0
+## v1.0
 - Mesure RTT réseau réelle en temps réel pendant une connexion.
 - Palette de couleurs douces persistante.
 - Barre de volume 0–100 %, extension à 200 % lorsque l’amplification est activée.
+- Fenêtre principale carrée par défaut (720 × 720) avec mise en page responsive lors du redimensionnement.
 
 
 ## Réduction de bruit
 
-La version 0.4.0 intègre RNNoise côté Rust pour traiter le microphone localement avant l'envoi UDP. RNNoise travaille sur des trames de 480 échantillons à 48 kHz, ce qui correspond au pipeline audio actuel de DuoVoice. citeturn0search5turn0search2
+La version 1.0 conserve les améliorations de la version 1.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
+
+Le signal sec est retardé du même bloc de 10 ms que le traitement RNNoise avant le mélange d'intensité. Cela évite de mélanger un signal direct avec sa version retardée, ce qui produirait un effet de voix doublée.
 
 La fonction est désactivable à chaud. Son état ON/OFF et son intensité sont sauvegardés localement. Le réglage d'intensité agit comme un mixage entre le signal brut et le signal traité, avec trois préréglages : Naturel, Équilibré et Agressif.

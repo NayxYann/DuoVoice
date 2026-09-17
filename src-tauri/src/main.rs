@@ -194,29 +194,43 @@ fn read_packet(buf: &[u8]) -> Option<Packet> {
     Some(Packet { seq, samples })
 }
 
-fn denoise_frame(denoiser: &mut Option<rnnoise2::Denoiser>, input: &[i16], intensity: f32, output: &mut [i16]) {
+fn denoise_frame(
+    denoiser: &mut Option<Box<nnnoiseless::DenoiseState<'static>>>,
+    delayed_dry: &mut Option<[i16; FRAME_SAMPLES]>,
+    input: &[i16],
+    intensity: f32,
+    output: &mut [i16],
+) {
     let strength = intensity.clamp(0.0, 1.0);
-    if strength <= 0.001 {
-        output.copy_from_slice(input);
-        return;
-    }
     if denoiser.is_none() {
-        *denoiser = rnnoise2::Denoiser::new(None);
+        *denoiser = Some(nnnoiseless::DenoiseState::new());
     }
+
     let Some(d) = denoiser.as_mut() else {
         output.copy_from_slice(input);
         return;
     };
+
+    // RNNoise is strictly mono, 48 kHz, 480 samples per frame.
+    // The capture path is already downmixed to mono.
     let mut in_f = [0.0f32; FRAME_SAMPLES];
     let mut out_f = [0.0f32; FRAME_SAMPLES];
     for i in 0..FRAME_SAMPLES {
-        in_f[i] = input[i] as f32 / 32768.0;
+        in_f[i] = input[i] as f32;
     }
-    d.process(&in_f, &mut out_f);
+
+    d.process_frame(&mut out_f, &in_f);
+
+    // RNNoise has one 10 ms frame of algorithmic delay. Never mix its delayed
+    // output with the current dry signal: doing so creates an audible doubled
+    // voice/short echo. Keep the dry frame delayed by exactly the same amount.
+    let mut current_dry = [0i16; FRAME_SAMPLES];
+    current_dry.copy_from_slice(input);
+    let dry = delayed_dry.replace(current_dry);
     for i in 0..FRAME_SAMPLES {
-        let dry = in_f[i];
-        let wet = out_f[i].clamp(-1.0, 1.0);
-        output[i] = ((dry + (wet - dry) * strength) * 32767.0)
+        let wet = out_f[i].clamp(-32768.0, 32767.0);
+        let dry_sample = dry.map(|frame| frame[i] as f32).unwrap_or(wet);
+        output[i] = (dry_sample + (wet - dry_sample) * strength)
             .round()
             .clamp(-32768.0, 32767.0) as i16;
     }
@@ -267,6 +281,7 @@ fn start_audio(
     let input_stream = match in_cfg.sample_format() {
         SampleFormat::F32 => {
             let mut denoiser = None;
+            let mut delayed_dry = None;
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[f32], _| {
@@ -280,7 +295,7 @@ fn start_audio(
                     let mut processed = [0i16; FRAME_SAMPLES];
                     if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
                         let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &b[..FRAME_SAMPLES], intensity, &mut processed);
+                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
                     } else {
                         processed.copy_from_slice(&b[..FRAME_SAMPLES]);
                     }
@@ -291,6 +306,7 @@ fn start_audio(
         },
         SampleFormat::I16 => {
             let mut denoiser = None;
+            let mut delayed_dry = None;
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[i16], _| {
@@ -304,7 +320,7 @@ fn start_audio(
                     let mut processed = [0i16; FRAME_SAMPLES];
                     if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
                         let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &b[..FRAME_SAMPLES], intensity, &mut processed);
+                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
                     } else {
                         processed.copy_from_slice(&b[..FRAME_SAMPLES]);
                     }
@@ -315,6 +331,7 @@ fn start_audio(
         },
         SampleFormat::U16 => {
             let mut denoiser = None;
+            let mut delayed_dry = None;
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
             input_device.build_input_stream(input_config, move |data: &[u16], _| {
@@ -328,7 +345,7 @@ fn start_audio(
                     let mut processed = [0i16; FRAME_SAMPLES];
                     if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
                         let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &b[..FRAME_SAMPLES], intensity, &mut processed);
+                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
                     } else {
                         processed.copy_from_slice(&b[..FRAME_SAMPLES]);
                     }
@@ -539,27 +556,76 @@ fn set_output(_state: State<'_, AudioState>, _name: String) -> Result<(), String
     Err("Le changement de périphérique à chaud sera ajouté après la V1 de test.".into())
 }
 
-fn startup_log(message: &str) {
-    #[cfg(not(target_os = "windows"))]
-    let _ = message;
+fn app_log_path() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        if let Ok(base) = std::env::var("LOCALAPPDATA") {
-            let dir = std::path::PathBuf::from(base).join("DuoVoice");
-            let _ = std::fs::create_dir_all(&dir);
-            let path = dir.join("startup.log");
-            use std::io::Write;
-            if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-                let _ = writeln!(file, "{}", message);
+        std::env::var_os("LOCALAPPDATA")
+            .map(std::path::PathBuf::from)
+            .map(|p| p.join("DuoVoice").join("duovoice.log"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local").join("share")))
+            .map(|p| p.join("DuoVoice").join("duovoice.log"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .map(|p| p.join("Library").join("Application Support").join("DuoVoice").join("duovoice.log"))
+    }
+}
+
+fn app_log(message: &str) {
+    use std::io::{Read, Write};
+    const MAX_LOG_SIZE: u64 = 2 * 1024 * 1024;
+
+    let Some(path) = app_log_path() else { return; };
+    let Some(dir) = path.parent() else { return; };
+    if std::fs::create_dir_all(dir).is_err() { return; }
+
+    // Keep at most one small backup. We rotate before writing so the active
+    // log can never grow beyond the configured limit by more than one entry.
+    if let Ok(meta) = std::fs::metadata(&path) {
+        if meta.len() >= MAX_LOG_SIZE {
+            let backup = path.with_extension("log.1");
+            let _ = std::fs::rename(&path, backup);
+        }
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "[{timestamp}] {message}");
+        let _ = file.flush();
+    }
+
+    // Defensive cap in case a very large single message is ever logged.
+    if let Ok(meta) = std::fs::metadata(&path) {
+        if meta.len() > MAX_LOG_SIZE {
+            if let Ok(mut file) = std::fs::File::open(&path) {
+                let mut data = Vec::new();
+                if file.read_to_end(&mut data).is_ok() {
+                    let keep = MAX_LOG_SIZE as usize;
+                    if data.len() > keep {
+                        let trimmed = &data[data.len() - keep..];
+                        let _ = std::fs::write(&path, trimmed);
+                    }
+                }
             }
         }
     }
 }
 
 fn main() {
-    startup_log("=== DuoVoice starting ===");
+    app_log("=== DuoVoice starting ===");
     let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
-    startup_log(&format!("autostart={launched_from_autostart}"));
+    app_log(&format!("autostart={launched_from_autostart}"));
 
     let result = tauri::Builder::default()
         .manage(AudioState {
@@ -592,7 +658,7 @@ fn main() {
             }
         })
         .setup(move |app| {
-            startup_log("Tauri setup entered");
+            app_log("Tauri setup entered");
             let discovery = app.state::<Arc<DiscoveryState>>().inner().clone();
             start_discovery(discovery);
 
@@ -643,7 +709,7 @@ fn main() {
                 .build(app)?;
 
             if launched_from_autostart {
-                startup_log("Hiding window because of autostart");
+                app_log("Hiding window because of autostart");
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.set_skip_taskbar(true);
                     let _ = w.hide();
@@ -653,13 +719,13 @@ fn main() {
                 let _ = w.set_focus();
             }
 
-            startup_log("Tauri setup completed");
+            app_log("Tauri setup completed");
             Ok(())
         })
         .run(tauri::generate_context!());
 
     match result {
-        Ok(()) => startup_log("DuoVoice exited normally"),
-        Err(e) => startup_log(&format!("DuoVoice startup error: {e}")),
+        Ok(()) => app_log("DuoVoice exited normally"),
+        Err(e) => app_log(&format!("DuoVoice startup error: {e}")),
     }
 }
