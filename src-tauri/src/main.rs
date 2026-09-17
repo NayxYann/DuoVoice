@@ -179,7 +179,6 @@ fn start_audio(
     let input_samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(FRAME_SAMPLES * 2)));
     let tx_buf = Arc::clone(&input_samples);
     let tx_socket = tx.try_clone().map_err(|e| e.to_string())?;
-    let stop_in = Arc::clone(&stop);
     let muted_in = Arc::clone(&muted);
     let mut seq = 0u32;
 
@@ -331,6 +330,8 @@ fn set_output(_state: State<'_, AudioState>, _name: String) -> Result<(), String
 }
 
 fn startup_log(message: &str) {
+    #[cfg(not(target_os = "windows"))]
+    let _ = message;
     #[cfg(target_os = "windows")]
     {
         if let Ok(base) = std::env::var("LOCALAPPDATA") {
@@ -386,8 +387,9 @@ fn main() {
                 .icon(icon)
                 .menu(&menu)
                 .tooltip("DuoVoice")
-                .on_tray_icon_event(|app, event| {
+                .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.set_skip_taskbar(false);
                             let _ = w.show();
