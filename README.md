@@ -48,3 +48,9 @@ Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préf
 - Finitions UI : volume adaptatif 0–100 % / 0–200 % et sauvegarde.
 - Palette de couleurs douces personnalisable.
 - Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
+
+
+## v0.3.2
+- Mesure RTT réseau réelle en temps réel pendant une connexion.
+- Palette de couleurs douces persistante.
+- Barre de volume 0–100 %, extension à 200 % lorsque l’amplification est activée.

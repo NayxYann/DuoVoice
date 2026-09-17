@@ -21,6 +21,8 @@ use tauri::{
 const DISCOVERY_PORT: u16 = 39471;
 const AUDIO_PORT: u16 = 39472;
 const MAGIC: &[u8; 4] = b"DV01";
+const PING_MAGIC: &[u8; 4] = b"DVP1";
+const PONG_MAGIC: &[u8; 4] = b"DVP2";
 const SAMPLE_RATE: u32 = 48_000;
 const FRAME_SAMPLES: usize = 480;
 
@@ -42,6 +44,7 @@ struct AudioState {
     close_to_tray: std::sync::atomic::AtomicBool,
     volume: Arc<Mutex<f32>>,
     muted: Arc<std::sync::atomic::AtomicBool>,
+    remote: Arc<Mutex<Option<SocketAddr>>>,
 }
 
 #[derive(Clone)]
@@ -209,6 +212,7 @@ fn start_audio(
     }
 
     let remote_addr: SocketAddr = format!("{}:{}", remote, AUDIO_PORT).parse().map_err(|e| format!("Adresse distante invalide: {e}"))?;
+    *state.remote.lock().unwrap() = Some(remote_addr);
     let tx = UdpSocket::bind(("0.0.0.0", 0)).map_err(|e| e.to_string())?;
     tx.set_nonblocking(true).ok();
     let rx = UdpSocket::bind(("0.0.0.0", AUDIO_PORT)).map_err(|e| format!("Port audio {} indisponible: {}", AUDIO_PORT, e))?;
@@ -278,7 +282,14 @@ fn start_audio(
         let mut last_seq: Option<u32> = None;
         while !stop_net.load(std::sync::atomic::Ordering::Relaxed) {
             match rx.recv_from(&mut buf) {
-                Ok((n, _)) => {
+                Ok((n, sender)) => {
+                    if n >= 12 && &buf[..4] == PING_MAGIC {
+                        let mut pong = Vec::with_capacity(12);
+                        pong.extend_from_slice(PONG_MAGIC);
+                        pong.extend_from_slice(&buf[4..n.min(12)]);
+                        let _ = rx.send_to(&pong, sender);
+                        continue;
+                    }
                     if let Some(packet) = read_packet(&buf[..n]) {
                         if let Some(prev) = last_seq {
                             let delta = packet.seq.wrapping_sub(prev);
@@ -364,11 +375,48 @@ fn start_audio(
 }
 
 fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
+    *state.remote.lock().unwrap() = None;
     if let Some(engine) = state.engine.lock().unwrap().take() {
         engine.stop.store(true, std::sync::atomic::Ordering::Relaxed);
         let _ = engine._network.join();
     }
     Ok(())
+}
+
+
+#[tauri::command]
+fn measure_latency(state: State<'_, AudioState>) -> Result<f64, String> {
+    let remote = *state.remote.lock().unwrap()
+        .as_ref()
+        .ok_or_else(|| "Aucune connexion active".to_string())?;
+
+    let socket = UdpSocket::bind(("0.0.0.0", 0))
+        .map_err(|e| format!("Sonde latence impossible: {e}"))?;
+    socket.set_read_timeout(Some(Duration::from_millis(400)))
+        .map_err(|e| e.to_string())?;
+
+    let nonce = Instant::now().elapsed().as_nanos() as u64 ^ std::process::id() as u64;
+    let mut ping = Vec::with_capacity(12);
+    ping.extend_from_slice(PING_MAGIC);
+    ping.extend_from_slice(&nonce.to_be_bytes());
+
+    let started = Instant::now();
+    socket.send_to(&ping, remote)
+        .map_err(|e| format!("Envoi sonde impossible: {e}"))?;
+
+    let mut buf = [0u8; 64];
+    loop {
+        match socket.recv_from(&mut buf) {
+            Ok((n, _)) if n >= 12 && &buf[..4] == PONG_MAGIC && &buf[4..12] == &nonce.to_be_bytes() => {
+                return Ok(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            Ok(_) => continue,
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
+                return Err("Mesure de latence expirée".into());
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
 }
 
 #[tauri::command]
@@ -438,6 +486,7 @@ fn main() {
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
             volume: Arc::new(Mutex::new(1.0)),
             muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            remote: Arc::new(Mutex::new(None)),
         })
         .manage(Arc::new(DiscoveryState { peers: Mutex::new(HashMap::new()) }))
         .plugin(tauri_plugin_autostart::init(
@@ -445,7 +494,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_input, set_output, set_close_action
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, measure_latency, set_input, set_output, set_close_action
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

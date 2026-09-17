@@ -10,6 +10,43 @@ const MANUAL_KEY = "duovoice.manualIps";
 const VOLUME_KEY = "duovoice.volume";
 const BOOST_KEY = "duovoice.boostVolume";
 const MUTE_KEY = "duovoice.muted";
+const COLOR_KEY = "duovoice.color";
+
+
+
+
+const PALETTE = {
+  violet: "#8f86b8",
+  rose: "#b88499",
+  bleu: "#7d9bb8",
+  vert: "#7fa18b",
+  jaune: "#b2a06f",
+  orange: "#b78d70",
+  cyan: "#72a3a3",
+  ardoise: "#858b99"
+};
+
+function applyAppColor(name) {
+  const color = PALETTE[name] || PALETTE.violet;
+  document.documentElement.style.setProperty("--accent", color);
+  document.documentElement.style.setProperty("--accent-soft", `${color}22`);
+  document.documentElement.style.setProperty("--accent-focus", `${color}2e`);
+  localStorage.setItem(COLOR_KEY, name);
+  document.querySelectorAll(".color-choice").forEach(b => b.classList.toggle("active", b.dataset.color === name));
+}
+
+function initColors() {
+  const box = $("colorChoices");
+  if (!box) return;
+  for (const [name, color] of Object.entries(PALETTE)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "color-choice"; b.dataset.color = name;
+    b.title = name; b.style.setProperty("--swatch", color);
+    b.addEventListener("click", () => applyAppColor(name));
+    box.appendChild(b);
+  }
+  applyAppColor(localStorage.getItem(COLOR_KEY) || "violet");
+}
 
 function setDetails(text) { $("details").textContent = text; }
 
@@ -48,6 +85,7 @@ function loadAudioPreferences() {
 }
 
 function updateVolumeUi() {
+  $("volume").max = $("boostVolume").checked ? 200 : 100;
   const value = Number($("volume").value);
   $("volumeValue").textContent = `${value}%`;
   $("savedVolume").textContent = `${value}%`;
@@ -115,6 +153,18 @@ async function addManualIp() {
     ips.add(p.address); localStorage.setItem(MANUAL_KEY, JSON.stringify([...ips]));
     renderPeers(p.address); $("manualIp").value = ""; setDetails(`IP ${p.address} ajoutée.`);
   } catch (e) { setDetails(`IP invalide : ${e}`); }
+}
+
+async function updateLatency() {
+  const el = $("latency");
+  if (!connected) { el.textContent = "— ms"; return; }
+  try {
+    const ms = await invoke("measure_latency");
+    const rounded = Math.max(0, Math.round(Number(ms)));
+    el.textContent = `${rounded} ms`;
+  } catch {
+    el.textContent = "…";
+  }
 }
 
 async function connect() {
@@ -204,5 +254,8 @@ loadManualIps();
 loadDevices();
 loadAutostart();
 loadAudioPreferences();
+initColors();
 loadPeers();
 setInterval(() => loadPeers(false), 3000);
+setInterval(updateLatency, 1000);
+updateLatency();
