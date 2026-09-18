@@ -1,6 +1,6 @@
 *{box-sizing:border-box}
 :root{color-scheme:dark;--accent:#8f86b8;--accent-soft:#24202f;--accent-focus:#8f86b82e}
-body{margin:0;min-width:0;min-height:100vh;background:#0d0f13;color:#f4f6f8;font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:auto}
+body{margin:0;min-width:0;min-height:100vh;background:#0d0f13;color:#f4f6f8;font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow-y:scroll;scrollbar-gutter:stable}
 button,input,select{font:inherit}
 button{border:0;color:#f5f7fa;cursor:pointer;transition:background .15s ease,transform .1s ease,opacity .15s ease}
 button:hover{filter:brightness(1.1)}
@@ -178,3 +178,73 @@ body{zoom:var(--ui-scale)}
 .update-banner.current{background:var(--success-soft);border-color:var(--success-border);color:#78cc9d}
 .update-banner.error{background:var(--danger-soft);border-color:var(--danger-border);color:#e79aa2}
 .update-banner{box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
+
+/* v1.1.3 — alignment, stable settings layout and scale controls */
+.icon-btn,.favorite-action,.add-btn{box-sizing:border-box;display:grid;place-items:center;align-content:center;justify-content:center;text-align:center;padding:0;line-height:1;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.icon-btn{overflow:hidden}
+.favorite-action{overflow:hidden}
+.add-btn{font-size:20px}
+.favorite-action{font-size:16px}
+.favorite-connect{font-size:14px}
+.favorite-disconnect{font-size:17px}
+.scale-labels{grid-template-columns:repeat(6,minmax(0,1fr));padding:0 8px;font-variant-numeric:tabular-nums}
+.scale-labels span{display:block;text-align:center!important}
+.scale-actions{display:grid;grid-template-columns:1fr 1.35fr;gap:8px;margin-top:10px}
+.scale-action{width:100%;height:38px;margin:0}
+@media(max-width:560px){.scale-actions{grid-template-columns:1fr}}
+
+
+/* v1.1.3: consistent spacing for explanatory/help text */
+.card-heading p,
+.settings-help,
+.settings-description,
+.help-text,
+.description,
+.hint,
+.option-description,
+.setting-description {
+  margin-top: 8px;
+  margin-bottom: 0;
+  line-height: 1.45;
+}
+
+.card-heading {
+  gap: 6px;
+}
+
+.card-heading + .settings-help,
+.card-heading + .settings-description,
+.card-heading + .help-text,
+.card-heading + .description,
+.card-heading + .hint,
+.card-heading + .option-description,
+.card-heading + .setting-description {
+  margin-top: 8px;
+}
+
+.settings-card,
+.settings-section {
+  padding-bottom: 14px;
+}
+
+/* Keep explanatory text visually separated from the control immediately above. */
+.card > p:last-child,
+.card > .help-text:last-child,
+.card > .description:last-child,
+.card > .hint:last-child {
+  margin-top: 10px;
+}
+
+/* Prevent helper text from touching adjacent controls on narrow layouts. */
+@media (max-width: 560px) {
+  .card-heading p,
+  .settings-help,
+  .settings-description,
+  .help-text,
+  .description,
+  .hint,
+  .option-description,
+  .setting-description {
+    line-height: 1.5;
+  }
+}

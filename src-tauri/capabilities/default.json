@@ -9,6 +9,11 @@
     "core:default",
     "autostart:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-hide"
   ]
 }

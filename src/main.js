@@ -20,7 +20,7 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const APP_VERSION = "1.1.2";
+const APP_VERSION = "1.1.3";
 let connectedPeer = "";
 
 
@@ -82,11 +82,16 @@ function showMain() {
   updateHeaderMode();
 }
 
+function setUiScaleControl(value) {
+  const scale = Number(value) || 1;
+  $("uiScale").value = String(scale);
+  $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
+}
+
 function applyUiScale(value) {
   const scale = Number(value) || 1;
   document.documentElement.style.setProperty("--ui-scale", String(scale));
-  $("uiScale").value = String(scale);
-  $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
+  setUiScaleControl(scale);
   localStorage.setItem(SCALE_KEY, String(scale));
 }
 
@@ -94,7 +99,14 @@ function loadUiScale() {
   const saved = Number(localStorage.getItem(SCALE_KEY) || "1");
   const allowed = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
   const scale = allowed.reduce((best, candidate) => Math.abs(candidate - saved) < Math.abs(best - saved) ? candidate : best, 1);
-  applyUiScale(scale);
+  document.documentElement.style.setProperty("--ui-scale", String(scale));
+  setUiScaleControl(scale);
+}
+
+function resetUiScale() {
+  setUiScaleControl(1);
+  applyUiScale(1);
+  setDetails("Échelle de l’interface rétablie à 100%.");
 }
 
 async function requestQuit() {
@@ -439,15 +451,17 @@ async function setUpdateBanner(status, update = null, error = "") {
   banner.onclick = null;
   banner.title = "";
   if (status === "checking") {
-    banner.textContent = "Rechercher des mises à jour";
+    banner.textContent = "↻ Vérification des mises à jour…";
   } else if (status === "current") {
-    banner.textContent = `✓ Déjà à jour · v${APP_VERSION} · cliquer pour rechercher`;
+    banner.textContent = `✓ Vérification terminée · aucune mise à jour · v${APP_VERSION} · cliquer pour vérifier`;
     banner.onclick = checkForUpdates;
+    banner.title = "La dernière vérification est terminée : DuoVoice est à jour.";
   } else if (status === "available") {
-    banner.textContent = `↑ Mise à jour disponible · v${update.version} — cliquer pour installer`;
+    banner.textContent = `↑ Mise à jour disponible · v${update.version} · cliquer pour télécharger`;
     banner.onclick = installUpdate;
+    banner.title = `Télécharger et installer DuoVoice v${update.version}`;
   } else {
-    banner.textContent = `⚠ Mise à jour indisponible · v${APP_VERSION} · cliquer pour réessayer`;
+    banner.textContent = `⚠ Vérification impossible · cliquer pour réessayer`;
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -459,13 +473,17 @@ async function checkForUpdates() {
   await setUpdateBanner("checking");
   try {
     const update = await check();
+    localStorage.setItem("duovoice.lastUpdateCheck", new Date().toISOString());
     if (update) {
       await setUpdateBanner("available", update);
+      setDetails(`Mise à jour v${update.version} disponible.`);
     } else {
       await setUpdateBanner("current");
+      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : DuoVoice est à jour.`);
     }
   } catch (e) {
     await setUpdateBanner("error", null, String(e));
+    setDetails(`Vérification des mises à jour impossible : ${String(e)}`);
   } finally {
     updateChecking = false;
   }
@@ -580,13 +598,16 @@ $("settingsBtn").addEventListener("click", () => {
 $("quitBtn").addEventListener("click", requestQuit);
 $("appVersion").textContent = `v${APP_VERSION}`;
 $("lastUpdate").textContent = formatLastUpdate();
-$("uiScale").addEventListener("input", () => applyUiScale($("uiScale").value));
+$("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
+$("applyUiScale").addEventListener("click", () => { applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
+$("resetUiScale").addEventListener("click", resetUiScale);
 updateHeaderMode();
 loadUiScale();
 
 listen("focus-window", async () => {
   try {
     const window = getCurrentWindow();
+    await window.setSkipTaskbar(false);
     await window.show();
     await window.unminimize();
     await window.setFocus();
@@ -607,6 +628,10 @@ $("autostart").addEventListener("change", async e => {
 
 $("startHidden").checked = localStorage.getItem("duovoice.startHidden") !== "false";
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
+if ($("startHidden").checked) {
+  invoke("hide_window_to_tray").catch((e) => setDetails(`Impossible de démarrer dans le tray : ${e}`));
+}
+
 $("startHidden").addEventListener("change", () => localStorage.setItem("duovoice.startHidden", String($("startHidden").checked)));
 $("closeAction").addEventListener("change", async () => {
   const value = $("closeAction").value;
