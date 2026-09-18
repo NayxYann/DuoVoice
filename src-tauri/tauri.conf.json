@@ -3,26 +3,31 @@
   "productName": "DuoVoice",
   "version": "1.1.1",
   "identifier": "fr.duovoice.intercom",
+
   "build": {
     "frontendDist": "../dist",
     "beforeBuildCommand": "npm run build"
   },
+
   "app": {
     "withGlobalTauri": false,
+
     "windows": [
       {
         "title": "DuoVoice",
         "width": 1080,
-        "height": 720,
+        "height": 800,
         "resizable": true,
         "minWidth": 820,
         "minHeight": 600
       }
     ],
+
     "security": {
       "csp": null
     }
   },
+
   "bundle": {
     "active": true,
     "targets": [
@@ -31,12 +36,15 @@
       "appimage",
       "deb"
     ],
+
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
     ]
   },
+
   "plugins": {
+    "updater": {},
     "autostart": null,
     "process": {}
   }
