@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+
   workflow_dispatch:
     inputs:
       tag:
@@ -21,6 +22,7 @@ env:
 jobs:
   windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,9 +44,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
@@ -52,10 +55,12 @@ jobs:
           args: --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
+          retryAttempts: 3
 
   linux:
     needs: windows
     runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,9 +93,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           releaseDraft: false
           prerelease: false
           projectPath: .
