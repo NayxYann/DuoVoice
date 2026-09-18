@@ -1,14 +1,17 @@
-# DuoVoice 1.2.5
+# DuoVoice 1.2.6
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.5
+## Nouveautés 1.2.6
 
-- **Version visible sur l’accueil** : la numérotation `1.2.5` apparaît désormais discrètement juste à côté du logo / nom DuoVoice, dans le même esprit que l’indicateur déjà présent dans le mini-panneau systray.
-- **Menu clic droit parfaitement aligné avec le clic gauche** : la popup personnalisée est maintenant centrée horizontalement sur l’icône DuoVoice du systray, exactement comme le panneau de contrôle rapide.
-- **Même hauteur de référence pour les deux panneaux systray** : le clic gauche et le clic droit utilisent désormais le même espacement de **3 px au-dessus de la zone de travail / barre des tâches**, pour une cohérence visuelle totale.
-- Les deux panneaux restent automatiquement contraints dans les limites du moniteur afin d’éviter tout débordement près des bords de l’écran.
-- Tous les changements de la 1.2.4 sont conservés : validation du nom en deux états, icônes recentrées, palette harmonisée, menu clic droit custom DuoVoice, retours visuels sur les actions, échelle systray sécurisée, favoris persistants et workflows GitHub entièrement manuels.
+- **Contours systray simplifiés** : les panneaux clic gauche et clic droit utilisent désormais un seul contour arrondi visible, sans second cadre/ombre native autour de la fenêtre.
+- **Bouton Muet harmonisé** : l’application principale utilise le même pictogramme micro, le même état barré en mode muet et la même couleur d’accent que le contrôle Muet du systray.
+- **Échelle systray unifiée** : le réglage d’échelle du systray redimensionne maintenant proportionnellement le panneau clic gauche **et** le menu clic droit.
+- **Proportions et position conservées** : les deux surfaces gardent leur rapport de taille, leur centrage sur l’icône DuoVoice et leur marge de **3 px** au-dessus de la barre des tâches quelle que soit l’échelle choisie.
+- **Plage d’échelle sécurisée** inchangée : **90 / 100 / 110 / 120 %** pour éviter un menu trop petit ou trop envahissant.
+- **Version visible sur l’accueil** et dans le mini-panneau systray.
+- Le menu clic droit custom DuoVoice reste limité à **Ouvrir DuoVoice / Paramètres / Quitter**.
+- Tous les acquis précédents sont conservés : nom de machine personnalisable, validation visuelle, palette harmonisée, favoris persistants, updater signé et workflows GitHub entièrement manuels.
 
 ## Fonctionnalités principales
 
@@ -99,7 +102,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.5`.
+5. saisir le tag voulu, par exemple `v1.2.6`.
 
 Le build produit notamment :
 

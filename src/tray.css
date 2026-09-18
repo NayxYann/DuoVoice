@@ -54,7 +54,6 @@ button:active { transform: translateY(1px); }
   border: 1px solid var(--border);
   border-radius: 17px;
   background: linear-gradient(180deg, #171a21 0%, #12151a 100%);
-  box-shadow: 0 18px 46px #00000080;
 }
 
 .tray-header, .tray-brand, .tray-status, .host-copy, .action-tile,
@@ -325,7 +324,7 @@ button:active { transform: translateY(1px); }
 .confirm-actions button:hover { background: var(--surface-2); }
 .confirm-actions .danger { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
 
-/* 1.2.5 — quick panel feedback and semantic colors match the main app. */
+/* 1.2.6 — quick panel feedback and semantic colors match the main app. */
 .icon-button,
 .action-tile,
 .quit-button,

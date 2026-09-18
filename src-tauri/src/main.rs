@@ -121,17 +121,30 @@ fn set_client_name(state: State<'_, Arc<DiscoveryState>>, name: String) -> Resul
 
 #[tauri::command]
 fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
-    const BASE_WIDTH: f64 = 280.0;
-    const BASE_HEIGHT: f64 = 348.0;
+    const QUICK_WIDTH: f64 = 280.0;
+    const QUICK_HEIGHT: f64 = 348.0;
+    const MENU_WIDTH: f64 = 190.0;
+    const MENU_HEIGHT: f64 = 154.0;
     let scale = scale.clamp(0.9, 1.2);
+
     if let Some(window) = app.get_webview_window("tray") {
         window
             .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-                (BASE_WIDTH * scale).round(),
-                (BASE_HEIGHT * scale).round(),
+                (QUICK_WIDTH * scale).round(),
+                (QUICK_HEIGHT * scale).round(),
             )))
             .map_err(|e| e.to_string())?;
     }
+
+    if let Some(window) = app.get_webview_window("tray-menu") {
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+                (MENU_WIDTH * scale).round(),
+                (MENU_HEIGHT * scale).round(),
+            )))
+            .map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 

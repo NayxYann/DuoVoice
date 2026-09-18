@@ -7,6 +7,7 @@
   --ui-scale: 1;
   --accent: #a78bfa;
   --accent-soft: #a78bfa22;
+  --accent-border: #a78bfa70;
   --accent-focus: #a78bfa2e;
   --danger: #e77984;
   --danger-soft: #3a1d24;
@@ -852,16 +853,62 @@ input[type="range"] {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  color: #d9dde4;
   font-weight: 600;
 }
 
+.mute-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: #1c2028;
+  color: #fff;
+}
+
 .mute-btn.active {
-  background: var(--danger-soft);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: #fff;
 }
 
 .mute-icon {
-  font-size: 15px;
+  position: relative;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  display: block;
+  color: currentColor;
 }
+
+.mute-icon::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 7px;
+  height: 12px;
+  border: 1.7px solid currentColor;
+  border-radius: 5px;
+}
+
+.mute-icon::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 13px;
+  height: 8px;
+  border: 1.7px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 0 -2.3px currentColor;
+}
+
+.mute-btn.active .mute-icon {
+  opacity: .95;
+  background: linear-gradient(45deg, transparent 45%, currentColor 46%, currentColor 54%, transparent 55%) center/22px 22px no-repeat;
+}
+
 
 .state-card {
   padding-bottom: 11px;
@@ -1314,7 +1361,7 @@ button:not(:disabled):active,
 }
 
 
-/* 1.2.5 — unified semantic colors and pixel-stable icon alignment. */
+/* 1.2.6 — unified semantic colors and pixel-stable icon alignment. */
 .icon-btn,
 .add-btn,
 .favorite-action,

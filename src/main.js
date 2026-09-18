@@ -24,7 +24,7 @@ const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.5";
+const FALLBACK_VERSION = "1.2.6";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -50,6 +50,7 @@ function applyAppColor(name) {
   const color = PALETTE[name] || PALETTE.violet;
   document.documentElement.style.setProperty("--accent", color);
   document.documentElement.style.setProperty("--accent-soft", `${color}22`);
+  document.documentElement.style.setProperty("--accent-border", `${color}70`);
   document.documentElement.style.setProperty("--accent-focus", `${color}2e`);
   localStorage.setItem(COLOR_KEY, name);
   emitTo("tray", "theme-changed", { color: name }).catch(() => {});
@@ -183,6 +184,7 @@ async function applyTrayScale(value) {
   try {
     await invoke("set_tray_scale", { scale });
     await emitTo("tray", "tray-scale-changed", { scale });
+    await emitTo("tray-menu", "tray-scale-changed", { scale });
     localStorage.setItem(TRAY_SCALE_KEY, String(scale));
     appliedTrayScale = scale;
     return true;
@@ -480,7 +482,6 @@ async function applyVolume() {
 function updateMuteUi(muted) {
   $("muteText").textContent = muted ? "Réactiver le son" : "Muet";
   $("mute").classList.toggle("active", muted);
-  $("mute").querySelector(".mute-icon").textContent = muted ? "🔇" : "🎙";
 }
 
 async function loadDevices() {
