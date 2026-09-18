@@ -225,22 +225,6 @@ button:active { transform: translateY(1px); }
   box-shadow: 0 4px 0 currentColor;
 }
 
-.settings-icon::before {
-  content: "";
-  position: absolute;
-  left: 5px; top: 5px;
-  width: 11px; height: 11px;
-  border: 2px dotted currentColor;
-  border-radius: 50%;
-}
-.settings-icon::after {
-  content: "";
-  position: absolute;
-  left: 9px; top: 9px;
-  width: 3px; height: 3px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-}
 
 .quit-button {
   width: 100%;
@@ -355,4 +339,17 @@ button:active { transform: translateY(1px); }
 .icon-button {
   display: grid;
   place-items: center;
+}
+
+/* 1.2.7 — SVG action icons share one optical center and stroke language. */
+.tile-svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

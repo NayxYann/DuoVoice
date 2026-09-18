@@ -1,17 +1,17 @@
-# DuoVoice 1.2.6
+# DuoVoice 1.2.7
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.6
+## Nouveautés 1.2.7
 
-- **Contours systray simplifiés** : les panneaux clic gauche et clic droit utilisent désormais un seul contour arrondi visible, sans second cadre/ombre native autour de la fenêtre.
-- **Bouton Muet harmonisé** : l’application principale utilise le même pictogramme micro, le même état barré en mode muet et la même couleur d’accent que le contrôle Muet du systray.
-- **Échelle systray unifiée** : le réglage d’échelle du systray redimensionne maintenant proportionnellement le panneau clic gauche **et** le menu clic droit.
-- **Proportions et position conservées** : les deux surfaces gardent leur rapport de taille, leur centrage sur l’icône DuoVoice et leur marge de **3 px** au-dessus de la barre des tâches quelle que soit l’échelle choisie.
-- **Plage d’échelle sécurisée** inchangée : **90 / 100 / 110 / 120 %** pour éviter un menu trop petit ou trop envahissant.
-- **Version visible sur l’accueil** et dans le mini-panneau systray.
-- Le menu clic droit custom DuoVoice reste limité à **Ouvrir DuoVoice / Paramètres / Quitter**.
-- Tous les acquis précédents sont conservés : nom de machine personnalisable, validation visuelle, palette harmonisée, favoris persistants, updater signé et workflows GitHub entièrement manuels.
+- **Icône du systray désactivable** : une nouvelle option « Afficher l’icône dans le systray » est disponible juste sous « Démarrer minimisé dans le tray ».
+- **Activée par défaut après installation** : si aucun choix n’a encore été enregistré, l’icône DuoVoice reste visible comme auparavant.
+- **Préférence persistante** : le choix est conservé entre les lancements et les mises à jour.
+- **Sécurité d’accès** : lorsque l’icône du systray est désactivée, « Démarrer minimisé dans le tray » est automatiquement désactivé et l’action de fermeture bascule sur « Quitter DuoVoice » afin d’éviter de rendre l’application invisible et impossible à rouvrir.
+- **Masquage immédiat** : désactiver l’option masque aussi les panneaux clic gauche/clic droit s’ils étaient ouverts.
+- **Icône Paramètres corrigée dans le contrôle rapide** : remplacement du pictogramme construit en CSS par un SVG d’engrenage propre, centré et cohérent avec les autres icônes.
+- **Vérification des icônes du panneau rapide** : alignement optique et centrage consolidés pour conserver des tuiles visuellement homogènes.
+- Tous les acquis de la 1.2.6 sont conservés : contours systray simplifiés, Muet harmonisé, échelle commune aux menus clic gauche/clic droit, palette cohérente, nom de machine personnalisable, favoris persistants, updater signé et workflows GitHub manuels.
 
 ## Fonctionnalités principales
 
@@ -102,7 +102,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.6`.
+5. saisir le tag voulu, par exemple `v1.2.7`.
 
 Le build produit notamment :
 

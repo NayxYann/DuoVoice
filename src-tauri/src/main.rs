@@ -119,6 +119,27 @@ fn set_client_name(state: State<'_, Arc<DiscoveryState>>, name: String) -> Resul
     Ok(value)
 }
 
+
+#[tauri::command]
+fn set_tray_icon_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let tray = app
+        .tray_by_id("duovoice-main-tray")
+        .ok_or_else(|| "Icône du systray introuvable".to_string())?;
+
+    tray.set_visible(enabled).map_err(|e| e.to_string())?;
+
+    if !enabled {
+        if let Some(window) = app.get_webview_window("tray") {
+            let _ = window.hide();
+        }
+        if let Some(window) = app.get_webview_window("tray-menu") {
+            let _ = window.hide();
+        }
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
     const QUICK_WIDTH: f64 = 280.0;
@@ -1016,7 +1037,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
+            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1063,6 +1084,7 @@ fn main() {
                 .ok_or_else(|| tauri::Error::AssetNotFound("DuoVoice tray icon".into()))?;
 
             let _tray = TrayIconBuilder::new()
+                .with_id("duovoice-main-tray")
                 .icon(icon)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {

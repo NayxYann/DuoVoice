@@ -22,9 +22,10 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
+const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.6";
+const FALLBACK_VERSION = "1.2.7";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -863,7 +864,49 @@ $("autostart").addEventListener("change", async e => {
 });
 
 $("startHidden").checked = localStorage.getItem("duovoice.startHidden") === "true";
+$("trayIconEnabled").checked = localStorage.getItem(TRAY_ICON_KEY) !== "false";
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
+
+function updateTrayPreferenceDependencies() {
+  const enabled = $("trayIconEnabled").checked;
+  $("startHidden").disabled = !enabled;
+  const trayOption = $("closeAction").querySelector('option[value="tray"]');
+  if (trayOption) trayOption.disabled = !enabled;
+}
+
+async function applyTrayIconPreference(enabled, announce = false) {
+  const desired = Boolean(enabled);
+
+  // Without a tray icon, hiding the main window would make DuoVoice impossible
+  // to reopen. Keep startup/close behaviour safe and explicit.
+  if (!desired) {
+    $("startHidden").checked = false;
+    localStorage.setItem("duovoice.startHidden", "false");
+    if ($("closeAction").value === "tray") {
+      $("closeAction").value = "quit";
+      localStorage.setItem("duovoice.closeAction", "quit");
+      await invoke("set_close_action", { action: "quit" }).catch(e => reportError("Close action", e));
+    }
+  }
+
+  localStorage.setItem(TRAY_ICON_KEY, String(desired));
+  updateTrayPreferenceDependencies();
+
+  try {
+    await invoke("set_tray_icon_enabled", { enabled: desired });
+    if (announce) {
+      $("autostartDetails").textContent = desired
+        ? "Icône du systray activée."
+        : "Icône du systray désactivée. Le démarrage minimisé est désactivé pour garder DuoVoice accessible.";
+    }
+  } catch (e) {
+    reportError("Tray icon", e);
+    $("trayIconEnabled").checked = !desired;
+    localStorage.setItem(TRAY_ICON_KEY, String(!desired));
+    updateTrayPreferenceDependencies();
+    $("autostartDetails").textContent = `Impossible de modifier l’icône du systray : ${e}`;
+  }
+}
 
 async function applyWindowPreferences() {
   const closeAction = $("closeAction").value;
@@ -882,6 +925,10 @@ $("startHidden").addEventListener("change", () => {
   localStorage.setItem("duovoice.startHidden", String($("startHidden").checked));
 });
 
+$("trayIconEnabled").addEventListener("change", async () => {
+  await applyTrayIconPreference($("trayIconEnabled").checked, true);
+});
+
 $("closeAction").addEventListener("change", async () => {
   const value = $("closeAction").value;
   localStorage.setItem("duovoice.closeAction", value);
@@ -891,10 +938,12 @@ $("closeAction").addEventListener("change", async () => {
 
 async function initializeWindow() {
   loadUiScale();
+  updateTrayPreferenceDependencies();
   await Promise.all([
     applyUiScale($("uiScale").value),
     applyTrayScale($("trayScale").value),
   ]);
+  await applyTrayIconPreference($("trayIconEnabled").checked, false);
   await applyWindowPreferences();
 }
 

@@ -1421,3 +1421,19 @@ button:not(:disabled):active,
   48% { transform: scale(1.035); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent); }
   100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }
+
+/* 1.2.7 — dependent tray preferences are visibly unavailable when the tray icon is disabled. */
+.switch-row:has(input:disabled) {
+  cursor: default;
+  color: #737b87;
+}
+
+.switch-row input:disabled + .switch {
+  border-color: #303640;
+  background: #22272f;
+  opacity: .58;
+}
+
+.switch-row input:disabled + .switch::after {
+  background: #69717c;
+}
