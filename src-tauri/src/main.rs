@@ -1118,11 +1118,12 @@ fn main() {
                                         icon_position.x + icon_size.width as i32 / 2
                                     }).unwrap_or_else(|| position.x.round() as i32);
 
-                                    // Anchor the custom context menu a little higher and with its
-                                    // right edge slightly past the tray icon center. This feels less
-                                    // cramped than the native menu while remaining inside the monitor.
-                                    let mut x = icon_center_x - width + 30;
-                                    let mut y = position.y.round() as i32 - height - 18;
+                                    // Use the exact same anchor model as the left-click quick panel:
+                                    // centered on the DuoVoice tray icon and detached from the taskbar
+                                    // by the same thin gap. The two tray surfaces therefore feel like
+                                    // alternate views of the same control, regardless of their size.
+                                    let mut x = icon_center_x - width / 2;
+                                    let mut y = position.y.round() as i32 - height - 3;
 
                                     if let Some(monitor) = monitor {
                                         let work = monitor.work_area();
@@ -1130,11 +1131,11 @@ fn main() {
                                         let top = work.position.y;
                                         let right = left + work.size.width as i32;
                                         let bottom = top + work.size.height as i32;
-                                        const EDGE_GAP: i32 = 6;
-                                        const RAISE_GAP: i32 = 18;
+                                        const EDGE_GAP: i32 = 4;
+                                        const TASKBAR_GAP: i32 = 3;
 
                                         x = x.clamp(left + EDGE_GAP, (right - width - EDGE_GAP).max(left + EDGE_GAP));
-                                        y = bottom - height - RAISE_GAP;
+                                        y = bottom - height - TASKBAR_GAP;
                                         if y < top + EDGE_GAP {
                                             y = top + EDGE_GAP;
                                         }

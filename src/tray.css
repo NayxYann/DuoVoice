@@ -325,7 +325,7 @@ button:active { transform: translateY(1px); }
 .confirm-actions button:hover { background: var(--surface-2); }
 .confirm-actions .danger { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
 
-/* 1.2.4 — quick panel feedback and semantic colors match the main app. */
+/* 1.2.5 — quick panel feedback and semantic colors match the main app. */
 .icon-button,
 .action-tile,
 .quit-button,
