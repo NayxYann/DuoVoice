@@ -828,10 +828,12 @@ fn main() {
                             let width = 332.0_f64;
                             let height = 286.0_f64;
                             let x = f64::from(position.x) - width / 2.0;
-                            let tray_y = f64::from(rect.position.y);
-                            let tray_h = f64::from(rect.size.height);
-                            let below = tray_y + tray_h + 8.0;
-                            let y = if below + height < 900.0 { below } else { tray_y - height - 8.0 };
+                            // Tauri 2 exposes tray rect position/size as enums, so do not
+                            // access `.y`/`.height` directly. The tray is normally at the
+                            // bottom of the screen, therefore opening above the click point
+                            // gives a compact and predictable placement without depending
+                            // on a particular Physical/Logical variant.
+                            let y = f64::from(position.y) - height - 8.0;
                             let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x.max(0.0) as i32, y.max(0.0) as i32)));
                             let _ = w.show();
                             let _ = w.set_focus();
