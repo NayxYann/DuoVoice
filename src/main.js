@@ -9,6 +9,7 @@ const $ = (id) => document.getElementById(id);
 let connected = false;
 let disconnecting = false;
 let updateState = { status: "checking", update: null };
+let updateChecking = false;
 const peerCache = new Map();
 const MANUAL_KEY = "duovoice.manualIps";
 const VOLUME_KEY = "duovoice.volume";
@@ -18,7 +19,7 @@ const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 let connectedPeer = "";
 
 
@@ -389,22 +390,27 @@ async function setUpdateBanner(status, update = null, error = "") {
   const banner = $("updateBanner");
   if (!banner) return;
   banner.className = `update-banner ${status}`;
-  banner.disabled = false;
+  banner.disabled = status === "checking";
   banner.onclick = null;
+  banner.title = "";
   if (status === "checking") {
     banner.textContent = "↻ Vérification des mises à jour…";
   } else if (status === "current") {
-    banner.textContent = `✓ DuoVoice est à jour · v${APP_VERSION}`;
+    banner.textContent = `✓ DuoVoice est à jour · v${APP_VERSION} · cliquer pour rechercher`;
+    banner.onclick = checkForUpdates;
   } else if (status === "available") {
     banner.textContent = `↑ Mise à jour disponible · v${update.version} — cliquer pour installer`;
     banner.onclick = installUpdate;
   } else {
-    banner.textContent = `⚠ Mises à jour indisponibles · v${APP_VERSION}`;
+    banner.textContent = `⚠ Vérification impossible · v${APP_VERSION} · cliquer pour réessayer`;
+    banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
 }
 
 async function checkForUpdates() {
+  if (updateChecking) return;
+  updateChecking = true;
   await setUpdateBanner("checking");
   try {
     const update = await check();
@@ -415,6 +421,8 @@ async function checkForUpdates() {
     }
   } catch (e) {
     await setUpdateBanner("error", null, String(e));
+  } finally {
+    updateChecking = false;
   }
 }
 

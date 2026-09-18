@@ -1,6 +1,6 @@
 # DuoVoice
 
-**Version actuelle : 1.0.0**
+**Version actuelle : 1.1.0**
 
 DuoVoice est un intercom audio **local**, conçu pour Windows et Linux. Il permet de communiquer directement entre deux PC du même réseau local, sans compte ni serveur intermédiaire.
 
@@ -82,8 +82,8 @@ Une release suit le principe :
 
 ```bash
 git add .
-git commit -m "Release v1.0.0"
-git tag v1.0.0
+git commit -m "Release v1.1.0"
+git tag v1.1.0
 git push origin main --tags
 ```
 

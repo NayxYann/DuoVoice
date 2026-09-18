@@ -16,7 +16,7 @@ h1{font-size:22px;line-height:1.15}
 .header-actions{display:flex;align-items:center;gap:9px}
 .status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;font-size:12px;font-weight:600}
 .status-dot{width:7px;height:7px;border-radius:50%;background:currentColor}
-.online{background:#102e20;color:#70dfa0}
+.online{background:#102e20;color:#70dfa0;cursor:pointer}
 .offline{background:#2c171d;color:#ff9eaa}
 .icon-btn{width:40px;height:40px;padding:0;display:grid;place-items:center;border-radius:10px;background:#1c2028;border:1px solid #2b313b;font-size:17px}
 .icon-btn.compact{width:36px;height:36px;font-size:16px}
@@ -127,7 +127,7 @@ input[type=range]{width:100%;margin:3px 0 9px;accent-color:var(--accent)}
 /* Mises à jour, paramètres et finitions des actions */
 .update-banner{width:100%;min-height:36px;margin:0 0 13px;padding:0 13px;border-radius:10px;border:1px solid #2b313b;background:#171b22;color:#aeb7c5;font-size:12px;font-weight:700;text-align:left;display:flex;align-items:center;justify-content:flex-start;transition:background .15s ease,border-color .15s ease,color .15s ease}
 .update-banner.checking{cursor:default}
-.update-banner.current{background:#102e20;border-color:#1f6c47;color:#70dfa0}
+.update-banner.current{background:#102e20;border-color:#1f6c47;color:#70dfa0;cursor:pointer}
 .update-banner.available{background:var(--accent-soft);border-color:var(--accent);color:#f3f5f8;cursor:pointer}
 .update-banner.error{background:#2c171d;border-color:#71313c;color:#ff9eaa;cursor:default}
 .update-banner:disabled{opacity:1}
