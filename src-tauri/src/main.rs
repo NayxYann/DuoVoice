@@ -1083,8 +1083,7 @@ fn main() {
             let icon = app.default_window_icon().cloned()
                 .ok_or_else(|| tauri::Error::AssetNotFound("DuoVoice tray icon".into()))?;
 
-            let _tray = TrayIconBuilder::new()
-                .with_id("duovoice-main-tray")
+            let _tray = TrayIconBuilder::with_id("duovoice-main-tray")
                 .icon(icon)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {
