@@ -17,7 +17,6 @@ permissions:
 env:
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-  TAURI_SIGNING_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
 
 jobs:
   windows:
@@ -37,30 +36,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Configure updater
+      - name: Configure updater endpoint
         shell: bash
         env:
           REPO: ${{ github.repository }}
-          PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-
-          path = "src-tauri/tauri.release.conf.json"
-
-          with open(path, "r", encoding="utf-8") as f:
-              config = json.load(f)
-
-          config["plugins"]["updater"]["pubkey"] = os.environ["PUBLIC_KEY"]
-          config["plugins"]["updater"]["endpoints"] = [
-              f"https://github.com/{os.environ['REPO']}/releases/latest/download/latest.json"
-          ]
-
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(config, f, indent=2)
-              f.write("\n")
-          PY
+          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
+          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
 
       - name: Publish Windows release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
@@ -109,30 +91,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Configure updater
+      - name: Configure updater endpoint
         shell: bash
         env:
           REPO: ${{ github.repository }}
-          PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-
-          path = "src-tauri/tauri.release.conf.json"
-
-          with open(path, "r", encoding="utf-8") as f:
-              config = json.load(f)
-
-          config["plugins"]["updater"]["pubkey"] = os.environ["PUBLIC_KEY"]
-          config["plugins"]["updater"]["endpoints"] = [
-              f"https://github.com/{os.environ['REPO']}/releases/latest/download/latest.json"
-          ]
-
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(config, f, indent=2)
-              f.write("\n")
-          PY
+          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
+          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
 
       - name: Publish Linux release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
