@@ -822,13 +822,10 @@ fn main() {
                 })
                 .build(app)?;
 
-            if launched_from_autostart {
-                app_log("Hiding window because of autostart");
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.set_skip_taskbar(true);
-                    let _ = w.hide();
-                }
-            } else if let Some(w) = app.get_webview_window("main") {
+            if let Some(w) = app.get_webview_window("main") {
+                // The frontend preference "Démarrer minimisé dans le tray" controls
+                // both automatic and manual launches. Do not hide unconditionally
+                // here, otherwise a fresh install would start invisibly.
                 let _ = w.show();
                 let _ = w.set_focus();
             }

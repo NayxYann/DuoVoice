@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 
@@ -20,7 +21,10 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const APP_VERSION = "1.1.3";
+const APP_VERSION = "1.1.4";
+const BASE_WINDOW_WIDTH = 1080;
+const BASE_WINDOW_HEIGHT = 800;
+const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 let connectedPeer = "";
 
 
@@ -88,24 +92,31 @@ function setUiScaleControl(value) {
   $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
 }
 
-function applyUiScale(value) {
-  const scale = Number(value) || 1;
+async function applyUiScale(value) {
+  const numeric = Number(value) || 1;
+  const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
   localStorage.setItem(SCALE_KEY, String(scale));
+
+  try {
+    const window = getCurrentWindow();
+    await window.setSize(new LogicalSize(Math.round(BASE_WINDOW_WIDTH * scale), Math.round(BASE_WINDOW_HEIGHT * scale)));
+  } catch (e) {
+    setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);
+  }
 }
 
 function loadUiScale() {
   const saved = Number(localStorage.getItem(SCALE_KEY) || "1");
-  const allowed = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
-  const scale = allowed.reduce((best, candidate) => Math.abs(candidate - saved) < Math.abs(best - saved) ? candidate : best, 1);
+  const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - saved) < Math.abs(best - saved) ? candidate : best, 1);
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
 }
 
-function resetUiScale() {
+async function resetUiScale() {
   setUiScaleControl(1);
-  applyUiScale(1);
+  await applyUiScale(1);
   setDetails("Échelle de l’interface rétablie à 100%.");
 }
 
@@ -118,6 +129,14 @@ async function requestQuit() {
 
 function setLastUpdateNow() {
   localStorage.setItem(LAST_UPDATE_KEY, new Date().toISOString());
+}
+
+function recordInstalledVersion() {
+  const previous = localStorage.getItem("duovoice.installedVersion");
+  if (previous !== APP_VERSION) {
+    localStorage.setItem("duovoice.installedVersion", APP_VERSION);
+    setLastUpdateNow();
+  }
 }
 
 function formatLastUpdate() {
@@ -442,26 +461,31 @@ async function connect() {
 }
 
 
+let updateChecking = false;
+let updateCheckToken = 0;
+
 async function setUpdateBanner(status, update = null, error = "") {
   updateState = { status, update };
   const banner = $("updateBanner");
   if (!banner) return;
   banner.className = `update-banner ${status}`;
-  banner.disabled = status === "checking";
+  banner.disabled = false;
   banner.onclick = null;
   banner.title = "";
+
   if (status === "checking") {
-    banner.textContent = "↻ Vérification des mises à jour…";
+    banner.textContent = "↻ Recherche des mises à jour…";
+    banner.disabled = true;
   } else if (status === "current") {
-    banner.textContent = `✓ Vérification terminée · aucune mise à jour · v${APP_VERSION} · cliquer pour vérifier`;
+    banner.textContent = "✓ Pas de mise à jour disponible · Cliquez pour vérifier";
     banner.onclick = checkForUpdates;
-    banner.title = "La dernière vérification est terminée : DuoVoice est à jour.";
+    banner.title = "Cliquer pour lancer une nouvelle vérification.";
   } else if (status === "available") {
-    banner.textContent = `↑ Mise à jour disponible · v${update.version} · cliquer pour télécharger`;
+    banner.textContent = `↑ Mise à jour disponible · v${update.version} · Cliquez pour télécharger`;
     banner.onclick = installUpdate;
     banner.title = `Télécharger et installer DuoVoice v${update.version}`;
   } else {
-    banner.textContent = `⚠ Vérification impossible · cliquer pour réessayer`;
+    banner.textContent = "⚠ Vérification impossible · Cliquez pour réessayer";
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -470,22 +494,31 @@ async function setUpdateBanner(status, update = null, error = "") {
 async function checkForUpdates() {
   if (updateChecking) return;
   updateChecking = true;
+  const token = ++updateCheckToken;
   await setUpdateBanner("checking");
+  setDetails("Recherche des mises à jour…");
+
   try {
-    const update = await check();
+    const update = await Promise.race([
+      check(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de vérification dépassé (10 s).")), 10000))
+    ]);
+    if (token !== updateCheckToken) return;
     localStorage.setItem("duovoice.lastUpdateCheck", new Date().toISOString());
+
     if (update) {
       await setUpdateBanner("available", update);
       setDetails(`Mise à jour v${update.version} disponible.`);
     } else {
       await setUpdateBanner("current");
-      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : DuoVoice est à jour.`);
+      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
     }
   } catch (e) {
+    if (token !== updateCheckToken) return;
     await setUpdateBanner("error", null, String(e));
     setDetails(`Vérification des mises à jour impossible : ${String(e)}`);
   } finally {
-    updateChecking = false;
+    if (token === updateCheckToken) updateChecking = false;
   }
 }
 
@@ -507,9 +540,7 @@ async function installUpdate() {
       if (event.event === "Started") {
         total = Number(event.data.contentLength || 0);
         downloaded = 0;
-        banner.textContent = total > 0
-          ? `Téléchargement de v${update.version} · 0%`
-          : `Téléchargement de v${update.version}…`;
+        banner.textContent = total > 0 ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`;
         setDetails("Téléchargement de la mise à jour…");
       } else if (event.event === "Progress") {
         downloaded += Number(event.data.chunkLength || 0);
@@ -527,6 +558,7 @@ async function installUpdate() {
     });
 
     setDetails("Mise à jour installée. Redémarrage de DuoVoice…");
+    await relaunch();
   } catch (e) {
     banner.disabled = false;
     await setUpdateBanner("available", update);
@@ -596,13 +628,15 @@ $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
 });
 $("quitBtn").addEventListener("click", requestQuit);
+recordInstalledVersion();
 $("appVersion").textContent = `v${APP_VERSION}`;
 $("lastUpdate").textContent = formatLastUpdate();
 $("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
-$("applyUiScale").addEventListener("click", () => { applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
+$("applyUiScale").addEventListener("click", async () => { await applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
 $("resetUiScale").addEventListener("click", resetUiScale);
 updateHeaderMode();
 loadUiScale();
+applyUiScale($("uiScale").value);
 
 listen("focus-window", async () => {
   try {
@@ -626,7 +660,7 @@ $("autostart").addEventListener("change", async e => {
   }
 });
 
-$("startHidden").checked = localStorage.getItem("duovoice.startHidden") !== "false";
+$("startHidden").checked = localStorage.getItem("duovoice.startHidden") === "true";
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
 if ($("startHidden").checked) {
   invoke("hide_window_to_tray").catch((e) => setDetails(`Impossible de démarrer dans le tray : ${e}`));

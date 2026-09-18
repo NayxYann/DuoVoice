@@ -248,3 +248,196 @@ body{zoom:var(--ui-scale)}
     line-height: 1.5;
   }
 }
+
+/* v1.1.4 — final interface alignment and proportional window scale */
+html { scrollbar-gutter: stable; }
+body { zoom: var(--ui-scale, 1); }
+
+.brand { align-items: center; }
+.brand-mark { flex: 0 0 38px; }
+.brand > div:last-child { min-width: 0; }
+
+.section-title { margin-bottom: 14px; }
+.section-title > div { min-width: 0; }
+.section-title p, .card-heading p { margin-top: 6px; line-height: 1.5; }
+
+select, input[type=text] { padding-left: 12px; padding-right: 38px; }
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9da6b4 50%),
+    linear-gradient(135deg, #9da6b4 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 17px,
+    calc(100% - 13px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select:focus {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+}
+
+.icon-btn, .favorite-btn, .add-btn, .favorite-action {
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  align-content: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+.icon-btn { overflow: hidden; }
+.icon-btn::first-letter { line-height: 1; }
+.favorite-btn { font-size: 19px; }
+.add-btn { font-size: 20px; }
+.quit-btn { font-size: 20px; }
+.favorite-action { font-size: 16px; }
+.favorite-disconnect { font-size: 18px; }
+
+.hint { margin-top: 8px; margin-bottom: 13px; line-height: 1.5; }
+.card-heading { margin-bottom: 16px; }
+.settings-head { margin-bottom: 17px; }
+.settings-head p { margin-top: 5px; }
+.settings-info { min-height: 40px; padding: 10px 0; }
+.switch-row { margin: 9px 0; }
+
+.scale-control { position: relative; margin-top: 3px; }
+.stepped-range { width: 100%; margin: 6px 0 7px !important; }
+.scale-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 8px;
+  color: #77808f;
+  font-size: 9px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.scale-labels span { width: auto; flex: 0 0 auto; text-align: center !important; }
+.scale-actions { margin-top: 13px; }
+.scale-action { height: 40px; }
+
+.update-banner { min-height: 38px; padding: 0 14px; }
+.update-banner.current, .update-banner.available, .update-banner.error { cursor: pointer; }
+.update-banner.checking { cursor: wait; }
+
+@media (max-width: 760px) {
+  .app { padding: 18px; }
+  .section-title { gap: 10px; }
+}
+
+
+/* v1.1.4 — final layout pass */
+html { scrollbar-gutter: stable both-edges; }
+body { overflow-y: scroll; }
+
+.app-header { min-height: 44px; }
+.brand { align-items: center; gap: 12px; }
+.brand-mark { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; }
+.brand > div:last-child { display: flex; flex-direction: column; justify-content: center; min-height: 40px; }
+.brand p { margin-top: 4px; line-height: 1.2; }
+.header-actions { align-items: center; }
+.header-icons { display: flex; align-items: center; gap: 8px; }
+
+.section-title { margin-bottom: 17px; }
+.section-title p, .card-heading p { margin-top: 7px; line-height: 1.5; }
+label { margin-bottom: 8px; }
+select, input[type=text] { margin-bottom: 14px; }
+.peer-row { margin-bottom: 14px; }
+.favorites-panel { margin-bottom: 14px; }
+.manual-row { margin-top: 0; }
+.hint { margin-top: 9px; margin-bottom: 14px; line-height: 1.5; }
+
+.icon-btn, .favorite-action, .add-btn {
+  display: inline-grid;
+  place-items: center;
+  align-items: center;
+  justify-items: center;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+  vertical-align: middle;
+  font-family: "Segoe UI Symbol", "Segoe UI", system-ui, sans-serif;
+}
+.icon-btn { width: 40px; height: 40px; }
+.icon-btn.compact, .favorite-btn { width: 40px; height: 40px; }
+.quit-btn { font-size: 20px; }
+.add-btn { width: 40px; height: 40px; font-size: 21px; }
+.favorite-btn { font-size: 20px; }
+.favorite-action { width: 32px; height: 32px; min-width: 32px; }
+.favorite-connect { font-size: 14px; }
+.favorite-disconnect { font-size: 18px; }
+
+/* Native select arrows are replaced so their distance from the right edge stays consistent. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9da6b4 50%),
+    linear-gradient(135deg, #9da6b4 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 17px,
+    calc(100% - 15px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select:focus {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+}
+
+/* Scale marks correspond exactly to the slider's six possible thumb positions. */
+.scale-control { position: relative; width: 100%; padding: 0 8px; }
+.scale-control .stepped-range {
+  display: block;
+  width: 100%;
+  margin: 5px 0 0 !important;
+  transform: translateX(0);
+}
+.scale-labels {
+  position: relative;
+  width: 100%;
+  height: 17px;
+  margin-top: 2px;
+  padding: 0;
+  display: block;
+  color: #77808f;
+  font-size: 9px;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.scale-labels span {
+  position: absolute;
+  top: 0;
+  width: max-content;
+  transform: translateX(-50%);
+  text-align: center !important;
+}
+.scale-labels span:nth-child(1) { left: 0%; transform: none; }
+.scale-labels span:nth-child(2) { left: 20%; }
+.scale-labels span:nth-child(3) { left: 40%; }
+.scale-labels span:nth-child(4) { left: 60%; }
+.scale-labels span:nth-child(5) { left: 80%; }
+.scale-labels span:nth-child(6) { left: 100%; transform: translateX(-100%); }
+.scale-actions { margin-top: 12px; gap: 9px; }
+.scale-action { min-height: 40px; height: 40px; }
+
+/* The update banner is always actionable after the initial check completes. */
+.update-banner.current, .update-banner.available, .update-banner.error { cursor: pointer; }
+.update-banner.current:hover, .update-banner.error:hover { filter: brightness(1.08); }
+
+/* Settings cards keep a predictable vertical rhythm when the scrollbar appears. */
+#settingsView { padding-right: 0; }
+#settingsView > .card { overflow: visible; }
+
+@media (max-width: 560px) {
+  .scale-actions { grid-template-columns: 1fr; }
+  .section-title { margin-bottom: 15px; }
+}
