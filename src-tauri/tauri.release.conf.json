@@ -5,7 +5,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5ODUzNjE0OEU5RjdFN0IKUldSN2ZwK09GRGFGV2Z0YXF4cDdpZ01YMXpDZWRGMkFLUStLUmYzLyt4V1hkR2FNdUhtVURZcUgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0OUYwQUNBODVDMDZERjUKUldUMWJjQ0Z5Z3FmeEhESFZnREdMQ0hRSzJZVFFVQnlHOTU2c29lZlVRbTZJN0V4OGRKUEVLWUsK",
       "endpoints": [
         "__TAURI_UPDATER_ENDPOINT__"
       ]

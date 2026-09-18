@@ -818,7 +818,7 @@ fn main() {
                 .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect, .. } = event {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect: _, .. } = event {
                         let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("tray") {
                             if w.is_visible().unwrap_or(false) {
