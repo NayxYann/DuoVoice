@@ -249,7 +249,7 @@ body{zoom:var(--ui-scale)}
   }
 }
 
-/* v1.1.4 — final interface alignment and proportional window scale */
+/* v1.1.5 — final interface alignment and proportional window scale */
 html { scrollbar-gutter: stable; }
 body { zoom: var(--ui-scale, 1); }
 
@@ -332,7 +332,7 @@ select:focus {
 }
 
 
-/* v1.1.4 — final layout pass */
+/* v1.1.5 — final layout pass */
 html { scrollbar-gutter: stable both-edges; }
 body { overflow-y: scroll; }
 
@@ -440,4 +440,68 @@ select:focus {
 @media (max-width: 560px) {
   .scale-actions { grid-template-columns: 1fr; }
   .section-title { margin-bottom: 15px; }
+}
+
+
+/* v1.1.5 — actions d'échelle toujours visibles et croix parfaitement centrée */
+#settingsView {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+#settingsScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 2px 2px 0;
+  scrollbar-gutter: stable;
+}
+#settingsScroll > .card {
+  margin-bottom: 13px;
+}
+#settingsScroll > .card:last-child {
+  margin-bottom: 0;
+}
+.settings-actions-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 9px;
+  padding: 10px 0 1px;
+  background: linear-gradient(to bottom, rgba(13,15,19,0), #0d0f13 10px);
+  position: relative;
+  z-index: 5;
+}
+.settings-actions-bar .scale-action {
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  margin: 0;
+}
+.quit-btn {
+  position: relative;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+.quit-btn::before,
+.quit-btn::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 15px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: center;
+}
+.quit-btn::before { transform: translate(-50%, -50%) rotate(45deg); }
+.quit-btn::after { transform: translate(-50%, -50%) rotate(-45deg); }
+@media (max-width: 560px) {
+  .settings-actions-bar { grid-template-columns: 1fr; }
 }
