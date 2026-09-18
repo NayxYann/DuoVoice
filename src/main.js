@@ -22,10 +22,10 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.1.9";
+const FALLBACK_VERSION = "1.2.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 800;
+const BASE_WINDOW_HEIGHT = 760;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 let connectedPeer = "";
 

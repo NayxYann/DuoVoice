@@ -71,9 +71,9 @@ p {
 
 .app {
   width: 1080px;
-  height: 800px;
+  height: 760px;
   margin: 0;
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -82,8 +82,8 @@ p {
 }
 
 .app-header {
-  min-height: 44px;
-  margin-bottom: 18px;
+  min-height: 42px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -249,8 +249,8 @@ p {
 
 .update-banner {
   width: 100%;
-  min-height: 38px;
-  margin: 0 0 13px;
+  min-height: 34px;
+  margin: 0 0 10px;
   padding: 0 14px;
   flex: 0 0 auto;
   display: flex;
@@ -302,16 +302,15 @@ p {
 }
 
 #mainView {
-  margin-right: -24px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .main-grid {
-  padding-right: 24px;
+  height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 13px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: stretch;
 }
 
@@ -321,7 +320,7 @@ p {
 
 .card {
   margin: 0;
-  padding: 17px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
@@ -339,7 +338,7 @@ p {
 }
 
 .section-title {
-  margin-bottom: 17px;
+  margin-bottom: 12px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -356,7 +355,7 @@ p {
 
 .section-title p,
 .card-heading p {
-  margin-top: 7px;
+  margin-top: 5px;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
@@ -380,8 +379,8 @@ label {
 select,
 input[type="text"] {
   width: 100%;
-  height: 40px;
-  margin-bottom: 14px;
+  height: 38px;
+  margin-bottom: 10px;
   padding: 0 42px 0 12px;
   outline: none;
   border: 1px solid var(--border-strong);
@@ -428,7 +427,7 @@ select:focus {
 
 .peer-row {
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .peer-row select {
@@ -449,9 +448,9 @@ select:focus {
 }
 
 .favorites-panel {
-  min-height: 132px;
-  margin: 0 0 14px;
-  padding: 10px 11px;
+  min-height: 104px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
   overflow: hidden;
   border: 1px solid #252b34;
   border-radius: 11px;
@@ -619,7 +618,7 @@ select:focus {
 }
 
 .hint {
-  margin: 9px 0 14px;
+  margin: 7px 0 10px;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
@@ -644,8 +643,8 @@ select:focus {
 
 .noise-control {
   position: relative;
-  margin: 2px 0 14px;
-  padding: 11px 12px;
+  margin: 2px 0 10px;
+  padding: 9px 11px;
   border: 1px solid #252b34;
   border-radius: 11px;
   background: var(--panel-soft);
@@ -752,8 +751,8 @@ input[type="range"] {
 }
 
 .switch-row {
-  min-height: 34px;
-  margin: 9px 0;
+  min-height: 30px;
+  margin: 6px 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -806,7 +805,7 @@ input[type="range"] {
 }
 
 .mute-btn {
-  margin-top: 10px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -823,7 +822,7 @@ input[type="range"] {
 }
 
 .state-card {
-  padding-bottom: 14px;
+  padding-bottom: 11px;
 }
 
 .state-card #details {
@@ -834,14 +833,14 @@ input[type="range"] {
 }
 
 .state-grid {
-  margin-top: 14px;
+  margin-top: 9px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 9px;
 }
 
 .state-item {
-  padding: 10px 11px;
+  padding: 8px 10px;
   border: 1px solid #252b34;
   border-radius: 10px;
   background: var(--panel-soft);
@@ -1056,7 +1055,7 @@ input[type="range"] {
   }
 }
 
-/* DuoVoice 1.1.9 — keep scrolling available while removing visual scrollbars. */
+/* Keep scrolling available while removing visual scrollbars. */
 html,
 body,
 * {

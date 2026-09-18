@@ -1,6 +1,9 @@
-# DuoVoice 1.1.9
+# DuoVoice 1.2.0
 
-## Nouveautés 1.1.9
+## Nouveautés 1.2.0
+
+- Panneau systray réellement indépendant et compact (build Vite multi-page).
+- Accueil compacté pour être entièrement visible à l’ouverture sans défilement.
 
 - Nouveau panneau de contrôle rapide compact dans la zone de notification.
 - Connexion/déconnexion à un hôte, mode muet, ouverture de l’app et accès direct aux paramètres.
