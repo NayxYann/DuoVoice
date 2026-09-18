@@ -1,25 +1,14 @@
-# DuoVoice 1.2.9
+# DuoVoice 1.3.0
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.9
+## Nouveautés 1.3.0
 
-- **Build Vite corrigé** : suppression de la seconde déclaration de `escapeHtml`, qui provoquait l'erreur `Identifier "escapeHtml" has already been declared` pendant `npm run build`.
-- **Sélecteur de version redessiné** : le contrôle « Version installée » reprend désormais les dimensions, bordures, espacements et états hover de DuoVoice au lieu d’une grande ligne grise.
-- **Titres GitHub affichés dans l’historique** : la liste montre uniquement le champ `name` de chaque GitHub Release (avec repli sur le tag si le titre est vide). Le `tag_name` reste utilisé uniquement en interne pour comparer et installer la bonne version.
-- **Démarrage encore fiabilisé** : un échec non critique de redimensionnement ou de systray ne peut plus empêcher l’ouverture de la fenêtre principale.
-- **Préférence systray protégée** : une erreur temporaire du backend ne peut plus inverser ni écraser le choix enregistré de l’utilisateur.
-- **Passe de stabilisation complète après la build 1.2.9 retirée** : correction de la régression JavaScript qui interrompait l’initialisation de l’application après la migration des icônes.
-- **Updater rétabli** : la recherche, l’affichage et l’installation des nouvelles versions fonctionnent de nouveau normalement.
-- **Détection des périphériques audio rétablie** : les listes microphone / sortie sont de nouveau chargées au démarrage.
-- **Détection réseau et connexion distante rétablies** : découverte LAN, favoris, connexion et état audio ne sont plus bloqués par l’erreur d’initialisation.
-- **Préférences de démarrage fiabilisées** : « Démarrer minimisé dans le tray » est de nouveau enregistré et restauré correctement ; désactiver l’option ouvre normalement la fenêtre au démarrage.
-- **Préférence d’icône systray conservée** : l’icône reste activée par défaut après installation et le choix utilisateur reste persistant.
-- **Icônes unifiées conservées** : la famille SVG unifiée reste inchangée ; les icônes dynamiques utilisent désormais les mêmes SVG sans casser le code métier.
-- **Retour à une version précédente** : dans Paramètres → Version, le numéro de version installé est maintenant cliquable. DuoVoice affiche les anciennes releases stables compatibles disposant d’un `latest.json` signé.
-- **Downgrade signé** : une version précédente sélectionnée est téléchargée et installée via l’updater Tauri en conservant la vérification de signature.
-- **Confirmation intégrée** avant l’installation d’une ancienne version, sans popup système native.
-- **Workflows GitHub toujours manuels** : Push origin ne déclenche ni build ni release automatiquement.
+- **Systray activé par défaut sur une nouvelle installation** : l’icône DuoVoice est visible dès le premier lancement. La préférence reste ensuite persistante si l’utilisateur la désactive volontairement.
+- **Fermeture vers le systray par défaut** : le bouton **X** masque désormais DuoVoice dans le systray au lieu de quitter l’application sur une nouvelle installation. Le choix reste modifiable dans les paramètres.
+- **Sélecteur de versions plus explicite** : l’ancien pictogramme de téléchargement à côté de la version installée est remplacé par un chevron vers le bas afin d’indiquer clairement qu’il s’agit d’une liste déroulante.
+- **Rollback conservé** : le sélecteur continue d’afficher le `name` des GitHub Releases et utilise le tag uniquement en interne pour la comparaison et l’installation.
+- Toutes les corrections de stabilisation de la branche 1.2.9 sont conservées : updater, découverte réseau, périphériques audio, connexion distante et persistance des préférences.
 
 ## Fonctionnalités principales
 
@@ -110,7 +99,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.9`.
+5. saisir le tag voulu, par exemple `v1.3.0`.
 
 Le build produit notamment :
 

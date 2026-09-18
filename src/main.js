@@ -25,7 +25,9 @@ const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.9";
+const DEFAULT_TRAY_ICON_ENABLED = true;
+const DEFAULT_CLOSE_ACTION = "tray";
+const FALLBACK_VERSION = "1.3.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -1016,8 +1018,11 @@ $("autostart").addEventListener("change", async e => {
 });
 
 $("startHidden").checked = localStorage.getItem("duovoice.startHidden") === "true";
-$("trayIconEnabled").checked = localStorage.getItem(TRAY_ICON_KEY) !== "false";
-$("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
+const storedTrayIconPreference = localStorage.getItem(TRAY_ICON_KEY);
+$("trayIconEnabled").checked = storedTrayIconPreference === null
+  ? DEFAULT_TRAY_ICON_ENABLED
+  : storedTrayIconPreference !== "false";
+$("closeAction").value = localStorage.getItem("duovoice.closeAction") || DEFAULT_CLOSE_ACTION;
 
 function updateTrayPreferenceDependencies() {
   const enabled = $("trayIconEnabled").checked;
