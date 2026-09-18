@@ -164,7 +164,8 @@ button:active { transform: translateY(1px); }
 .action-tile.primary { border-color: var(--accent-border); background: var(--accent-soft); color: white; }
 .action-tile.primary:hover { border-color: var(--accent); }
 .action-tile.disconnect { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
-.action-tile.active { border-color: var(--accent-border); background: var(--accent-soft); color: white; }
+.action-tile.active { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
+.action-tile.active:hover { border-color: var(--danger); background: #45232b; color: #ffd7dc; }
 .tile-label { width: 100%; overflow: hidden; font-size: 10px; font-weight: 650; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 
 .tile-icon {
@@ -341,7 +342,7 @@ button:active { transform: translateY(1px); }
   place-items: center;
 }
 
-/* 1.2.7 — SVG action icons share one optical center and stroke language. */
+/* 1.2.8 — SVG/action icons share one optical center and the mute state matches the main app. */
 .tile-svg {
   width: 19px;
   height: 19px;

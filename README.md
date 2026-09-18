@@ -1,8 +1,14 @@
-# DuoVoice 1.2.7
+# DuoVoice 1.2.8
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.7
+## Nouveautés 1.2.8
+
+- Harmonisation complète du bouton **Muet** entre l’application principale et le panneau systray.
+- Même pictogramme microphone et même barre diagonale lorsque le mode Muet est actif.
+- Même palette pour les deux interfaces : état normal sombre, survol identique et état Muet rouge/danger.
+- Les couleurs utilisent désormais les mêmes variables sémantiques (`danger`, bordure et fond) afin d’éviter les écarts visuels entre l’application et le systray.
+- Conservation de toutes les fonctions de la 1.2.7, notamment l’option d’affichage de l’icône systray et les workflows GitHub manuels.
 
 - **Icône du systray désactivable** : une nouvelle option « Afficher l’icône dans le systray » est disponible juste sous « Démarrer minimisé dans le tray ».
 - **Activée par défaut après installation** : si aucun choix n’a encore été enregistré, l’icône DuoVoice reste visible comme auparavant.
@@ -102,7 +108,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.7`.
+5. saisir le tag voulu, par exemple `v1.2.8`.
 
 Le build produit notamment :
 

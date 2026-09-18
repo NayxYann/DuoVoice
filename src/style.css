@@ -854,21 +854,27 @@ input[type="range"] {
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--border);
-  background: var(--panel-soft);
+  background: #1c2028;
   color: #d9dde4;
   font-weight: 600;
 }
 
 .mute-btn:hover:not(:disabled) {
   border-color: var(--border-strong);
-  background: #1c2028;
+  background: #232833;
   color: #fff;
 }
 
 .mute-btn.active {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  color: #fff;
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.mute-btn.active:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: #45232b;
+  color: #ffd7dc;
 }
 
 .mute-icon {
@@ -1422,7 +1428,7 @@ button:not(:disabled):active,
   100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }
 
-/* 1.2.7 — dependent tray preferences are visibly unavailable when the tray icon is disabled. */
+/* 1.2.8 — dependent tray preferences remain visibly unavailable when the tray icon is disabled. */
 .switch-row:has(input:disabled) {
   cursor: default;
   color: #737b87;
