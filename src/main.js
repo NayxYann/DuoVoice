@@ -25,7 +25,7 @@ const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.3.0";
+const FALLBACK_VERSION = "1.2.9";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -325,6 +325,7 @@ function formatLastUpdate() {
 
 const RELEASES_API = "https://api.github.com/repos/NayxYann/DuoVoice/releases?per_page=30";
 let rollbackVersion = "";
+let rollbackName = "";
 let rollbackBusy = false;
 
 function parseSemver(value) {
@@ -347,16 +348,20 @@ function setVersionPicker(open) {
   layer.setAttribute("aria-hidden", String(!open));
   if (!open) {
     rollbackVersion = "";
+    rollbackName = "";
     $("versionRollbackConfirm").classList.add("hidden");
     $("versionPickerStatus").textContent = "";
     $("versionPickerStatus").classList.remove("error");
   }
 }
 
-function formatReleaseDate(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) return "Release stable";
-  return `Publiée le ${date.toLocaleDateString("fr-FR")}`;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 async function loadPreviousVersions() {
@@ -377,7 +382,7 @@ async function loadPreviousVersions() {
       .filter(release => !release.draft && !release.prerelease)
       .map(release => ({
         version: String(release.tag_name || "").replace(/^v/i, ""),
-        date: release.published_at,
+        name: String(release.name || release.tag_name || "").trim(),
         hasUpdater: Array.isArray(release.assets) && release.assets.some(asset => asset.name === "latest.json"),
       }))
       .filter(release => release.hasUpdater && parseSemver(release.version) && compareSemver(release.version, appVersion) < 0)
@@ -393,10 +398,11 @@ async function loadPreviousVersions() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "version-option";
-      button.innerHTML = `<span class="version-option-main"><strong>v${release.version}</strong><small>${formatReleaseDate(release.date)}</small></span>${UI_ICONS.download}`;
+      button.innerHTML = `<span class="version-option-main"><strong>${escapeHtml(release.name || `v${release.version}`)}</strong></span>${UI_ICONS.download}`;
       button.addEventListener("click", () => {
         rollbackVersion = release.version;
-        $("rollbackVersionLabel").textContent = `DuoVoice v${release.version}`;
+        rollbackName = release.name || `v${release.version}`;
+        $("rollbackVersionLabel").textContent = rollbackName;
         $("versionRollbackConfirm").classList.remove("hidden");
         $("versionPickerStatus").textContent = "";
       });
@@ -964,6 +970,7 @@ $("versionSelector").addEventListener("click", openVersionPicker);
 $("closeVersionPicker").addEventListener("click", () => { if (!rollbackBusy) setVersionPicker(false); });
 $("cancelRollback").addEventListener("click", () => {
   rollbackVersion = "";
+  rollbackName = "";
   $("versionRollbackConfirm").classList.add("hidden");
   $("versionPickerStatus").textContent = "";
 });
@@ -1025,35 +1032,42 @@ function updateTrayPreferenceDependencies() {
 
 async function applyTrayIconPreference(enabled, announce = false) {
   const desired = Boolean(enabled);
-
-  // Without a tray icon, hiding the main window would make DuoVoice impossible
-  // to reopen. Keep startup/close behaviour safe and explicit.
-  if (!desired) {
-    $("startHidden").checked = false;
-    localStorage.setItem("duovoice.startHidden", "false");
-    if ($("closeAction").value === "tray") {
-      $("closeAction").value = "quit";
-      localStorage.setItem("duovoice.closeAction", "quit");
-      await invoke("set_close_action", { action: "quit" }).catch(e => reportError("Close action", e));
-    }
-  }
-
-  localStorage.setItem(TRAY_ICON_KEY, String(desired));
-  updateTrayPreferenceDependencies();
+  const previousStored = localStorage.getItem(TRAY_ICON_KEY) !== "false";
 
   try {
+    // Apply the native tray state first. A transient backend failure must never
+    // overwrite the user's persisted preference.
     await invoke("set_tray_icon_enabled", { enabled: desired });
+
+    localStorage.setItem(TRAY_ICON_KEY, String(desired));
+    $("trayIconEnabled").checked = desired;
+
+    // Without a tray icon, hiding the main window would make DuoVoice
+    // impossible to reopen. Keep dependent settings safe and explicit.
+    if (!desired) {
+      $("startHidden").checked = false;
+      localStorage.setItem("duovoice.startHidden", "false");
+      if ($("closeAction").value === "tray") {
+        $("closeAction").value = "quit";
+        localStorage.setItem("duovoice.closeAction", "quit");
+        await invoke("set_close_action", { action: "quit" }).catch(e => reportError("Close action", e));
+      }
+    }
+
+    updateTrayPreferenceDependencies();
     if (announce) {
       $("autostartDetails").textContent = desired
         ? "Icône du systray activée."
         : "Icône du systray désactivée. Le démarrage minimisé est désactivé pour garder DuoVoice accessible.";
     }
+    return true;
   } catch (e) {
     reportError("Tray icon", e);
-    $("trayIconEnabled").checked = !desired;
-    localStorage.setItem(TRAY_ICON_KEY, String(!desired));
+    // Restore the UI from the last known persisted value, but do not rewrite it.
+    $("trayIconEnabled").checked = previousStored;
     updateTrayPreferenceDependencies();
     $("autostartDetails").textContent = `Impossible de modifier l’icône du systray : ${e}`;
+    return false;
   }
 }
 
@@ -1088,10 +1102,15 @@ $("closeAction").addEventListener("change", async () => {
 async function initializeWindow() {
   loadUiScale();
   updateTrayPreferenceDependencies();
-  await Promise.all([
+
+  // Non-critical UI setup must never prevent the main window from being
+  // shown. This keeps startup reliable even if one optional Tauri operation
+  // temporarily fails.
+  await Promise.allSettled([
     applyUiScale($("uiScale").value),
     applyTrayScale($("trayScale").value),
   ]);
+
   await applyTrayIconPreference($("trayIconEnabled").checked, false);
   await applyWindowPreferences();
 }
