@@ -1081,7 +1081,7 @@ fn main() {
                             }).unwrap_or_else(|| position.x.round() as i32);
 
                             let mut x = icon_center_x - width / 2;
-                            let mut y = position.y.round() as i32 - height - 8;
+                            let mut y = position.y.round() as i32 - height - 4;
 
                             if let Some(monitor) = monitor {
                                 let work = monitor.work_area();
@@ -1089,7 +1089,7 @@ fn main() {
                                 let top = work.position.y;
                                 let right = left + work.size.width as i32;
                                 let bottom = top + work.size.height as i32;
-                                const GAP: i32 = 8;
+                                const GAP: i32 = 4;
 
                                 x = x.clamp(left + GAP, (right - width - GAP).max(left + GAP));
                                 // Anchor the panel to the usable desktop edge above the taskbar.

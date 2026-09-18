@@ -319,3 +319,19 @@ button:active { transform: translateY(1px); }
 }
 .confirm-actions button:hover { background: var(--surface-2); }
 .confirm-actions .danger { border-color: #713742; background: #3a2027; color: #ffadb6; }
+
+/* 1.2.3 — quick panel action feedback matches the main app. */
+.icon-button,
+.action-tile,
+.quit-button,
+.confirm-actions button {
+  transition: transform .12s ease, background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.icon-button:not(:disabled):active,
+.action-tile:not(:disabled):active,
+.quit-button:not(:disabled):active,
+.confirm-actions button:not(:disabled):active {
+  transform: scale(.965);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}

@@ -1,23 +1,18 @@
-# DuoVoice 1.2.2
+# DuoVoice 1.2.3
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.2
+## Nouveautés 1.2.3
 
-- Mini-panneau systray repositionné entièrement au-dessus de la barre des tâches, avec un léger espace visuel pour le détacher de celle-ci.
-- Position du panneau recalculée à chaque ouverture afin de rester centrée sur l’icône DuoVoice du systray, quelle que soit son échelle.
-- Échelle indépendante du panneau systray avec valeurs limitées à **90 / 100 / 110 / 120 %** pour éviter un panneau trop petit ou trop grand.
-- L’échelle de l’application principale et celle du systray sont appliquées ensemble avec les boutons **Appliquer les modifications** et **Rétablir par défaut**.
-- Redimensionnement manuel de la fenêtre principale désactivé : seuls les paramètres d’échelle contrôlent sa taille.
-- Nom de machine/client personnalisable directement dans l’interface, sauvegardé localement et diffusé en temps réel dans la découverte réseau.
-- Les autres clients DuoVoice voient automatiquement le nom personnalisé lors de la détection.
-- Indicateur discret de version **1.2.2** affiché à côté du nom DuoVoice dans le mini-panneau systray.
-- Icône d’extinction remplacée par un SVG propre et cohérent dans le systray et les confirmations de fermeture.
-- Bouton **Ouvrir** du systray ramenant systématiquement vers l’accueil de l’application, tandis que le bouton **Paramètres** ouvre directement les paramètres.
-- Confirmation de fermeture intégrée et centrée dans l’application, harmonisée visuellement avec le systray et le reste de DuoVoice.
-- Favoris conservés de façon persistante entre les lancements et les mises à jour.
-- Nettoyage du warning Rust lié à l’affectation inutile de `last_seq` sans modifier la logique de resynchronisation audio.
-- Workflows GitHub **Build** et **Release** configurés en lancement manuel uniquement : un `git push` ou un push de tag ne déclenche plus automatiquement d’Action.
+- Mini-panneau systray légèrement abaissé tout en restant détaché de la barre des tâches et centré sur l’icône DuoVoice.
+- Nom de machine : bouton d’application plus lisible, état **à appliquer** puis coche verte **appliqué** après validation.
+- Échelles de l’application et du systray : bouton **Appliquer** passant visuellement en état validé après application.
+- Bouton **Rétablir par défaut** automatiquement grisé et désactivé quand les deux échelles sont déjà à 100 %, puis réactivé dès qu’un réglage s’en écarte.
+- Mise à jour disponible désormais signalée par un bandeau rose-violet distinct de l’état « aucune mise à jour ».
+- Retour visuel harmonisé sur les icônes et boutons compacts cliquables (pression, halo bref, états actifs).
+- Le bouton de rechargement des machines tourne pendant la recherche puis confirme visuellement la fin de l’actualisation.
+- Échelle du systray toujours limitée à **90 / 100 / 110 / 120 %** et repositionnement recalculé selon sa taille réelle.
+- Nom de machine personnalisable, favoris persistants, workflows GitHub manuels et correctifs audio/réseau des versions précédentes conservés.
 
 ## Fonctionnalités principales
 
@@ -108,7 +103,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.2`.
+5. saisir le tag voulu, par exemple `v1.2.3`.
 
 Le build produit notamment :
 

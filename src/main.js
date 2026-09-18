@@ -24,13 +24,16 @@ const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.2";
+const FALLBACK_VERSION = "1.2.3";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
+let appliedClientName = "";
+let appliedUiScale = 1;
+let appliedTrayScale = 1;
 
 const PALETTE = {
   violet: "#a78bfa",
@@ -68,14 +71,33 @@ function initColors() {
 
 function setDetails(text) { $("details").textContent = text; }
 
+function updateClientNameVisual(applied = false) {
+  const input = $("clientName");
+  const button = $("saveClientName");
+  if (!input || !button) return;
+  const isCurrent = input.value.trim() === appliedClientName;
+  button.classList.toggle("is-applied", isCurrent && Boolean(appliedClientName));
+  button.classList.toggle("is-dirty", !isCurrent);
+  button.textContent = isCurrent && appliedClientName ? "✓" : "→";
+  button.title = isCurrent && appliedClientName ? "Nom appliqué" : "Appliquer ce nom";
+  button.setAttribute("aria-label", button.title);
+  if (applied && isCurrent) {
+    button.classList.remove("validation-pop");
+    void button.offsetWidth;
+    button.classList.add("validation-pop");
+  }
+}
+
 async function loadClientName() {
   try {
     const systemName = await invoke("get_client_name");
     const saved = (localStorage.getItem(CLIENT_NAME_KEY) || "").trim();
     const desired = saved || systemName || "DuoVoice";
     const applied = await invoke("set_client_name", { name: desired });
+    appliedClientName = applied;
     $("clientName").value = applied;
     localStorage.setItem(CLIENT_NAME_KEY, applied);
+    updateClientNameVisual();
   } catch (e) {
     reportError("Client name", e);
   }
@@ -83,14 +105,20 @@ async function loadClientName() {
 
 async function saveClientName() {
   const input = $("clientName");
+  const button = $("saveClientName");
   try {
+    button.disabled = true;
     const applied = await invoke("set_client_name", { name: input.value });
+    appliedClientName = applied;
     input.value = applied;
     localStorage.setItem(CLIENT_NAME_KEY, applied);
-    setDetails(`Nom réseau enregistré : ${applied}. Les autres PC le verront automatiquement.`);
+    updateClientNameVisual(true);
+    setDetails(`✓ Nom réseau appliqué : ${applied}. Les autres PC le verront automatiquement.`);
   } catch (e) {
     setDetails(`Nom de la machine : ${e}`);
     input.focus();
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -146,25 +174,26 @@ function normalizedTrayScale(value) {
 async function applyTrayScale(value) {
   const scale = normalizedTrayScale(value);
   setTrayScaleControl(scale);
-  localStorage.setItem(TRAY_SCALE_KEY, String(scale));
   try {
     await invoke("set_tray_scale", { scale });
     await emitTo("tray", "tray-scale-changed", { scale });
+    localStorage.setItem(TRAY_SCALE_KEY, String(scale));
+    appliedTrayScale = scale;
+    return true;
   } catch (e) {
     reportError("Tray scale", e);
     setDetails(`Impossible d’adapter le contrôle rapide à ${Math.round(scale * 100)}% : ${e}`);
+    return false;
   }
 }
 
 async function applyUiScale(value) {
   const scale = normalizedScale(value);
 
-  // DuoVoice is laid out on a fixed 1080 × 800 design canvas. The same scale
-  // factor is applied to the canvas and to the native window, so every element
-  // keeps exactly the same relative position at every UI size.
+  // DuoVoice is laid out on a fixed design canvas. The same scale factor is
+  // applied to the canvas and to the native window so positions stay stable.
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
-  localStorage.setItem(SCALE_KEY, String(scale));
 
   try {
     const window = getCurrentWindow();
@@ -172,24 +201,55 @@ async function applyUiScale(value) {
       Math.round(BASE_WINDOW_WIDTH * scale),
       Math.round(BASE_WINDOW_HEIGHT * scale)
     ));
+    localStorage.setItem(SCALE_KEY, String(scale));
+    appliedUiScale = scale;
+    return true;
   } catch (e) {
     reportError("UI scale", e);
     setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);
+    return false;
   }
+}
+
+function updateScaleActionsState(justApplied = false) {
+  const ui = normalizedScale($("uiScale").value);
+  const tray = normalizedTrayScale($("trayScale").value);
+  const apply = $("applyUiScale");
+  const reset = $("resetUiScale");
+  const dirty = ui !== appliedUiScale || tray !== appliedTrayScale;
+  const defaultState = ui === 1 && tray === 1 && appliedUiScale === 1 && appliedTrayScale === 1;
+
+  apply.disabled = !dirty;
+  apply.classList.toggle("is-applied", !dirty);
+  apply.textContent = dirty ? "Appliquer les modifications" : "✓ Paramètres appliqués";
+  if (justApplied && !dirty) {
+    apply.classList.remove("validation-pop");
+    void apply.offsetWidth;
+    apply.classList.add("validation-pop");
+  }
+
+  reset.disabled = defaultState;
+  reset.classList.toggle("is-disabled-default", defaultState);
+  reset.title = defaultState ? "Les deux échelles sont déjà à 100%" : "Rétablir les deux échelles à 100%";
 }
 
 function loadUiScale() {
   const scale = normalizedScale(localStorage.getItem(SCALE_KEY) || "1");
+  const trayScale = normalizedTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1");
+  appliedUiScale = scale;
+  appliedTrayScale = trayScale;
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
-  setTrayScaleControl(normalizedTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1"));
+  setTrayScaleControl(trayScale);
+  updateScaleActionsState();
 }
 
 async function resetUiScale() {
   setUiScaleControl(1);
   setTrayScaleControl(1);
-  await Promise.all([applyUiScale(1), applyTrayScale(1)]);
-  setDetails("Échelles de l’application et du systray rétablies à 100%.");
+  const results = await Promise.all([applyUiScale(1), applyTrayScale(1)]);
+  updateScaleActionsState(results.every(Boolean));
+  if (results.every(Boolean)) setDetails("✓ Échelles de l’application et du systray rétablies à 100%.");
 }
 
 function setAppQuitConfirmation(open) {
@@ -433,7 +493,11 @@ async function loadDevices() {
 
 async function loadPeers(manual = false) {
   const refresh = $("refresh");
-  if (manual) { refresh.disabled = true; refresh.textContent = "…"; setDetails("Recherche des ordinateurs…"); }
+  if (manual) {
+    refresh.disabled = true;
+    refresh.classList.add("is-spinning");
+    setDetails("Recherche des ordinateurs…");
+  }
   try {
     const peers = await invoke("list_peers");
     const now = Date.now();
@@ -454,7 +518,14 @@ async function loadPeers(manual = false) {
     renderFavorites();
     if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
   } catch (e) { reportError("Peer discovery", e); setDetails(`Détection réseau : ${e}`); }
-  finally { if (manual) { refresh.disabled = false; refresh.textContent = "↻"; } }
+  finally {
+    if (manual) {
+      refresh.disabled = false;
+      refresh.classList.remove("is-spinning");
+      refresh.classList.add("success-flash");
+      setTimeout(() => refresh.classList.remove("success-flash"), 650);
+    }
+  }
 }
 
 function loadManualIps() {
@@ -683,6 +754,7 @@ $("peer").addEventListener("change", updateFavoriteButton);
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
 $("saveClientName").addEventListener("click", saveClientName);
+$("clientName").addEventListener("input", () => updateClientNameVisual());
 $("clientName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); saveClientName(); } });
 
 $("volume").addEventListener("input", () => {
@@ -751,11 +823,23 @@ document.addEventListener("keydown", event => {
   }
 });
 loadAppVersion();
-$("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
-$("trayScale").addEventListener("input", () => setTrayScaleControl($("trayScale").value));
+$("uiScale").addEventListener("input", () => {
+  setUiScaleControl($("uiScale").value);
+  updateScaleActionsState();
+});
+$("trayScale").addEventListener("input", () => {
+  setTrayScaleControl($("trayScale").value);
+  updateScaleActionsState();
+});
 $("applyUiScale").addEventListener("click", async () => {
-  await Promise.all([applyUiScale($("uiScale").value), applyTrayScale($("trayScale").value)]);
-  setDetails(`Échelles appliquées — application : ${$("uiScaleValue").textContent}, systray : ${$("trayScaleValue").textContent}.`);
+  const button = $("applyUiScale");
+  button.disabled = true;
+  button.textContent = "Application…";
+  const results = await Promise.all([applyUiScale($("uiScale").value), applyTrayScale($("trayScale").value)]);
+  updateScaleActionsState(results.every(Boolean));
+  if (results.every(Boolean)) {
+    setDetails(`✓ Échelles appliquées — application : ${$("uiScaleValue").textContent}, systray : ${$("trayScaleValue").textContent}.`);
+  }
 });
 $("resetUiScale").addEventListener("click", resetUiScale);
 updateHeaderMode();
@@ -810,6 +894,16 @@ async function initializeWindow() {
 initializeWindow().catch(e => {
   reportError("Window initialization", e);
   setDetails(`Initialisation de la fenêtre impossible : ${e}`);
+});
+
+// Consistent tactile/visual feedback for compact clickable controls.
+document.addEventListener("click", event => {
+  const button = event.target.closest("button.icon-btn, button.add-btn, button.favorite-action, button.color-choice, button.noise-presets button");
+  if (!button || button.disabled || button.id === "refresh" || button.id === "saveClientName") return;
+  button.classList.remove("click-feedback");
+  void button.offsetWidth;
+  button.classList.add("click-feedback");
+  setTimeout(() => button.classList.remove("click-feedback"), 320);
 });
 
 listen("open-settings", showSettings).catch(() => {});
