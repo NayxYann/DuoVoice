@@ -223,6 +223,7 @@ window.addEventListener("blur", () => {
 });
 listen("theme-changed", (event) => applyColor(event.payload?.color || "violet")).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
+listen("audio-state-changed", refreshState).catch(() => {});
 
 applyColor(localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();

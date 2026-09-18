@@ -1,14 +1,14 @@
-# DuoVoice 1.3.0
+# DuoVoice 1.3.1
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.3.0
+## Nouveautés 1.3.1
 
-- **Systray activé par défaut sur une nouvelle installation** : l’icône DuoVoice est visible dès le premier lancement. La préférence reste ensuite persistante si l’utilisateur la désactive volontairement.
-- **Fermeture vers le systray par défaut** : le bouton **X** masque désormais DuoVoice dans le systray au lieu de quitter l’application sur une nouvelle installation. Le choix reste modifiable dans les paramètres.
-- **Sélecteur de versions plus explicite** : l’ancien pictogramme de téléchargement à côté de la version installée est remplacé par un chevron vers le bas afin d’indiquer clairement qu’il s’agit d’une liste déroulante.
-- **Rollback conservé** : le sélecteur continue d’afficher le `name` des GitHub Releases et utilise le tag uniquement en interne pour la comparaison et l’installation.
-- Toutes les corrections de stabilisation de la branche 1.2.9 sont conservées : updater, découverte réseau, périphériques audio, connexion distante et persistance des préférences.
+- **Changement de périphérique audio à chaud** : le microphone ou la sortie audio peuvent désormais être changés pendant une connexion active sans déconnecter/reconnecter manuellement le correspondant. DuoVoice redémarre uniquement le moteur audio sur les nouveaux périphériques tout en conservant l’hôte distant.
+- **Retour automatique en cas d’échec** : si le nouveau périphérique ne peut pas être ouvert, DuoVoice tente de restaurer immédiatement les périphériques précédemment utilisés au lieu de laisser la session audio dans un état incomplet.
+- **Muet synchronisé entre l’application et le systray** : le bouton Muet de l’interface principale et celui du panneau clic gauche utilisent maintenant le même état réel côté backend. Une modification depuis l’une des interfaces est reflétée dans l’autre.
+- **État audio resynchronisé** : l’ouverture/reprise de l’application relit l’état réel de connexion et de Muet depuis Tauri afin d’éviter qu’un état visuel local ne contredise le moteur audio.
+- Toutes les fonctionnalités et corrections de la **1.3.0** restent conservées, notamment le systray activé par défaut, la fermeture vers le tray par défaut et le sélecteur de versions/rollback.
 
 ## Fonctionnalités principales
 
@@ -99,7 +99,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.3.0`.
+5. saisir le tag voulu, par exemple `v1.3.1`.
 
 Le build produit notamment :
 

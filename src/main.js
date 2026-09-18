@@ -27,7 +27,7 @@ const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.3.0";
+const FALLBACK_VERSION = "1.3.1";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -37,6 +37,9 @@ let connectedPeer = "";
 let appliedClientName = "";
 let appliedUiScale = 1;
 let appliedTrayScale = 1;
+let appliedInputDevice = null;
+let appliedOutputDevice = null;
+let switchingAudioDevice = false;
 
 const PALETTE = {
   violet: "#a78bfa",
@@ -635,6 +638,8 @@ async function loadDevices() {
     const savedOutput = localStorage.getItem("duovoice.output");
     if (savedInput && [...input.options].some(o => o.value === savedInput)) input.value = savedInput;
     if (savedOutput && [...output.options].some(o => o.value === savedOutput)) output.value = savedOutput;
+    appliedInputDevice = input.value || null;
+    appliedOutputDevice = output.value || null;
   } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
 }
 
@@ -717,6 +722,8 @@ async function connectToAddress(address) {
     if (connected) await disconnect();
     setDetails(`Connexion à ${address}…`);
     await invoke("start_audio", { remote: address, input: $("input").value || null, output: $("output").value || null });
+    appliedInputDevice = $("input").value || null;
+    appliedOutputDevice = $("output").value || null;
     await applyVolume();
     connected = true;
     connectedPeer = address;
@@ -925,6 +932,7 @@ $("mute").addEventListener("click", async () => {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
+    await emitTo("tray", "audio-state-changed", { muted });
   } catch (e) { reportError("Mute", e); setDetails(`Muet : ${e}`); }
 });
 
@@ -952,8 +960,69 @@ document.addEventListener("click", event => {
   if (!popover.classList.contains("hidden") && !event.target.closest(".noise-control")) popover.classList.add("hidden");
 });
 
-$("input").addEventListener("change", () => localStorage.setItem("duovoice.input", $("input").value));
-$("output").addEventListener("change", () => localStorage.setItem("duovoice.output", $("output").value));
+async function applyAudioDeviceChange(kind) {
+  const inputEl = $("input");
+  const outputEl = $("output");
+  const selectedInput = inputEl.value || null;
+  const selectedOutput = outputEl.value || null;
+
+  if (!connected || !connectedPeer) {
+    appliedInputDevice = selectedInput;
+    appliedOutputDevice = selectedOutput;
+    localStorage.setItem("duovoice.input", inputEl.value);
+    localStorage.setItem("duovoice.output", outputEl.value);
+    return;
+  }
+
+  if (switchingAudioDevice) return;
+  switchingAudioDevice = true;
+  inputEl.disabled = true;
+  outputEl.disabled = true;
+
+  const previousInput = appliedInputDevice;
+  const previousOutput = appliedOutputDevice;
+  const label = kind === "input" ? "source audio" : "sortie audio";
+  setDetails(`Changement de ${label}…`);
+
+  try {
+    await invoke("start_audio", { remote: connectedPeer, input: selectedInput, output: selectedOutput });
+    appliedInputDevice = selectedInput;
+    appliedOutputDevice = selectedOutput;
+    localStorage.setItem("duovoice.input", inputEl.value);
+    localStorage.setItem("duovoice.output", outputEl.value);
+    await applyVolume();
+    await emitTo("tray", "audio-state-changed", { connected: true, remote: connectedPeer });
+    setDetails(`${kind === "input" ? "Source" : "Sortie"} audio changée sans déconnexion.`);
+  } catch (error) {
+    reportError("Audio device hot switch", error);
+    let restored = false;
+    try {
+      await invoke("start_audio", { remote: connectedPeer, input: previousInput, output: previousOutput });
+      restored = true;
+    } catch (rollbackError) {
+      reportError("Audio device rollback", rollbackError);
+    }
+
+    if (restored) {
+      if (previousInput && [...inputEl.options].some(o => o.value === previousInput)) inputEl.value = previousInput;
+      if (previousOutput && [...outputEl.options].some(o => o.value === previousOutput)) outputEl.value = previousOutput;
+      localStorage.setItem("duovoice.input", inputEl.value);
+      localStorage.setItem("duovoice.output", outputEl.value);
+      await applyVolume();
+      setDetails(`Impossible d'utiliser ce périphérique. L'ancien périphérique a été restauré.`);
+    } else {
+      await refreshFromTray();
+      setDetails(`Changement audio impossible : ${error}`);
+    }
+  } finally {
+    inputEl.disabled = false;
+    outputEl.disabled = false;
+    switchingAudioDevice = false;
+  }
+}
+
+$("input").addEventListener("change", () => applyAudioDeviceChange("input"));
+$("output").addEventListener("change", () => applyAudioDeviceChange("output"));
 
 $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
@@ -1139,6 +1208,18 @@ async function refreshFromTray() {
     const state = await invoke("audio_status");
     connected = Boolean(state.connected);
     connectedPeer = state.remote || "";
+    if (connected) {
+      // Keep the hot-switch rollback target aligned with the device choices that
+      // were used by a connection started from the tray or restored externally.
+      if (appliedInputDevice === null) appliedInputDevice = $("input").value || localStorage.getItem("duovoice.input") || null;
+      if (appliedOutputDevice === null) appliedOutputDevice = $("output").value || localStorage.getItem("duovoice.output") || null;
+    } else {
+      appliedInputDevice = null;
+      appliedOutputDevice = null;
+    }
+    const muted = Boolean(state.muted);
+    localStorage.setItem(MUTE_KEY, String(muted));
+    updateMuteUi(muted);
     $("connect").textContent = connected ? "Se déconnecter" : "Se connecter";
     $("status").innerHTML = `<span class="status-dot"></span>${connected ? "Connecté" : "Hors ligne"}`;
     $("status").className = `status ${connected ? "online" : "offline"}`;
