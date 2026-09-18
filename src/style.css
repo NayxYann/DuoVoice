@@ -1428,7 +1428,7 @@ button:not(:disabled):active,
   100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }
 
-/* 1.2.8 — dependent tray preferences remain visibly unavailable when the tray icon is disabled. */
+/* 1.2.9 — dependent tray preferences remain visibly unavailable when the tray icon is disabled. */
 .switch-row:has(input:disabled) {
   cursor: default;
   color: #737b87;
@@ -1443,3 +1443,33 @@ button:not(:disabled):active,
 .switch-row input:disabled + .switch::after {
   background: #69717c;
 }
+
+
+/* 1.2.9 — canonical SVG icon system. Same action = same glyph across main UI and tray surfaces. */
+.ui-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.icon-btn .ui-icon, .add-btn .ui-icon { margin: auto; }
+.update-banner .ui-icon { width: 15px; height: 15px; }
+.update-banner { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.favorites-label { display: inline-flex; align-items: center; gap: 6px; }
+.favorites-label .ui-icon { width: 14px; height: 14px; }
+.mute-btn .mute-svg { width: 18px; height: 18px; }
+.mute-svg .mute-slash { opacity: 0; transition: opacity .12s ease; }
+.mute-btn.active .mute-svg .mute-slash { opacity: 1; }
+/* Disable legacy CSS-drawn microphone after migration to the canonical SVG. */
+.mute-btn .mute-icon, .mute-btn .mute-icon::before, .mute-btn .mute-icon::after { display: none !important; }
+
+.favorite-btn.active .ui-icon { fill: currentColor; }
+.favorite-action .ui-icon { width: 15px; height: 15px; margin: auto; }
+.client-name-save .ui-icon { width: 16px; height: 16px; }
+.app-confirm-icon .power-svg { width: 20px; height: 20px; }

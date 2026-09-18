@@ -1,23 +1,16 @@
-# DuoVoice 1.2.8
+# DuoVoice 1.2.9
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.8
+## Nouveautés 1.2.9
 
-- Harmonisation complète du bouton **Muet** entre l’application principale et le panneau systray.
-- Même pictogramme microphone et même barre diagonale lorsque le mode Muet est actif.
-- Même palette pour les deux interfaces : état normal sombre, survol identique et état Muet rouge/danger.
-- Les couleurs utilisent désormais les mêmes variables sémantiques (`danger`, bordure et fond) afin d’éviter les écarts visuels entre l’application et le systray.
-- Conservation de toutes les fonctions de la 1.2.7, notamment l’option d’affichage de l’icône systray et les workflows GitHub manuels.
-
-- **Icône du systray désactivable** : une nouvelle option « Afficher l’icône dans le systray » est disponible juste sous « Démarrer minimisé dans le tray ».
-- **Activée par défaut après installation** : si aucun choix n’a encore été enregistré, l’icône DuoVoice reste visible comme auparavant.
-- **Préférence persistante** : le choix est conservé entre les lancements et les mises à jour.
-- **Sécurité d’accès** : lorsque l’icône du systray est désactivée, « Démarrer minimisé dans le tray » est automatiquement désactivé et l’action de fermeture bascule sur « Quitter DuoVoice » afin d’éviter de rendre l’application invisible et impossible à rouvrir.
-- **Masquage immédiat** : désactiver l’option masque aussi les panneaux clic gauche/clic droit s’ils étaient ouverts.
-- **Icône Paramètres corrigée dans le contrôle rapide** : remplacement du pictogramme construit en CSS par un SVG d’engrenage propre, centré et cohérent avec les autres icônes.
-- **Vérification des icônes du panneau rapide** : alignement optique et centrage consolidés pour conserver des tuiles visuellement homogènes.
-- Tous les acquis de la 1.2.6 sont conservés : contours systray simplifiés, Muet harmonisé, échelle commune aux menus clic gauche/clic droit, palette cohérente, nom de machine personnalisable, favoris persistants, updater signé et workflows GitHub manuels.
+- **Refonte complète des icônes** : tous les pictogrammes cliquables ont été revus et remplacés par une famille SVG cohérente inspirée des conventions Lucide (traits arrondis, même épaisseur et même grille 24×24).
+- **Une action = une seule icône** : Paramètres, Fermer, Actualiser, Valider, Favoris, Ajouter, Muet, Accueil/Ouvrir, Connexion et Quitter utilisent désormais le même pictogramme partout où l’action apparaît.
+- **Paramètres unifiés** : suppression des anciens engrenages Unicode/CSS différents entre l’application, le panneau clic gauche et le menu clic droit.
+- **Muet unifié** : même microphone SVG dans l’application principale et le systray ; la barre diagonale apparaît uniquement quand le mode Muet est actif.
+- **Systray nettoyé** : les anciennes icônes dessinées en CSS (croix, connexion, micro, fenêtre, accueil, engrenage) sont remplacées par des SVG centrés et lisibles.
+- **Ordre des options inversé** dans Paramètres → Démarrage : « Afficher l’icône dans le systray » apparaît maintenant avant « Démarrer minimisé dans le tray », ce qui rend la dépendance entre les deux réglages plus claire.
+- Toutes les fonctions et préférences de la 1.2.8 sont conservées.
 
 ## Fonctionnalités principales
 
@@ -108,7 +101,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.8`.
+5. saisir le tag voulu, par exemple `v1.2.9`.
 
 Le build produit notamment :
 

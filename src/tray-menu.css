@@ -143,3 +143,18 @@ button { font: inherit; }
   background: var(--danger-soft);
   color: #f09aa3;
 }
+
+
+/* 1.2.9 — canonical SVG glyphs, identical to the rest of DuoVoice. */
+.menu-icon .ui-icon, .tray-menu-item > .ui-icon {
+  width: 17px;
+  height: 17px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home-icon::before, .home-icon::after,
+.settings-menu-icon::before, .settings-menu-icon::after { display: none !important; }

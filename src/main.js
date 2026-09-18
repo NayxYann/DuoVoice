@@ -25,7 +25,7 @@ const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.8";
+const FALLBACK_VERSION = "1.2.9";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -82,7 +82,7 @@ function updateClientNameVisual(applied = false) {
 
   // One icon, two unmistakable states: green = a change can be applied,
   // grey = the displayed name is already active and there is nothing to do.
-  button.textContent = "✓";
+  button.innerHTML = UI_ICONS.check;
   button.classList.toggle("is-applied", isCurrent);
   button.classList.toggle("is-dirty", !isCurrent);
   button.disabled = isCurrent;
@@ -137,7 +137,7 @@ function reportError(scope, error) {
 function updateHeaderMode() {
   const settings = !$(`settingsView`).classList.contains("hidden");
   const button = $("settingsBtn");
-  button.textContent = settings ? "←" : "⚙";
+  button.innerHTML = settings ? NAV_ICONS.back : NAV_ICONS.settings;
   button.title = settings ? "Retour" : "Paramètres";
   button.setAttribute("aria-label", button.title);
   button.classList.toggle("settings-back", settings);
@@ -324,7 +324,7 @@ function updateFavoriteButton() {
   const button = $("favoriteBtn");
   if (!button) return;
   const favorite = favoriteFor($("peer").value);
-  button.textContent = favorite ? "★" : "☆";
+  button.innerHTML = UI_ICONS.star;
   button.classList.toggle("active", !!favorite);
   button.title = favorite ? "Retirer des favoris" : "Ajouter aux favoris";
   button.setAttribute("aria-label", button.title);
@@ -337,7 +337,7 @@ function renderFavorites() {
   const favorites = loadFavorites().sort((a, b) => a.name.localeCompare(b.name));
   box.innerHTML = "";
   if (!favorites.length) {
-    box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis cliquez sur ☆.</div>';
+    box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.</div>';
     return;
   }
 
@@ -351,7 +351,7 @@ function renderFavorites() {
     const connectBtn = document.createElement("button");
     connectBtn.type = "button";
     connectBtn.className = "favorite-action favorite-connect";
-    connectBtn.textContent = "↗";
+    connectBtn.innerHTML = UI_ICONS.link;
     connectBtn.title = isActive ? "Déjà connecté" : "Se connecter";
     connectBtn.disabled = !available || isActive;
     connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
@@ -359,7 +359,7 @@ function renderFavorites() {
     const disconnectBtn = document.createElement("button");
     disconnectBtn.type = "button";
     disconnectBtn.className = "favorite-action favorite-disconnect";
-    disconnectBtn.textContent = "×";
+    disconnectBtn.innerHTML = UI_ICONS.x;
     disconnectBtn.title = "Se déconnecter";
     disconnectBtn.disabled = !isActive;
     disconnectBtn.addEventListener("click", (event) => {
@@ -657,18 +657,18 @@ async function setUpdateBanner(status, update = null, error = "") {
   banner.title = "";
 
   if (status === "checking") {
-    banner.textContent = "↻ Recherche des mises à jour…";
+    banner.innerHTML = iconLabel(UI_ICONS.refresh, "Recherche des mises à jour…");
     banner.disabled = true;
   } else if (status === "current") {
-    banner.textContent = "✓ Pas de mise à jour disponible · Cliquez pour vérifier";
+    banner.innerHTML = iconLabel(UI_ICONS.check, "Pas de mise à jour disponible · Cliquez pour vérifier");
     banner.onclick = checkForUpdates;
     banner.title = "Cliquer pour lancer une nouvelle vérification.";
   } else if (status === "available") {
-    banner.textContent = `↑ Mise à jour disponible · v${update.version} · Cliquez pour télécharger`;
+    banner.innerHTML = iconLabel(UI_ICONS.download, `Mise à jour disponible · v${update.version} · Cliquez pour télécharger`);
     banner.onclick = installUpdate;
     banner.title = `Télécharger et installer DuoVoice v${update.version}`;
   } else {
-    banner.textContent = "⚠ Vérification impossible · Cliquez pour réessayer";
+    banner.innerHTML = iconLabel(UI_ICONS.alert, "Vérification impossible · Cliquez pour réessayer");
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -705,7 +705,7 @@ async function installUpdate() {
   if (!banner) return;
 
   banner.disabled = true;
-  banner.textContent = `Préparation de v${update.version}…`;
+  banner.innerHTML = iconLabel(UI_ICONS.refresh, `Préparation de v${update.version}…`);
   setDetails(`Préparation du téléchargement de v${update.version}…`);
 
   try {
@@ -717,22 +717,22 @@ async function installUpdate() {
       if (event.event === "Started") {
         total = Number(event.data.contentLength || 0);
         downloaded = 0;
-        banner.textContent = total > 0 ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`;
+        banner.innerHTML = iconLabel(UI_ICONS.download, total > 0 ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`);
         setDetails(total > 0 ? `Téléchargement de la mise à jour… 0%` : "Téléchargement de la mise à jour…");
       } else if (event.event === "Progress") {
         downloaded += Number(event.data.chunkLength || 0);
         if (total > 0) {
           const percent = Math.min(100, Math.round((downloaded / total) * 100));
-          banner.textContent = `Téléchargement de v${update.version} · ${percent}%`;
+          banner.innerHTML = iconLabel(UI_ICONS.download, `Téléchargement de v${update.version} · ${percent}%`);
           setDetails(`Téléchargement de la mise à jour… ${percent}%`);
         }
       } else if (event.event === "Finished") {
-        banner.textContent = `Installation de v${update.version}…`;
+        banner.innerHTML = iconLabel(UI_ICONS.refresh, `Installation de v${update.version}…`);
         setDetails("Téléchargement terminé. Vérification de la mise à jour…");
       }
     }, { timeout: 120000 });
 
-    banner.textContent = `Installation de v${update.version}…`;
+    banner.innerHTML = iconLabel(UI_ICONS.refresh, `Installation de v${update.version}…`);
     setDetails("Téléchargement terminé. Installation de la mise à jour…");
     await update.install();
 

@@ -342,7 +342,7 @@ button:active { transform: translateY(1px); }
   place-items: center;
 }
 
-/* 1.2.8 — SVG/action icons share one optical center and the mute state matches the main app. */
+/* 1.2.9 — SVG/action icons share one optical center and the mute state matches the main app. */
 .tile-svg {
   width: 19px;
   height: 19px;
@@ -354,3 +354,26 @@ button:active { transform: translateY(1px); }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+
+/* 1.2.9 — one canonical SVG family shared with the main application. */
+.ui-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon-button .ui-icon { width: 15px; height: 15px; margin: auto; }
+.tile-icon .ui-icon { width: 19px; height: 19px; margin: auto; }
+.mute-svg .mute-slash { opacity: 0; transition: opacity .12s ease; }
+.action-tile.active .mute-svg .mute-slash { opacity: 1; }
+.close-button::before, .close-button::after,
+.connect-icon::before, .connect-icon::after,
+.mute-icon::before, .mute-icon::after,
+.app-icon::before, .app-icon::after { display: none !important; }
+.quit-button > .power-svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.confirm-icon .power-svg { width: 17px; height: 17px; }
