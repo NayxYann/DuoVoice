@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 
@@ -18,7 +18,9 @@ const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const APP_VERSION = "1.1.1";
+const SCALE_KEY = "duovoice.uiScale";
+const LAST_UPDATE_KEY = "duovoice.lastUpdate";
+const APP_VERSION = "1.1.2";
 let connectedPeer = "";
 
 
@@ -59,14 +61,59 @@ function initColors() {
 
 function setDetails(text) { $("details").textContent = text; }
 
+function updateHeaderMode() {
+  const settings = !$(`settingsView`).classList.contains("hidden");
+  const button = $("settingsBtn");
+  button.textContent = settings ? "←" : "⚙";
+  button.title = settings ? "Retour" : "Paramètres";
+  button.setAttribute("aria-label", button.title);
+  button.classList.toggle("settings-back", settings);
+}
+
 function showSettings() {
   $("mainView").classList.add("hidden");
   $("settingsView").classList.remove("hidden");
+  updateHeaderMode();
 }
 
 function showMain() {
   $("settingsView").classList.add("hidden");
   $("mainView").classList.remove("hidden");
+  updateHeaderMode();
+}
+
+function applyUiScale(value) {
+  const scale = Number(value) || 1;
+  document.documentElement.style.setProperty("--ui-scale", String(scale));
+  $("uiScale").value = String(scale);
+  $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
+  localStorage.setItem(SCALE_KEY, String(scale));
+}
+
+function loadUiScale() {
+  const saved = Number(localStorage.getItem(SCALE_KEY) || "1");
+  const allowed = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
+  const scale = allowed.reduce((best, candidate) => Math.abs(candidate - saved) < Math.abs(best - saved) ? candidate : best, 1);
+  applyUiScale(scale);
+}
+
+async function requestQuit() {
+  const confirmed = window.confirm("Êtes-vous sûr de vouloir quitter DuoVoice ?");
+  if (!confirmed) return;
+  try { await invoke("quit_app"); }
+  catch (e) { setDetails(`Impossible de quitter DuoVoice : ${e}`); }
+}
+
+function setLastUpdateNow() {
+  localStorage.setItem(LAST_UPDATE_KEY, new Date().toISOString());
+}
+
+function formatLastUpdate() {
+  const value = localStorage.getItem(LAST_UPDATE_KEY);
+  if (!value) return "Date de mise à jour : non disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date de mise à jour : non disponible";
+  return `Dernière mise à jour : ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function loadFavorites() {
@@ -392,15 +439,15 @@ async function setUpdateBanner(status, update = null, error = "") {
   banner.onclick = null;
   banner.title = "";
   if (status === "checking") {
-    banner.textContent = "↻ Vérification des mises à jour…";
+    banner.textContent = "Rechercher des mises à jour";
   } else if (status === "current") {
-    banner.textContent = `✓ DuoVoice est à jour · v${APP_VERSION} · cliquer pour rechercher`;
+    banner.textContent = `✓ Déjà à jour · v${APP_VERSION} · cliquer pour rechercher`;
     banner.onclick = checkForUpdates;
   } else if (status === "available") {
     banner.textContent = `↑ Mise à jour disponible · v${update.version} — cliquer pour installer`;
     banner.onclick = installUpdate;
   } else {
-    banner.textContent = `⚠ Vérification impossible · v${APP_VERSION} · cliquer pour réessayer`;
+    banner.textContent = `⚠ Mise à jour indisponible · v${APP_VERSION} · cliquer pour réessayer`;
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -455,18 +502,13 @@ async function installUpdate() {
         }
       } else if (event.event === "Finished") {
         banner.textContent = "Installation terminée. Redémarrage…";
+        setLastUpdateNow();
+        $("lastUpdate").textContent = formatLastUpdate();
         setDetails("Installation terminée. Redémarrage de DuoVoice…");
       }
     });
 
-    // Tauri's updater normally terminates/restarts the application on Windows.
-    // On platforms where it returns, explicitly relaunch the updated binary.
-    try {
-      await relaunch();
-    } catch (relaunchError) {
-      setDetails(`Mise à jour installée, mais redémarrage automatique impossible : ${relaunchError}`);
-      window.location.reload();
-    }
+    setDetails("Mise à jour installée. Redémarrage de DuoVoice…");
   } catch (e) {
     banner.disabled = false;
     await setUpdateBanner("available", update);
@@ -532,10 +574,26 @@ document.addEventListener("click", event => {
 $("input").addEventListener("change", () => localStorage.setItem("duovoice.input", $("input").value));
 $("output").addEventListener("change", () => localStorage.setItem("duovoice.output", $("output").value));
 
-$("settingsBtn").addEventListener("click", showSettings);
-$("backBtn").addEventListener("click", showMain);
-$("checkUpdateBtn").addEventListener("click", checkForUpdates);
+$("settingsBtn").addEventListener("click", () => {
+  if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
+});
+$("quitBtn").addEventListener("click", requestQuit);
 $("appVersion").textContent = `v${APP_VERSION}`;
+$("lastUpdate").textContent = formatLastUpdate();
+$("uiScale").addEventListener("input", () => applyUiScale($("uiScale").value));
+updateHeaderMode();
+loadUiScale();
+
+listen("focus-window", async () => {
+  try {
+    const window = getCurrentWindow();
+    await window.show();
+    await window.unminimize();
+    await window.setFocus();
+  } catch (e) {
+    setDetails(`Impossible de remettre DuoVoice au premier plan : ${e}`);
+  }
+}).catch(() => {});
 
 $("autostart").addEventListener("change", async e => {
   try {

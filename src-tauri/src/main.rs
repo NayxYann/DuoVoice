@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::{
     collections::{HashMap, VecDeque},
     io,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket, TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -25,6 +25,7 @@ const PING_MAGIC: &[u8; 4] = b"DVP1";
 const PONG_MAGIC: &[u8; 4] = b"DVP2";
 const SAMPLE_RATE: u32 = 48_000;
 const FRAME_SAMPLES: usize = 480;
+const INSTANCE_PORT: u16 = 39473;
 
 #[derive(Clone, Serialize)]
 struct DeviceLists {
@@ -693,8 +694,30 @@ fn app_log(message: &str) {
     }
 }
 
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+fn acquire_single_instance() -> Option<TcpListener> {
+    match TcpListener::bind((Ipv4Addr::LOCALHOST, INSTANCE_PORT)) {
+        Ok(listener) => Some(listener)
+        Err(_) => {
+            if let Ok(mut stream) = TcpStream::connect((Ipv4Addr::LOCALHOST, INSTANCE_PORT)) {
+                use std::io::Write;
+                let _ = stream.write_all(b"FOCUS");
+            }
+            None
+        }
+    }
+}
+
 fn main() {
     app_log("=== DuoVoice starting ===");
+    let Some(instance_listener) = acquire_single_instance() else {
+        app_log("Another DuoVoice instance is already running; requesting focus and exiting.");
+        return;
+    };
     let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
     app_log(&format!("autostart={launched_from_autostart}"));
 
@@ -717,7 +740,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action, quit_app
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -735,6 +758,15 @@ fn main() {
             app_log("Tauri setup entered");
             let discovery = app.state::<Arc<DiscoveryState>>().inner().clone();
             start_discovery(discovery);
+
+            let focus_app = app.handle().clone();
+            thread::spawn(move || {
+                for stream in instance_listener.incoming() {
+                    if stream.is_ok() {
+                        let _ = focus_app.emit("focus-window", ());
+                    }
+                }
+            });
 
             let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Paramètres", true, None::<&str>)?;

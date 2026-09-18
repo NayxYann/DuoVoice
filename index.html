@@ -20,7 +20,10 @@
       </div>
       <div class="header-actions">
         <span id="status" class="status offline"><span class="status-dot"></span>Hors ligne</span>
+        <div class="header-icons">
         <button id="settingsBtn" class="icon-btn" title="Paramètres" aria-label="Paramètres">⚙</button>
+        <button id="quitBtn" class="icon-btn quit-btn" title="Quitter DuoVoice" aria-label="Quitter DuoVoice">×</button>
+      </div>
       </div>
     </header>
 
@@ -148,7 +151,6 @@
 
     <section id="settingsView" class="hidden">
       <div class="settings-head">
-        <button id="backBtn" class="secondary small-btn">← Retour</button>
         <div>
           <h2>Paramètres</h2>
           <p>Préférences de DuoVoice</p>
@@ -162,9 +164,12 @@
         </div>
         <div class="settings-info">
           <span>Version installée</span>
-          <strong id="appVersion">v1.1.1</strong>
+          <strong id="appVersion">v1.1.2</strong>
         </div>
-        <button id="checkUpdateBtn" class="secondary" type="button">Vérifier les mises à jour</button>
+        <div class="settings-info">
+          <span>Historique</span>
+          <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
+        </div>
       </section>
 
       <section class="card">
@@ -204,6 +209,21 @@
           <p>Choisissez une couleur douce pour l’interface.</p>
         </div>
         <div id="colorChoices" class="color-choices" aria-label="Couleur de l'application"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <h3>Échelle de l’interface</h3>
+          <p>Ajustez la taille générale de DuoVoice selon votre écran et votre confort.</p>
+        </div>
+        <div class="volume-line scale-line">
+          <label for="uiScale">Taille</label>
+          <strong id="uiScaleValue">100%</strong>
+        </div>
+        <input id="uiScale" class="stepped-range" type="range" min="0.8" max="1.3" step="0.1" value="1">
+        <div class="scale-labels" aria-hidden="true">
+          <span>80%</span><span>90%</span><span>100%</span><span>110%</span><span>120%</span><span>130%</span>
+        </div>
       </section>
 
       <section class="card">

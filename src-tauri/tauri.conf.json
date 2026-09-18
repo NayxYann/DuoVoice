@@ -1,14 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DuoVoice",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "identifier": "fr.duovoice.intercom",
-
   "build": {
     "frontendDist": "../dist",
     "beforeBuildCommand": "npm run build"
   },
-
   "app": {
     "withGlobalTauri": false,
     "windows": [
@@ -25,7 +23,6 @@
       "csp": null
     }
   },
-
   "bundle": {
     "active": true,
     "targets": [
@@ -39,7 +36,6 @@
       "icons/icon.ico"
     ]
   },
-
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5ODUzNjE0OEU5RjdFN0IKUldSN2ZwK09GRGFGV2Z0YXF4cDdpZ01YMXpDZWRGMkFLUStLUmYzLyt4V1hkR2FNdUhtVURZcUgK"
