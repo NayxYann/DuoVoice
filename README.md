@@ -1,12 +1,12 @@
-# DuoVoice 1.2.1
+# DuoVoice 1.2.2
 
-## Nouveautés 1.2.1
+## Nouveautés 1.2.2
 
-- Panneau systray légèrement agrandi et plus aéré, tout en restant compact.
-- Le bouton **Ouvrir** du systray revient systématiquement sur l’accueil ; **Paramètres** ouvre uniquement les paramètres.
-- Nouvelle confirmation de fermeture intégrée à l’application, centrée et harmonisée avec le design DuoVoice.
-- Nettoyage ciblé du code, notamment suppression de l’affectation Rust inutile sur `last_seq`.
-- Les favoris restent stockés sous `duovoice.favorites` et ne sont pas réinitialisés par la mise à jour.
+- Panneau systray replacé entièrement au-dessus de la barre des tâches et centré sur l’icône DuoVoice.
+- Icône d’extinction remplacée par un SVG propre et cohérent dans le systray et les confirmations de fermeture.
+- Redimensionnement manuel de la fenêtre principale désactivé : l’échelle définie dans les paramètres reste la seule source de redimensionnement.
+- Conservation des améliorations 1.2.1 : tray compact, navigation Accueil/Paramètres distincte, popup de fermeture intégrée, favoris persistants et nettoyage de `last_seq`.
+
 ## Fonctionnalités
 
 - audio bidirectionnel simultané sur le LAN ;
@@ -108,3 +108,9 @@ Le journal technique est écrit dans :
 - Linux : `$XDG_DATA_HOME/DuoVoice/duovoice.log` ou `~/.local/share/DuoVoice/duovoice.log`
 
 Il contient uniquement des événements utiles (démarrage, arrêt, erreurs réseau/audio/updater, connexion/déconnexion). Les paquets audio ne sont pas journalisés.
+
+
+## 1.2.2
+- Échelle indépendante du panneau systray, appliquée avec les mêmes boutons que l’échelle principale.
+- Positionnement du panneau recalculé à chaque ouverture pour rester centré sur l’icône et au-dessus de la barre des tâches.
+- Nom de machine personnalisable et diffusé automatiquement sur le réseau local.

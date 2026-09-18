@@ -60,6 +60,7 @@ struct DiscoveredPeer {
 
 struct DiscoveryState {
     peers: Mutex<HashMap<String, DiscoveredPeer>>,
+    local_name: Mutex<String>,
 }
 
 struct AudioEngine {
@@ -96,12 +97,47 @@ fn list_peers(state: State<'_, Arc<DiscoveryState>>) -> Vec<Peer> {
     peers.values().map(|p| p.peer.clone()).collect()
 }
 
+#[tauri::command]
+fn get_client_name(state: State<'_, Arc<DiscoveryState>>) -> String {
+    state.local_name.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn set_client_name(state: State<'_, Arc<DiscoveryState>>, name: String) -> Result<String, String> {
+    let cleaned = name.trim();
+    if cleaned.is_empty() {
+        return Err("Le nom de la machine ne peut pas être vide".into());
+    }
+    if cleaned.chars().count() > 32 {
+        return Err("Le nom de la machine est limité à 32 caractères".into());
+    }
+    if cleaned.contains('|') || cleaned.chars().any(|c| c.is_control()) {
+        return Err("Le nom contient un caractère non autorisé".into());
+    }
+
+    let value = cleaned.to_string();
+    *state.local_name.lock().unwrap() = value.clone();
+    Ok(value)
+}
+
+#[tauri::command]
+fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
+    const BASE_WIDTH: f64 = 280.0;
+    const BASE_HEIGHT: f64 = 348.0;
+    let scale = scale.clamp(0.9, 1.2);
+    if let Some(window) = app.get_webview_window("tray") {
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+                (BASE_WIDTH * scale).round(),
+                (BASE_HEIGHT * scale).round(),
+            )))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn start_discovery(app_state: Arc<DiscoveryState>) {
     thread::spawn(move || {
-        let hostname = hostname::get().ok()
-            .and_then(|h| h.into_string().ok())
-            .unwrap_or_else(|| "DuoVoice".into());
-
         let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT)) {
             Ok(s) => s,
             Err(e) => {
@@ -117,7 +153,8 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
 
         loop {
             if last_broadcast.elapsed() >= Duration::from_secs(2) {
-                let msg = format!("DUOVOICE|{}|{}", hostname, AUDIO_PORT);
+                let local_name = app_state.local_name.lock().unwrap().clone();
+                let msg = format!("DUOVOICE|{}|{}", local_name, AUDIO_PORT);
                 let _ = socket.send_to(msg.as_bytes(), SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
                 last_broadcast = Instant::now();
             }
@@ -126,7 +163,8 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
                 Ok((n, addr)) => {
                     if let Ok(text) = std::str::from_utf8(&buf[..n]) {
                         let parts: Vec<&str> = text.split('|').collect();
-                        if parts.len() == 3 && parts[0] == "DUOVOICE" && parts[1] != hostname {
+                        let local_name = app_state.local_name.lock().unwrap().clone();
+                        if parts.len() == 3 && parts[0] == "DUOVOICE" && parts[1] != local_name {
                             if let Ok(port) = parts[2].parse::<u16>() {
                                 let ip = addr.ip().to_string();
                                 app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
@@ -950,7 +988,15 @@ fn main() {
             noise_intensity: Arc::new(Mutex::new(0.65)),
             remote: Arc::new(Mutex::new(None)),
         })
-        .manage(Arc::new(DiscoveryState { peers: Mutex::new(HashMap::new()) }))
+        .manage(Arc::new(DiscoveryState {
+            peers: Mutex::new(HashMap::new()),
+            local_name: Mutex::new(
+                hostname::get().ok()
+                    .and_then(|h| h.into_string().ok())
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or_else(|| "DuoVoice".into())
+            ),
+        }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
@@ -958,7 +1004,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
+            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1013,26 +1059,47 @@ fn main() {
                 .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect: _, .. } = event {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect, .. } = event {
                         let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("tray") {
                             if w.is_visible().unwrap_or(false) {
                                 let _ = w.hide();
                                 return;
                             }
-                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(264, 324));
-                            let width = f64::from(size.width);
-                            let height = f64::from(size.height);
-                            // The Windows notification area normally sits against the right
-                            // edge of the screen. Aligning the popup's right edge with the click
-                            // keeps the compact panel fully visible instead of placing half of it
-                            // outside the monitor.
-                            let x = f64::from(position.x) - width + 12.0;
-                            let y = f64::from(position.y) - height - 8.0;
-                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
-                                x.round() as i32,
-                                y.round() as i32,
-                            )));
+                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 348));
+                            let width = size.width as i32;
+                            let height = size.height as i32;
+
+                            // Center the popup on the tray icon click and keep it entirely inside
+                            // the monitor work area. On Windows the work area stops above the
+                            // taskbar, so the panel sits cleanly above it instead of overlapping it.
+                            let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
+                            let icon_center_x = monitor.as_ref().map(|monitor| {
+                                let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
+                                let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
+                                icon_position.x + icon_size.width as i32 / 2
+                            }).unwrap_or_else(|| position.x.round() as i32);
+
+                            let mut x = icon_center_x - width / 2;
+                            let mut y = position.y.round() as i32 - height - 8;
+
+                            if let Some(monitor) = monitor {
+                                let work = monitor.work_area();
+                                let left = work.position.x;
+                                let top = work.position.y;
+                                let right = left + work.size.width as i32;
+                                let bottom = top + work.size.height as i32;
+                                const GAP: i32 = 8;
+
+                                x = x.clamp(left + GAP, (right - width - GAP).max(left + GAP));
+                                // Anchor the panel to the usable desktop edge above the taskbar.
+                                y = bottom - height - GAP;
+                                if y < top + GAP {
+                                    y = top + GAP;
+                                }
+                            }
+
+                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
                             let _ = w.show();
                             let _ = w.set_focus();
                         }

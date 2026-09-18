@@ -7,12 +7,28 @@ const $ = (id) => document.getElementById(id);
 const COLOR_KEY = "duovoice.color";
 const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
+const TRAY_SCALE_KEY = "duovoice.trayScale";
 const PALETTE = { violet: "#a78bfa", rose: "#f472b6", bleu: "#60a5fa", vert: "#4ade80", jaune: "#facc15", orange: "#fb923c", cyan: "#22d3ee", ardoise: "#94a3b8" };
 
 let peers = [];
 let connected = false;
 let remote = "";
 let busy = false;
+
+function normalizedTrayScale(value) {
+  const allowed = [0.9, 1, 1.1, 1.2];
+  const numeric = Number(value) || 1;
+  return allowed.reduce((best, candidate) =>
+    Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
+}
+
+function applyTrayScale(value) {
+  const scale = normalizedTrayScale(value);
+  document.documentElement.style.setProperty("--tray-scale", String(scale));
+  localStorage.setItem(TRAY_SCALE_KEY, String(scale));
+}
+
+applyTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1");
 
 function applyColor(name) {
   const color = PALETTE[name] || PALETTE.violet;
@@ -179,6 +195,7 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY) applyColor(event.newValue || "violet");
+  if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
 });
 
 let peerTimer = null;
@@ -205,6 +222,7 @@ window.addEventListener("blur", () => {
   stopPolling();
 });
 listen("theme-changed", (event) => applyColor(event.payload?.color || "violet")).catch(() => {});
+listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
 
 applyColor(localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();

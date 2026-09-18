@@ -37,6 +37,12 @@
             <button id="refresh" class="icon-btn compact" type="button" title="Actualiser la détection" aria-label="Actualiser la détection">↻</button>
           </div>
 
+          <label for="clientName">Nom de cette machine</label>
+          <div class="client-name-row">
+            <input id="clientName" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Nom visible sur le réseau">
+            <button id="saveClientName" class="icon-btn compact client-name-save" type="button" title="Enregistrer le nom" aria-label="Enregistrer le nom">✓</button>
+          </div>
+
           <label for="peer">Ordinateur distant</label>
           <div class="peer-row">
             <select id="peer"><option value="">Recherche d'un PC…</option></select>
@@ -161,7 +167,7 @@
           </div>
           <div class="settings-info">
             <span>Version installée</span>
-            <strong id="appVersion">v1.2.1</strong>
+            <strong id="appVersion">v1.2.2</strong>
           </div>
           <div class="settings-info">
             <span>Historique</span>
@@ -214,7 +220,7 @@
             <p>Ajustez la taille générale de DuoVoice selon votre écran et votre confort.</p>
           </div>
           <div class="volume-line scale-line">
-            <label for="uiScale">Taille</label>
+            <label for="uiScale">Application principale</label>
             <strong id="uiScaleValue">100%</strong>
           </div>
           <div class="scale-control">
@@ -223,7 +229,18 @@
               <span>80%</span><span>90%</span><span>100%</span><span>110%</span><span>120%</span><span>130%</span>
             </div>
           </div>
-          <div id="scaleActions" class="scale-actions" aria-label="Actions de l'échelle de l'interface">
+
+          <div class="volume-line scale-line tray-scale-line">
+            <label for="trayScale">Contrôle rapide du systray</label>
+            <strong id="trayScaleValue">100%</strong>
+          </div>
+          <div class="scale-control tray-scale-control">
+            <input id="trayScale" class="stepped-range" type="range" min="0.9" max="1.2" step="0.1" value="1">
+            <div class="scale-labels" aria-hidden="true">
+              <span>90%</span><span>100%</span><span>110%</span><span>120%</span>
+            </div>
+          </div>
+          <div id="scaleActions" class="scale-actions" aria-label="Actions des échelles de l'interface">
             <button id="resetUiScale" class="secondary scale-action" type="button">Rétablir par défaut</button>
             <button id="applyUiScale" class="primary scale-action" type="button">Appliquer les modifications</button>
           </div>
@@ -249,7 +266,7 @@
 
     <div id="appQuitConfirm" class="app-confirm-layer" aria-hidden="true">
       <div class="app-confirm-card" role="dialog" aria-modal="true" aria-labelledby="appQuitTitle">
-        <div class="app-confirm-icon" aria-hidden="true"><span class="app-power-icon"></span></div>
+        <div class="app-confirm-icon" aria-hidden="true"><svg class="power-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M6.4 5.6a8 8 0 1 0 11.2 0"/></svg></div>
         <strong id="appQuitTitle">Quitter DuoVoice ?</strong>
         <p>L’application et l’audio seront complètement arrêtés.</p>
         <div class="app-confirm-actions">

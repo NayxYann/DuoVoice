@@ -21,12 +21,15 @@ const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
+const TRAY_SCALE_KEY = "duovoice.trayScale";
+const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.1";
+const FALLBACK_VERSION = "1.2.2";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
+const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
 
 const PALETTE = {
@@ -65,6 +68,32 @@ function initColors() {
 
 function setDetails(text) { $("details").textContent = text; }
 
+async function loadClientName() {
+  try {
+    const systemName = await invoke("get_client_name");
+    const saved = (localStorage.getItem(CLIENT_NAME_KEY) || "").trim();
+    const desired = saved || systemName || "DuoVoice";
+    const applied = await invoke("set_client_name", { name: desired });
+    $("clientName").value = applied;
+    localStorage.setItem(CLIENT_NAME_KEY, applied);
+  } catch (e) {
+    reportError("Client name", e);
+  }
+}
+
+async function saveClientName() {
+  const input = $("clientName");
+  try {
+    const applied = await invoke("set_client_name", { name: input.value });
+    input.value = applied;
+    localStorage.setItem(CLIENT_NAME_KEY, applied);
+    setDetails(`Nom réseau enregistré : ${applied}. Les autres PC le verront automatiquement.`);
+  } catch (e) {
+    setDetails(`Nom de la machine : ${e}`);
+    input.focus();
+  }
+}
+
 function reportError(scope, error) {
   invoke("log_client_error", { message: `${scope}: ${String(error)}` }).catch(() => {});
 }
@@ -96,9 +125,39 @@ function setUiScaleControl(value) {
   $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
 }
 
-async function applyUiScale(value) {
+function setTrayScaleControl(value) {
+  const scale = Number(value) || 1;
+  $("trayScale").value = String(scale);
+  $("trayScaleValue").textContent = `${Math.round(scale * 100)}%`;
+}
+
+function normalizedScale(value) {
   const numeric = Number(value) || 1;
-  const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
+  return SCALE_VALUES.reduce((best, candidate) =>
+    Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
+}
+
+function normalizedTrayScale(value) {
+  const numeric = Number(value) || 1;
+  return TRAY_SCALE_VALUES.reduce((best, candidate) =>
+    Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
+}
+
+async function applyTrayScale(value) {
+  const scale = normalizedTrayScale(value);
+  setTrayScaleControl(scale);
+  localStorage.setItem(TRAY_SCALE_KEY, String(scale));
+  try {
+    await invoke("set_tray_scale", { scale });
+    await emitTo("tray", "tray-scale-changed", { scale });
+  } catch (e) {
+    reportError("Tray scale", e);
+    setDetails(`Impossible d’adapter le contrôle rapide à ${Math.round(scale * 100)}% : ${e}`);
+  }
+}
+
+async function applyUiScale(value) {
+  const scale = normalizedScale(value);
 
   // DuoVoice is laid out on a fixed 1080 × 800 design canvas. The same scale
   // factor is applied to the canvas and to the native window, so every element
@@ -120,16 +179,17 @@ async function applyUiScale(value) {
 }
 
 function loadUiScale() {
-  const saved = Number(localStorage.getItem(SCALE_KEY) || "1");
-  const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - saved) < Math.abs(best - saved) ? candidate : best, 1);
+  const scale = normalizedScale(localStorage.getItem(SCALE_KEY) || "1");
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
+  setTrayScaleControl(normalizedTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1"));
 }
 
 async function resetUiScale() {
   setUiScaleControl(1);
-  await applyUiScale(1);
-  setDetails("Échelle de l’interface rétablie à 100%.");
+  setTrayScaleControl(1);
+  await Promise.all([applyUiScale(1), applyTrayScale(1)]);
+  setDetails("Échelles de l’application et du systray rétablies à 100%.");
 }
 
 function setAppQuitConfirmation(open) {
@@ -377,12 +437,21 @@ async function loadPeers(manual = false) {
   try {
     const peers = await invoke("list_peers");
     const now = Date.now();
+    let favoritesChanged = false;
+    const favorites = loadFavorites();
     for (const p of peers) {
       const old = peerCache.get(p.address);
       peerCache.set(p.address, { ...p, seenAt: now, manual: old?.manual ?? false });
+      const favorite = favorites.find(item => item.address === p.address);
+      if (favorite && favorite.name !== p.name) {
+        favorite.name = p.name;
+        favoritesChanged = true;
+      }
     }
+    if (favoritesChanged) saveFavorites(favorites);
     for (const [address, p] of peerCache) if (!p.manual && now - p.seenAt > 15000) peerCache.delete(address);
     renderPeers();
+    renderFavorites();
     if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
   } catch (e) { reportError("Peer discovery", e); setDetails(`Détection réseau : ${e}`); }
   finally { if (manual) { refresh.disabled = false; refresh.textContent = "↻"; } }
@@ -613,6 +682,8 @@ $("favoriteBtn").addEventListener("click", toggleFavorite);
 $("peer").addEventListener("change", updateFavoriteButton);
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
+$("saveClientName").addEventListener("click", saveClientName);
+$("clientName").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); saveClientName(); } });
 
 $("volume").addEventListener("input", () => {
   if (!$("boostVolume").checked && Number($("volume").value) > 100) $("volume").value = 100;
@@ -681,7 +752,11 @@ document.addEventListener("keydown", event => {
 });
 loadAppVersion();
 $("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
-$("applyUiScale").addEventListener("click", async () => { await applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
+$("trayScale").addEventListener("input", () => setTrayScaleControl($("trayScale").value));
+$("applyUiScale").addEventListener("click", async () => {
+  await Promise.all([applyUiScale($("uiScale").value), applyTrayScale($("trayScale").value)]);
+  setDetails(`Échelles appliquées — application : ${$("uiScaleValue").textContent}, systray : ${$("trayScaleValue").textContent}.`);
+});
 $("resetUiScale").addEventListener("click", resetUiScale);
 updateHeaderMode();
 
@@ -725,7 +800,10 @@ $("closeAction").addEventListener("change", async () => {
 
 async function initializeWindow() {
   loadUiScale();
-  await applyUiScale($("uiScale").value);
+  await Promise.all([
+    applyUiScale($("uiScale").value),
+    applyTrayScale($("trayScale").value),
+  ]);
   await applyWindowPreferences();
 }
 
@@ -756,6 +834,7 @@ listen("audio-state-changed", refreshFromTray).catch(() => {});
 
 loadManualIps();
 renderFavorites();
+loadClientName();
 loadDevices();
 loadAutostart();
 loadAudioPreferences();
