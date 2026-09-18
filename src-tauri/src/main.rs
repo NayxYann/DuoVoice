@@ -595,6 +595,23 @@ fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), 
     Ok(())
 }
 
+
+#[derive(Clone, Serialize)]
+struct AudioStatus {
+    connected: bool,
+    muted: bool,
+    remote: Option<String>,
+}
+
+#[tauri::command]
+fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
+    AudioStatus {
+        connected: state.engine.lock().unwrap().is_some(),
+        muted: state.muted.load(std::sync::atomic::Ordering::Relaxed),
+        remote: state.remote.lock().unwrap().map(|addr| addr.ip().to_string()),
+    }
+}
+
 #[tauri::command]
 fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> { stop_audio_inner(&state) }
 
@@ -748,10 +765,15 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action, quit_app, hide_window_to_tray
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, audio_status, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action, quit_app, hide_window_to_tray
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "tray" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
                 let to_tray = window.state::<AudioState>().close_to_tray.load(std::sync::atomic::Ordering::Relaxed);
                 if to_tray {
                     api.prevent_close();
@@ -759,6 +781,11 @@ fn main() {
                     let _ = window.hide();
                 } else {
                     let _ = window.close();
+                }
+            }
+            if let tauri::WindowEvent::Focused(false) = event {
+                if window.label() == "tray" {
+                    let _ = window.hide();
                 }
             }
         })
@@ -776,10 +803,11 @@ fn main() {
                 }
             });
 
+            let quick = MenuItem::with_id(app, "quick", "Contrôle rapide", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Paramètres", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &settings, &quit])?;
+            let menu = Menu::with_items(app, &[&quick, &show, &settings, &quit])?;
 
             // Do not unwrap default_window_icon(): a missing icon must not crash the whole app.
             let icon = app.default_window_icon().cloned()
@@ -790,10 +818,21 @@ fn main() {
                 .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect, .. } = event {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.set_skip_taskbar(false);
+                        if let Some(w) = app.get_webview_window("tray") {
+                            if w.is_visible().unwrap_or(false) {
+                                let _ = w.hide();
+                                return;
+                            }
+                            let width = 332.0_f64;
+                            let height = 286.0_f64;
+                            let x = f64::from(position.x) - width / 2.0;
+                            let tray_y = f64::from(rect.position.y);
+                            let tray_h = f64::from(rect.size.height);
+                            let below = tray_y + tray_h + 8.0;
+                            let y = if below + height < 900.0 { below } else { tray_y - height - 8.0 };
+                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x.max(0.0) as i32, y.max(0.0) as i32)));
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
@@ -801,6 +840,13 @@ fn main() {
                 })
                 .on_menu_event(|app, event| {
                     match event.id.as_ref() {
+                        "quick" => {
+                            if let Some(w) = app.get_webview_window("tray") {
+                                let _ = w.center();
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
                         "show" => {
                             if let Some(w) = app.get_webview_window("main") {
                                 let _ = w.set_skip_taskbar(false);
@@ -821,6 +867,11 @@ fn main() {
                     }
                 })
                 .build(app)?;
+
+            if let Some(w) = app.get_webview_window("tray") {
+                let _ = w.hide();
+                let _ = w.set_skip_taskbar(true);
+            }
 
             if let Some(w) = app.get_webview_window("main") {
                 // The frontend preference "Démarrer minimisé dans le tray" controls

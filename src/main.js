@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emitTo } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
@@ -21,7 +21,7 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const APP_VERSION = "1.1.6";
+const APP_VERSION = "1.1.7";
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 800;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
@@ -47,6 +47,7 @@ function applyAppColor(name) {
   document.documentElement.style.setProperty("--accent-soft", `${color}22`);
   document.documentElement.style.setProperty("--accent-focus", `${color}2e`);
   localStorage.setItem(COLOR_KEY, name);
+  emitTo("tray", "theme-changed", { color: name }).catch(() => {});
   document.querySelectorAll(".color-choice").forEach(b => b.classList.toggle("active", b.dataset.color === name));
 }
 
@@ -92,28 +93,14 @@ function setUiScaleControl(value) {
   $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
 }
 
-async function keepScaleActionsVisible() {
-  const actions = $("scaleActions");
-  const scroll = $("settingsScroll");
-  if (!actions || !scroll || $("settingsView").classList.contains("hidden")) return;
-
-  await new Promise(requestAnimationFrame);
-  await new Promise(requestAnimationFrame);
-
-  const scrollRect = scroll.getBoundingClientRect();
-  const actionRect = actions.getBoundingClientRect();
-  const margin = 12;
-  const above = actionRect.top < scrollRect.top + margin;
-  const below = actionRect.bottom > scrollRect.bottom - margin;
-
-  if (above || below) {
-    actions.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-  }
-}
-
 async function applyUiScale(value) {
   const numeric = Number(value) || 1;
   const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
+  const scroll = $("settingsScroll");
+  const scaleCard = $("scaleActions")?.closest(".card");
+  const anchorTop = scroll && scaleCard ? scaleCard.getBoundingClientRect().top : null;
+  const previousScale = Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
+
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
   localStorage.setItem(SCALE_KEY, String(scale));
@@ -121,7 +108,26 @@ async function applyUiScale(value) {
   try {
     const window = getCurrentWindow();
     await window.setSize(new LogicalSize(Math.round(BASE_WINDOW_WIDTH * scale), Math.round(BASE_WINDOW_HEIGHT * scale)));
-    await keepScaleActionsVisible();
+
+    // Keep the scale card at the exact same screen position. The page is zoomed
+    // around its top-left corner, so the scroll offset has to be compensated
+    // proportionally instead of scrolling the buttons into view afterwards.
+    if (scroll && scaleCard && anchorTop !== null) {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const newTop = scaleCard.getBoundingClientRect().top;
+      const zoom = scale / previousScale;
+      const delta = newTop - anchorTop;
+      if (Math.abs(delta) > 0.5 && zoom > 0) {
+        scroll.scrollTop += delta / zoom;
+      }
+      await new Promise(requestAnimationFrame);
+      const correctedTop = scaleCard.getBoundingClientRect().top;
+      const remaining = correctedTop - anchorTop;
+      if (Math.abs(remaining) > 0.5) {
+        scroll.scrollTop += remaining / zoom;
+      }
+    }
   } catch (e) {
     setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);
   }
@@ -707,6 +713,42 @@ $("closeAction").addEventListener("change", async () => {
 });
 
 listen("open-settings", showSettings).catch(() => {});
+
+async function refreshFromTray() {
+  try {
+    const state = await invoke("audio_status");
+    connected = Boolean(state.connected);
+    connectedPeer = state.remote || "";
+    $("connect").textContent = connected ? "Se déconnecter" : "Se connecter";
+    $("status").innerHTML = `<span class="status-dot"></span>${connected ? "Connecté" : "Hors ligne"}`;
+    $("status").className = `status ${connected ? "online" : "offline"}`;
+    $("peer").value = connectedPeer;
+    await loadPeers(false);
+    await updateLatency();
+    renderFavorites();
+  } catch {}
+}
+
+listen("tray-open-main", async () => {
+  try {
+    const w = getCurrentWindow();
+    await w.setSkipTaskbar(false);
+    await w.show();
+    await w.unminimize();
+    await w.setFocus();
+  } catch {}
+});
+listen("tray-open-settings", async () => {
+  try {
+    const w = getCurrentWindow();
+    await w.setSkipTaskbar(false);
+    await w.show();
+    await w.unminimize();
+    await w.setFocus();
+    showSettings();
+  } catch {}
+});
+listen("audio-state-changed", refreshFromTray).catch(() => {});
 
 loadManualIps();
 renderFavorites();
