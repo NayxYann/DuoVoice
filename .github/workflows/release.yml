@@ -104,6 +104,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Fix Tauri CLI permissions
+        run: chmod +x node_modules/.bin/tauri
+
       - name: Configure updater endpoint
         shell: bash
         env:
@@ -134,6 +137,7 @@ jobs:
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
           projectPath: .
