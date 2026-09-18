@@ -1,9 +1,6 @@
 name: Release DuoVoice
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
@@ -63,8 +60,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          tagName: ${{ inputs.tag }}
+          releaseName: "DuoVoice ${{ inputs.tag }}"
           releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
@@ -131,8 +128,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          tagName: ${{ inputs.tag }}
+          releaseName: "DuoVoice ${{ inputs.tag }}"
           releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
