@@ -7,6 +7,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 import { COLOR_KEY, THEME_KEY, PALETTE, THEMES, applyThemeVariables, normalizeThemeName } from "./theme.js";
+import { LANGUAGE_KEY, getLanguage, setLanguage, t, localeForLanguage, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
@@ -25,6 +26,7 @@ const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
+const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
 const FALLBACK_VERSION = "1.3.3";
@@ -183,6 +185,25 @@ async function saveClientName() {
   }
 }
 
+function applyLanguageUi(language = getLanguage(), { broadcast = false } = {}) {
+  const lang = setLanguage(language);
+  applyStaticTranslations(document, lang);
+  const select = $("languageSelect");
+  if (select) select.value = lang;
+  updateHeaderMode();
+  updateNoiseUi();
+  updateMuteUi(localStorage.getItem(MUTE_KEY) === "true");
+  renderPeers();
+  renderFavorites();
+  if (updateState.status) setUpdateBanner(updateState.status, updateState.update);
+  if ($("lastUpdate")) $("lastUpdate").textContent = formatLastUpdate();
+  if (broadcast) {
+    emitTo("tray", "language-changed", { language: lang }).catch(() => {});
+    emitTo("tray-menu", "language-changed", { language: lang }).catch(() => {});
+  }
+  return lang;
+}
+
 function reportError(scope, error) {
   invoke("log_client_error", { message: `${scope}: ${String(error)}` }).catch(() => {});
 }
@@ -191,7 +212,7 @@ function updateHeaderMode() {
   const settings = !$(`settingsView`).classList.contains("hidden");
   const button = $("settingsBtn");
   button.innerHTML = settings ? NAV_ICONS.back : NAV_ICONS.settings;
-  button.title = settings ? "Retour" : "Paramètres";
+  button.title = settings ? (getLanguage() === "fr" ? "Retour" : getLanguage() === "es" ? "Volver" : getLanguage() === "de" ? "Zurück" : "Back") : t("common.settings");
   button.setAttribute("aria-label", button.title);
   button.classList.toggle("settings-back", settings);
 }
@@ -371,10 +392,12 @@ async function loadAppVersion() {
 
 function formatLastUpdate() {
   const value = localStorage.getItem(LAST_UPDATE_KEY);
-  if (!value) return "Date de mise à jour : non disponible";
+  if (!value) return t("settings.lastUpdateUnavailable");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Date de mise à jour : non disponible";
-  return `Dernière mise à jour : ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+  if (Number.isNaN(date.getTime())) return t("settings.lastUpdateUnavailable");
+  const locale = localeForLanguage();
+  const prefix = ({ en: "Last update", fr: "Dernière mise à jour", es: "Última actualización", de: "Letztes Update" })[getLanguage()] || "Last update";
+  return `${prefix}: ${date.toLocaleDateString(locale)} ${date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 const RELEASES_API = "https://api.github.com/repos/NayxYann/DuoVoice/releases?per_page=30";
@@ -532,7 +555,7 @@ function renderFavorites() {
   const favorites = loadFavorites().sort((a, b) => a.name.localeCompare(b.name));
   box.innerHTML = "";
   if (!favorites.length) {
-    box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.</div>';
+    box.innerHTML = `<div class="favorites-empty">${({en:'No favorites yet. Select a PC, then use the Favorite button.',fr:'Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.',es:'Aún no hay favoritos. Selecciona un PC y usa el botón Favorito.',de:'Noch keine Favoriten. Wähle einen PC und nutze die Favoriten-Schaltfläche.'})[getLanguage()]}</div>`;
     return;
   }
 
@@ -547,7 +570,7 @@ function renderFavorites() {
     connectBtn.type = "button";
     connectBtn.className = "favorite-action favorite-connect";
     connectBtn.innerHTML = UI_ICONS.link;
-    connectBtn.title = isActive ? "Déjà connecté" : "Se connecter";
+    connectBtn.title = isActive ? t("status.connected") : t("connection.connect");
     connectBtn.disabled = !available || isActive;
     connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
 
@@ -555,7 +578,7 @@ function renderFavorites() {
     disconnectBtn.type = "button";
     disconnectBtn.className = "favorite-action favorite-disconnect";
     disconnectBtn.innerHTML = UI_ICONS.x;
-    disconnectBtn.title = "Se déconnecter";
+    disconnectBtn.title = t("connection.disconnect");
     disconnectBtn.disabled = !isActive;
     disconnectBtn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -566,7 +589,7 @@ function renderFavorites() {
     item.innerHTML = `
       <span class="favorite-dot"></span>
       <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
-      <span class="favorite-status">${isActive ? "Connecté" : (available ? "Disponible" : "Indisponible")}</span>
+      <span class="favorite-status">${isActive ? t("status.connected") : (available ? t("connection.available") : t("connection.unavailable"))}</span>
     `;
     const actions = document.createElement("span");
     actions.className = "favorite-actions";
@@ -581,7 +604,7 @@ function renderPeers(preferred = "") {
   const current = preferred || select.value;
   select.innerHTML = "";
   const list = [...peerCache.values()].sort((a,b) => a.name.localeCompare(b.name));
-  if (!list.length) select.add(new Option("Aucun PC détecté — ajoutez une IP", ""));
+  if (!list.length) select.add(new Option(t("connection.none"), ""));
   for (const p of list) select.add(new Option(`${p.name} — ${p.address}`, p.address));
   if (current && [...select.options].some(o => o.value === current)) select.value = current;
   updateFavoriteButton();
@@ -596,13 +619,13 @@ function toggleFavorite() {
   if (index >= 0) {
     favorites.splice(index, 1);
     saveFavorites(favorites);
-    setDetails("Favori retiré.");
+    setDetails(t("connection.favoriteRemoved"));
   } else {
     const peer = peerCache.get(address);
     const name = peer?.name || `PC — ${address}`;
     favorites.push({ name, address });
     saveFavorites(favorites);
-    setDetails(`${name} ajouté aux favoris.`);
+    setDetails(t("connection.favoriteAdded", { name }));
   }
   updateFavoriteButton();
   renderFavorites();
@@ -646,8 +669,8 @@ function updateNoiseUi() {
   const enabled = $("noiseEnabled").checked;
   const intensity = Number($("noiseIntensity").value);
   $("noiseIntensityValue").textContent = `${intensity}%`;
-  $("noiseStatus").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
-  $("savedNoise").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
+  $("noiseStatus").textContent = enabled ? `${t("audio.enabled")} · ${intensity}%` : t("audio.disabled");
+  $("savedNoise").textContent = enabled ? `${t("audio.enabled")} · ${intensity}%` : t("audio.disabled");
   $("noiseSettings").classList.toggle("active", enabled);
 }
 
@@ -672,7 +695,7 @@ async function applyVolume() {
 }
 
 function updateMuteUi(muted) {
-  $("muteText").textContent = muted ? "Réactiver le son" : "Muet";
+  $("muteText").textContent = muted ? t("audio.unmute") : t("audio.mute");
   $("mute").classList.toggle("active", muted);
 }
 
@@ -777,19 +800,19 @@ async function connectToAddress(address) {
     connected = true;
     connectedPeer = address;
     $("peer").value = address;
-    button.textContent = "Se déconnecter";
+    button.textContent = t("connection.disconnect");
     button.classList.add("disconnect-state");
-    $("status").innerHTML = '<span class="status-dot"></span>Connecté';
+    $("status").innerHTML = `<span class="status-dot"></span>${t("status.connected")}`;
     $("status").className = "status online";
-    setDetails("Audio bidirectionnel actif.");
+    setDetails(t("state.active"));
     renderFavorites();
     await updateLatency();
   } catch (e) {
     connected = false;
     connectedPeer = "";
-    button.textContent = "Se connecter";
+    button.textContent = t("connection.connect");
     button.classList.remove("disconnect-state");
-    $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+    $("status").innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
     $("status").className = "status offline";
     reportError("Audio connect", e);
     setDetails(`Connexion impossible : ${e}`);
@@ -807,13 +830,13 @@ async function disconnect() {
   connectedPeer = "";
   $("connect").textContent = "Se connecter";
   $("connect").classList.remove("disconnect-state");
-  $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+  $("status").innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
   $("status").className = "status offline";
   $("latency").textContent = "— ms";
   renderFavorites();
   try {
     await invoke("stop_audio");
-    setDetails(oldPeer ? "Déconnecté." : "Audio arrêté.");
+    setDetails(oldPeer ? t("state.disconnected") : t("state.disconnected"));
   } catch (e) {
     reportError("Audio disconnect", e);
     setDetails(`Déconnexion : ${e}`);
@@ -855,18 +878,18 @@ async function setUpdateBanner(status, update = null, error = "") {
   banner.title = "";
 
   if (status === "checking") {
-    banner.innerHTML = iconLabel(UI_ICONS.refresh, "Recherche des mises à jour…");
+    banner.innerHTML = iconLabel(UI_ICONS.refresh, t("update.checking"));
     banner.disabled = true;
   } else if (status === "current") {
-    banner.innerHTML = iconLabel(UI_ICONS.check, "Pas de mise à jour disponible · Cliquez pour vérifier");
+    banner.innerHTML = iconLabel(UI_ICONS.check, t("update.current"));
     banner.onclick = checkForUpdates;
     banner.title = "Cliquer pour lancer une nouvelle vérification.";
   } else if (status === "available") {
-    banner.innerHTML = iconLabel(UI_ICONS.download, `Mise à jour disponible · v${update.version} · Cliquez pour télécharger`);
+    banner.innerHTML = iconLabel(UI_ICONS.download, t("update.available", { version: update.version }));
     banner.onclick = installUpdate;
     banner.title = `Télécharger et installer DuoVoice v${update.version}`;
   } else {
-    banner.innerHTML = iconLabel(UI_ICONS.alert, "Vérification impossible · Cliquez pour réessayer");
+    banner.innerHTML = iconLabel(UI_ICONS.alert, t("update.error"));
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -885,7 +908,7 @@ async function checkForUpdates() {
       setDetails(`Mise à jour v${update.version} disponible.`);
     } else {
       await setUpdateBanner("current");
-      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
+      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString(localeForLanguage(), { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
     }
   } catch (e) {
     reportError("Updater check", e);
@@ -1076,6 +1099,12 @@ async function applyAudioDeviceChange(kind) {
 $("input").addEventListener("change", () => applyAudioDeviceChange("input"));
 $("output").addEventListener("change", () => applyAudioDeviceChange("output"));
 
+$("languageSelect").value = getLanguage();
+$("languageSelect").addEventListener("change", async () => {
+  const language = applyLanguageUi($("languageSelect").value, { broadcast: true });
+  setDetails(t("language.changed", {}, language));
+});
+
 $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
 });
@@ -1118,7 +1147,7 @@ $("trayScale").addEventListener("input", () => {
 $("applyUiScale").addEventListener("click", async () => {
   const button = $("applyUiScale");
   button.disabled = true;
-  button.textContent = "Application…";
+  button.textContent = ({en:"Applying…",fr:"Application…",es:"Aplicando…",de:"Wird angewendet…"})[getLanguage()];
   const results = await Promise.all([applyUiScale($("uiScale").value), applyTrayScale($("trayScale").value)]);
   updateScaleActionsState(results.every(Boolean));
   if (results.every(Boolean)) {
@@ -1131,7 +1160,7 @@ updateHeaderMode();
 $("autostart").addEventListener("change", async e => {
   try {
     if (e.target.checked) await enableAutostart(); else await disableAutostart();
-    $("autostartDetails").textContent = e.target.checked ? "Démarrage automatique activé." : "Démarrage automatique désactivé.";
+    $("autostartDetails").textContent = e.target.checked ? t("autostart.enabled") : t("autostart.disabled");
   } catch (err) {
     reportError("Autostart", err);
     e.target.checked = await isAutostartEnabled().catch(() => false);
@@ -1179,9 +1208,7 @@ async function applyTrayIconPreference(enabled, announce = false) {
 
     updateTrayPreferenceDependencies();
     if (announce) {
-      $("autostartDetails").textContent = desired
-        ? "Icône du systray activée."
-        : "Icône du systray désactivée. Le démarrage minimisé est désactivé pour garder DuoVoice accessible.";
+      $("autostartDetails").textContent = desired ? t("trayIcon.enabled") : t("trayIcon.disabled");
     }
     return true;
   } catch (e) {
@@ -1273,9 +1300,9 @@ async function refreshFromTray() {
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
-    $("connect").textContent = connected ? "Se déconnecter" : "Se connecter";
+    $("connect").textContent = connected ? t("connection.disconnect") : t("connection.connect");
     $("connect").classList.toggle("disconnect-state", connected);
-    $("status").innerHTML = `<span class="status-dot"></span>${connected ? "Connecté" : "Hors ligne"}`;
+    $("status").innerHTML = `<span class="status-dot"></span>${connected ? t("status.connected") : t("status.offline")}`;
     $("status").className = `status ${connected ? "online" : "offline"}`;
     $("peer").value = connectedPeer;
     await loadPeers(false);
@@ -1286,6 +1313,7 @@ async function refreshFromTray() {
 
 listen("audio-state-changed", refreshFromTray).catch(() => {});
 
+applyLanguageUi(getLanguage(), { broadcast: true });
 loadManualIps();
 renderFavorites();
 loadClientName();
@@ -1305,3 +1333,4 @@ document.addEventListener("visibilitychange", () => {
 });
 updateLatency();
 checkForUpdates();
+setInterval(() => { checkForUpdates(); }, UPDATE_CHECK_INTERVAL_MS);

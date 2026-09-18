@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,11 +15,11 @@
             <h1>DuoVoice</h1>
             <span class="brand-version">1.3.3</span>
           </div>
-          <p>Intercom local</p>
+          <p data-i18n="brand.subtitle">Local intercom</p>
         </div>
       </div>
       <div class="header-actions">
-        <span id="status" class="status offline"><span class="status-dot"></span>Hors ligne</span>
+        <span id="status" class="status offline"><span class="status-dot"></span><span data-i18n="status.offline">Offline</span></span>
         <div class="header-icons">
           <button id="settingsBtn" class="icon-btn" type="button" title="Paramètres" aria-label="Paramètres"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button>
           <button id="quitBtn" class="icon-btn quit-btn" type="button" title="Quitter DuoVoice" aria-label="Quitter DuoVoice"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
@@ -27,63 +27,63 @@
       </div>
     </header>
 
-    <button id="updateBanner" class="update-banner checking" type="button" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M16 8h5V3"/></svg><span>Vérification des mises à jour…</span></button>
+    <button id="updateBanner" class="update-banner checking" type="button" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M16 8h5V3"/></svg><span data-i18n="update.checking">Checking for updates…</span></button>
 
     <section id="mainView">
       <div class="main-grid">
         <section class="card connection-card">
           <div class="section-title">
             <div>
-              <h2>Connexion</h2>
-              <p>Choisissez le PC avec lequel communiquer.</p>
+              <h2 data-i18n="connection.title">Connection</h2>
+              <p data-i18n="connection.subtitle">Choose the PC you want to communicate with.</p>
             </div>
             <button id="refresh" class="icon-btn compact" type="button" title="Actualiser la détection" aria-label="Actualiser la détection"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M16 8h5V3"/></svg></button>
           </div>
 
-          <label for="clientName">Nom de cette machine</label>
+          <label for="clientName" data-i18n="connection.machineName">This machine name</label>
           <div class="client-name-row">
-            <input id="clientName" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Nom visible sur le réseau">
+            <input id="clientName" type="text" maxlength="32" autocomplete="off" spellcheck="false" data-i18n-placeholder="connection.machinePlaceholder" placeholder="Name visible on the network">
             <button id="saveClientName" class="icon-btn compact client-name-save" type="button" title="Enregistrer le nom" aria-label="Valider ce nouveau nom"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg></button>
           </div>
 
-          <label for="peer">Ordinateur distant</label>
+          <label for="peer" data-i18n="connection.remote">Remote computer</label>
           <div class="peer-row">
-            <select id="peer"><option value="">Recherche d'un PC…</option></select>
+            <select id="peer"><option value="" data-i18n="connection.searching">Searching for a PC…</option></select>
             <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></button>
           </div>
 
           <div class="favorites-panel">
-            <div class="favorites-title"><span class="favorites-label"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg>Favoris</span><span class="favorites-hint">Actions rapides</span></div>
+            <div class="favorites-title"><span class="favorites-label"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg> <span data-i18n="connection.favorites">Favorites</span></span><span class="favorites-hint" data-i18n="connection.quickActions">Quick actions</span></div>
             <div id="favoritesList"></div>
           </div>
 
           <div class="manual-row">
-            <input id="manualIp" type="text" inputmode="decimal" placeholder="Adresse IP, ex. 192.168.1.25">
+            <input id="manualIp" type="text" inputmode="decimal" data-i18n-placeholder="connection.ipPlaceholder" placeholder="IP address, e.g. 192.168.1.25">
             <button id="addIp" class="add-btn" type="button" title="Ajouter cette IP" aria-label="Ajouter cette IP"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
           </div>
-          <p class="hint">Vous pouvez aussi ajouter directement une adresse IP.</p>
-          <button id="connect" class="primary" type="button">Se connecter</button>
+          <p class="hint" data-i18n="connection.ipHint">You can also add an IP address directly.</p>
+          <button id="connect" class="primary" type="button" data-i18n="connection.connect">Connect</button>
         </section>
 
         <section class="card audio-card">
           <div class="section-title">
             <div>
-              <h2>Audio</h2>
-              <p>Microphone et sortie du PC.</p>
+              <h2 data-i18n="audio.title">Audio</h2>
+              <p data-i18n="audio.subtitle">Microphone and PC output.</p>
             </div>
           </div>
 
-          <label for="input">Microphone</label>
+          <label for="input" data-i18n="audio.microphone">Microphone</label>
           <select id="input"></select>
 
-          <label for="output">Sortie audio</label>
+          <label for="output" data-i18n="audio.output">Audio output</label>
           <select id="output"></select>
 
           <div class="noise-control">
             <div class="noise-line">
               <div>
-                <strong>Réduction de bruit</strong>
-                <span id="noiseStatus" class="noise-status">Désactivée</span>
+                <strong data-i18n="audio.noise">Noise reduction</strong>
+                <span id="noiseStatus" class="noise-status" data-i18n="audio.disabled">Disabled</span>
               </div>
               <div class="noise-actions">
                 <label class="switch-row noise-switch-row">
@@ -97,27 +97,27 @@
             <div id="noisePopover" class="noise-popover hidden">
               <div class="popover-heading">
                 <div>
-                  <strong>Réglages</strong>
-                  <span>RNNoise · traitement local</span>
+                  <strong data-i18n="audio.noiseSettings">Settings</strong>
+                  <span data-i18n="audio.localRnnoise">RNNoise · local processing</span>
                 </div>
                 <strong id="noiseIntensityValue">65%</strong>
               </div>
               <div class="volume-line">
-                <label for="noiseIntensity">Intensité</label>
-                <span class="subtle">Plus fort = suppression plus marquée</span>
+                <label for="noiseIntensity" data-i18n="audio.intensity">Intensity</label>
+                <span class="subtle" data-i18n="audio.moreSuppression">Higher = stronger suppression</span>
               </div>
               <input id="noiseIntensity" type="range" min="0" max="100" step="1" value="65">
               <div class="noise-presets">
-                <button type="button" data-noise-preset="0.35">Naturel</button>
-                <button type="button" data-noise-preset="0.65">Équilibré</button>
-                <button type="button" data-noise-preset="0.9">Agressif</button>
+                <button type="button" data-noise-preset="0.35">Natural</button>
+                <button type="button" data-noise-preset="0.65">Balanced</button>
+                <button type="button" data-noise-preset="0.9">Aggressive</button>
               </div>
-              <p class="hint">La réduction est appliquée au micro avant l'envoi réseau. Le curseur dose le mélange entre le signal brut et le signal traité.</p>
+              <p class="hint" data-i18n="audio.noiseHint">Noise reduction is applied to the microphone before network transmission.</p>
             </div>
           </div>
 
           <div class="volume-line">
-            <label for="volume">Volume distant</label>
+            <label for="volume" data-i18n="audio.remoteVolume">Remote volume</label>
             <strong id="volumeValue">100%</strong>
           </div>
           <input id="volume" type="range" min="0" max="100" step="1" value="100">
@@ -125,29 +125,29 @@
           <label class="switch-row">
             <input id="boostVolume" type="checkbox">
             <span class="switch"></span>
-            <span>Autoriser le volume au-dessus de 100%</span>
+            <span data-i18n="audio.boost">Allow volume above 100%</span>
           </label>
 
           <button id="mute" class="secondary mute-btn" type="button">
-            <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText">Muet</span>
+            <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText" data-i18n="audio.mute">Mute</span>
           </button>
         </section>
 
         <section class="card state-card">
           <div class="section-title">
             <div>
-              <h2>État</h2>
-              <p id="details">Recherche des ordinateurs sur le réseau local…</p>
+              <h2 data-i18n="state.title">Status</h2>
+              <p id="details" data-i18n="state.searching">Searching for computers on the local network…</p>
             </div>
           </div>
           <div class="state-grid">
             <div class="state-item">
-              <span>Latence audio</span>
+              <span data-i18n="state.latency">Audio latency</span>
               <strong id="latency">— ms</strong>
             </div>
             <div class="state-item">
-              <span>Mode</span>
-              <strong id="mode">LAN direct</strong>
+              <span data-i18n="state.mode">Mode</span>
+              <strong id="mode" data-i18n="state.lan">Direct LAN</strong>
             </div>
           </div>
         </section>
@@ -157,21 +157,21 @@
     <section id="settingsView" class="hidden">
       <div class="settings-head">
         <div>
-          <h2>Paramètres</h2>
-          <p>Préférences de DuoVoice</p>
+          <h2 data-i18n="settings.title">Settings</h2>
+          <p data-i18n="settings.subtitle">DuoVoice preferences</p>
         </div>
       </div>
 
       <div id="settingsScroll">
         <section class="card">
           <div class="card-heading">
-            <h3>Version</h3>
-            <p>Version actuellement installée et mises à jour.</p>
+            <h3 data-i18n="settings.version">Version</h3>
+            <p data-i18n="settings.versionDesc">Currently installed version and updates.</p>
           </div>
           <div class="settings-info version-row">
             <div class="version-row-copy">
-              <span>Version installée</span>
-              <small>Cliquer sur la version pour choisir une autre release.</small>
+              <span data-i18n="settings.installedVersion">Installed version</span>
+              <small data-i18n="settings.versionHint">Click the version to choose another release.</small>
             </div>
             <button id="versionSelector" class="version-selector" type="button" title="Choisir une autre version" aria-haspopup="dialog">
               <strong id="appVersion">v1.3.3</strong>
@@ -179,57 +179,70 @@
             </button>
           </div>
           <div class="settings-info">
-            <span>Historique</span>
-            <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
+            <span data-i18n="settings.history">History</span>
+            <strong id="lastUpdate" data-i18n="settings.lastUpdateUnavailable">Last update: unavailable</strong>
           </div>
         </section>
 
         <section class="card">
           <div class="card-heading">
-            <h3>Démarrage</h3>
-            <p>Contrôlez le comportement au lancement.</p>
+            <h3 data-i18n="settings.startup">Startup</h3>
+            <p data-i18n="settings.startupDesc">Control startup behavior.</p>
           </div>
           <label class="switch-row">
             <input id="autostart" type="checkbox">
             <span class="switch"></span>
-            <span>Démarrer DuoVoice avec Windows/Linux</span>
+            <span data-i18n="settings.autostart">Start DuoVoice with Windows/Linux</span>
           </label>
           <label class="switch-row">
             <input id="trayIconEnabled" type="checkbox" checked>
             <span class="switch"></span>
-            <span>Afficher l’icône dans le systray</span>
+            <span data-i18n="settings.trayIcon">Show the system tray icon</span>
           </label>
           <label class="switch-row">
             <input id="startHidden" type="checkbox">
             <span class="switch"></span>
-            <span>Démarrer minimisé dans le tray</span>
+            <span data-i18n="settings.startHidden">Start minimized to tray</span>
           </label>
-          <p id="autostartDetails" class="hint">Les réglages sont enregistrés automatiquement.</p>
+          <p id="autostartDetails" class="hint" data-i18n="settings.savedAutomatically">Settings are saved automatically.</p>
         </section>
 
         <section class="card">
           <div class="card-heading">
-            <h3>Fermeture</h3>
-            <p>Choisissez ce que fait le bouton X.</p>
+            <h3 data-i18n="settings.language">Language</h3>
+            <p data-i18n="settings.languageDesc">Choose the application language.</p>
           </div>
-          <label for="closeAction">Action du bouton fermer</label>
-          <select id="closeAction">
-            <option value="tray">Réduire dans le tray</option>
-            <option value="quit">Quitter DuoVoice</option>
+          <select id="languageSelect" aria-label="Application language">
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="de">Deutsch</option>
           </select>
-          <p class="hint">En mode tray, DuoVoice disparaît aussi de la barre des tâches.</p>
         </section>
 
         <section class="card">
           <div class="card-heading">
-            <h3>Apparence</h3>
-            <p>Choisissez une couleur douce pour l’interface.</p>
+            <h3 data-i18n="settings.close">Close behavior</h3>
+            <p data-i18n="settings.closeDesc">Choose what the X button does.</p>
+          </div>
+          <label for="closeAction" data-i18n="settings.closeAction">Close button action</label>
+          <select id="closeAction">
+            <option value="tray" data-i18n="settings.minimizeTray">Minimize to tray</option>
+            <option value="quit" data-i18n="settings.quitDuoVoice">Quit DuoVoice</option>
+          </select>
+          <p class="hint" data-i18n="settings.closeHint">In tray mode, DuoVoice also disappears from the taskbar.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
+            <h3 data-i18n="settings.appearance">Appearance</h3>
+            <p data-i18n="settings.appearanceDesc">Choose a soft accent color for the interface.</p>
           </div>
           <div id="colorChoices" class="color-choices" aria-label="Couleur de l'application"></div>
           <div class="theme-plus-block">
             <div class="theme-plus-heading">
-              <strong>Thèmes++</strong>
-              <span>Applique une palette complète à DuoVoice et au systray.</span>
+              <strong data-i18n="settings.themesPlus">Themes++</strong>
+              <span data-i18n="settings.themesPlusDesc">Applies a complete palette to DuoVoice and the system tray.</span>
             </div>
             <div id="themeChoices" class="theme-choices" aria-label="Thèmes complets de l'application"></div>
           </div>
@@ -237,11 +250,11 @@
 
         <section class="card">
           <div class="card-heading">
-            <h3>Échelle de l’interface</h3>
-            <p>Ajustez la taille générale de DuoVoice selon votre écran et votre confort.</p>
+            <h3 data-i18n="settings.scale">Interface scale</h3>
+            <p data-i18n="settings.scaleDesc">Adjust DuoVoice size for your display and comfort.</p>
           </div>
           <div class="volume-line scale-line">
-            <label for="uiScale">Application principale</label>
+            <label for="uiScale" data-i18n="settings.mainApp">Main application</label>
             <strong id="uiScaleValue">100%</strong>
           </div>
           <div class="scale-control">
@@ -252,7 +265,7 @@
           </div>
 
           <div class="volume-line scale-line tray-scale-line">
-            <label for="trayScale">Contrôle rapide du systray</label>
+            <label for="trayScale" data-i18n="settings.trayControl">System tray controls</label>
             <strong id="trayScaleValue">100%</strong>
           </div>
           <div class="scale-control tray-scale-control">
@@ -262,23 +275,23 @@
             </div>
           </div>
           <div id="scaleActions" class="scale-actions" aria-label="Actions des échelles de l'interface">
-            <button id="resetUiScale" class="secondary scale-action" type="button">Rétablir par défaut</button>
-            <button id="applyUiScale" class="primary scale-action" type="button">Appliquer les modifications</button>
+            <button id="resetUiScale" class="secondary scale-action" type="button" data-i18n="common.reset">Restore defaults</button>
+            <button id="applyUiScale" class="primary scale-action" type="button" data-i18n="common.apply">Apply changes</button>
           </div>
         </section>
 
         <section class="card">
           <div class="card-heading">
             <h3>Audio</h3>
-            <p>Les périphériques, le volume et la réduction de bruit sont conservés entre les lancements.</p>
+            <p data-i18n="settings.audioDesc">Devices, volume and noise reduction are kept between launches.</p>
           </div>
           <div class="settings-info">
-            <span>Volume enregistré</span>
+            <span data-i18n="settings.savedVolume">Saved volume</span>
             <strong id="savedVolume">100%</strong>
           </div>
           <div class="settings-info">
-            <span>Réduction de bruit</span>
-            <strong id="savedNoise">Désactivée</strong>
+            <span data-i18n="settings.noiseReduction">Noise reduction</span>
+            <strong id="savedNoise" data-i18n="audio.disabled">Disabled</strong>
           </div>
         </section>
       </div>
@@ -289,22 +302,22 @@
       <div class="version-picker-card" role="dialog" aria-modal="true" aria-labelledby="versionPickerTitle">
         <div class="version-picker-head">
           <div>
-            <strong id="versionPickerTitle">Choisir une version</strong>
-            <p>Réinstallez une version précédente signée de DuoVoice.</p>
+            <strong id="versionPickerTitle" data-i18n="version.choose">Choose a version</strong>
+            <p data-i18n="version.chooseDesc">Reinstall a previous signed DuoVoice release.</p>
           </div>
           <button id="closeVersionPicker" class="icon-btn compact" type="button" title="Fermer" aria-label="Fermer">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
         <div id="versionList" class="version-list" aria-live="polite">
-          <div class="version-loading">Recherche des versions disponibles…</div>
+          <div class="version-loading" data-i18n="version.searching">Searching available versions…</div>
         </div>
         <p id="versionPickerStatus" class="version-picker-status"></p>
         <div id="versionRollbackConfirm" class="version-rollback-confirm hidden">
           <p>Installer <strong id="rollbackVersionLabel">cette version</strong> ?</p>
           <div class="app-confirm-actions">
-            <button id="cancelRollback" type="button">Annuler</button>
-            <button id="confirmRollback" class="danger" type="button">Installer</button>
+            <button id="cancelRollback" type="button" data-i18n="common.cancel">Cancel</button>
+            <button id="confirmRollback" class="danger" type="button" data-i18n="version.install">Install</button>
           </div>
         </div>
       </div>
@@ -313,11 +326,11 @@
     <div id="appQuitConfirm" class="app-confirm-layer" aria-hidden="true">
       <div class="app-confirm-card" role="dialog" aria-modal="true" aria-labelledby="appQuitTitle">
         <div class="app-confirm-icon" aria-hidden="true"><svg class="ui-icon power-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M6.4 5.6a8 8 0 1 0 11.2 0"/></svg></div>
-        <strong id="appQuitTitle">Quitter DuoVoice ?</strong>
-        <p>L’application et l’audio seront complètement arrêtés.</p>
+        <strong id="appQuitTitle" data-i18n="quit.title">Quit DuoVoice?</strong>
+        <p data-i18n="quit.body">The application and audio will be completely stopped.</p>
         <div class="app-confirm-actions">
-          <button id="cancelAppQuit" type="button">Annuler</button>
-          <button id="confirmAppQuit" class="danger" type="button">Quitter</button>
+          <button id="cancelAppQuit" type="button" data-i18n="common.cancel">Cancel</button>
+          <button id="confirmAppQuit" class="danger" type="button" data-i18n="common.quit">Quit</button>
         </div>
       </div>
     </div>

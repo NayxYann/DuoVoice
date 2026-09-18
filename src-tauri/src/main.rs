@@ -986,9 +986,17 @@ fn open_project_github() -> Result<(), String> {
     const URL: &str = "https://github.com/NayxYann/DuoVoice";
 
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", "", URL])
-        .spawn();
+    let result = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+        // Open the URL through the Windows URL handler without spawning a visible
+        // command prompt. This keeps the browser launch silent for GUI builds.
+        std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", URL])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+    };
 
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open")

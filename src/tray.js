@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import "./tray.css";
 import { COLOR_KEY, THEME_KEY, applyThemeVariables, normalizeThemeName } from "./theme.js";
+import { LANGUAGE_KEY, getLanguage, t, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 const MUTE_KEY = "duovoice.muted";
@@ -35,6 +36,12 @@ function applyTheme(themeName, colorName) {
   applyThemeVariables(document.documentElement, theme, color);
 }
 
+function applyLanguage() {
+  applyStaticTranslations(document, getLanguage());
+  renderPeers();
+  updateStatus();
+}
+
 function favoriteAddresses() {
   try {
     return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]").map((item) => item.address).filter(Boolean);
@@ -50,7 +57,7 @@ function renderPeers() {
 
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = peers.length ? "Choisir un PC…" : "Aucun hôte détecté";
+  placeholder.textContent = peers.length ? t("tray.choosePc") : t("tray.noDetected");
   select.appendChild(placeholder);
 
   const favs = favoriteAddresses();
@@ -69,13 +76,13 @@ function renderPeers() {
 function updateStatus() {
   const status = $("trayStatus");
   status.className = `tray-status ${connected ? "online" : "offline"}`;
-  status.innerHTML = `<i></i>${connected ? "Connecté" : "Hors ligne"}`;
+  status.innerHTML = `<i></i>${connected ? t("status.connected") : t("status.offline")}`;
 
   const peer = peers.find((item) => item.address === remote);
-  $("trayPeerName").textContent = connected ? (peer?.name || remote || "Hôte connecté") : "Aucun hôte connecté";
+  $("trayPeerName").textContent = connected ? (peer?.name || remote || t("status.connected")) : t("tray.noHost");
 
   const connectButton = $("quickConnect");
-  $("quickConnectText").textContent = connected ? "Déconnecter" : "Connexion";
+  $("quickConnectText").textContent = connected ? t("connection.disconnect") : t("tray.connection");
   connectButton.classList.toggle("primary", !connected);
   connectButton.classList.toggle("disconnect", connected);
 
@@ -91,7 +98,7 @@ async function refreshState() {
     remote = state.remote || "";
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted));
-    $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
+    $("quickMuteText").textContent = muted ? t("audio.unmute") : t("audio.mute");
     $("quickMute").classList.toggle("active", muted);
     updateStatus();
   } catch {}
@@ -137,7 +144,7 @@ async function connectSelected() {
     await refreshState();
   } catch (error) {
     invoke("log_client_error", { message: `Tray connect: ${String(error)}` }).catch(() => {});
-    $("trayPeerName").textContent = `Erreur de connexion`;
+    $("trayPeerName").textContent = ({en:"Connection error",fr:"Erreur de connexion",es:"Error de conexión",de:"Verbindungsfehler"})[getLanguage()];
   } finally {
     busy = false;
     button.disabled = false;
@@ -148,7 +155,7 @@ async function toggleMute() {
   try {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
-    $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
+    $("quickMuteText").textContent = muted ? t("audio.unmute") : t("audio.mute");
     $("quickMute").classList.toggle("active", muted);
     await emit("audio-state-changed");
   } catch (error) {
@@ -194,6 +201,7 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY || event.key === THEME_KEY) applyTheme();
   if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
+  if (event.key === LANGUAGE_KEY) applyLanguage();
 });
 
 let peerTimer = null;
@@ -222,6 +230,7 @@ window.addEventListener("blur", () => {
 listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payload?.color)).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
 listen("audio-state-changed", refreshState).catch(() => {});
+listen("language-changed", applyLanguage).catch(() => {});
 
 
 async function openProjectGithub() {
@@ -238,6 +247,7 @@ if (trayGithubBrand) {
     }
   });
 }
+applyStaticTranslations(document, getLanguage());
 applyTheme(localStorage.getItem(THEME_KEY) || "duovoice", localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();
 refreshState();

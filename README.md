@@ -1,146 +1,138 @@
 # DuoVoice 1.3.3
 
-## Nouveautés 1.3.3
+> **Vibe-coded project.** DuoVoice was built entirely through AI-assisted / vibe coding for personal use. I am not a software developer, and this repository started as a practical tool for my own local audio setup. It is shared publicly in case it is useful to someone else.
 
-- La zone **logo + DuoVoice + version** de l’application principale ouvre maintenant la page GitHub officielle du projet.
-- Le mini-panel systray (clic gauche) reprend exactement le même comportement sur son en-tête **logo + nom + version**.
-- Le menu systray clic droit ajoute une entrée **Page GitHub** avec l’icône GitHub.
-- Les trois accès utilisent le navigateur système et gardent la même logique visuelle de survol / focus.
-- Les thèmes et la palette de la 1.3.2 restent inchangés.
+DuoVoice is a lightweight bidirectional audio intercom for Windows and Linux. It is designed for direct communication between computers on the same local network, with a compact interface, system-tray controls, device switching, and signed application updates.
 
+## Highlights
 
-DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
+- Full-duplex LAN audio between two DuoVoice clients.
+- Automatic discovery of nearby DuoVoice machines.
+- Custom client name broadcast on the local network.
+- Manual IPv4 entries and persistent favorites.
+- Hot switching of microphone and output devices while connected.
+- Synchronized mute state between the main window and the tray panel.
+- Adjustable remote volume and optional boost above 100%.
+- Local RNNoise-based noise reduction with persistent settings.
+- Compact left-click tray control panel and custom right-click tray menu.
+- Optional tray icon, startup-to-tray behavior, and configurable close action.
+- Persistent UI scale and tray scale.
+- Accent colors and complete **Themes++** palettes.
+- Signed updates through GitHub Releases, with optional rollback to older signed releases.
+- Automatic update checks at startup and every 5 minutes while the app is open.
+- Interface languages: **English, French, Spanish, and German**. English is the default.
 
-## Nouveautés 1.3.2
+## Themes++
 
-- **Palette unifiée** : les couleurs de l’application sont désormais pilotées par un jeu commun de variables (fond, surfaces, bordures, texte, accent, succès, danger et mise à jour) afin d’éviter les écarts visuels entre l’interface principale, le panneau systray et le menu clic droit.
-- **Couleur d’accent mieux cadrée** : la couleur choisie dans Apparence sert aux actions, sliders, focus et sélections. Le vert est réservé aux succès/états positifs, le rouge aux actions dangereuses et le rose-violet à une mise à jour disponible. L’état « à jour » redevient neutre pour ne pas surcharger l’écran.
-- **Thèmes++** : nouvelle section sous les couleurs d’accent avec six palettes complètes : **DuoVoice**, **Windows XP**, **Axolotl**, **Cherry Blossom**, **Sage** et **Ocean**. Les thèmes modifient ensemble le fond, les panneaux, les bordures, les textes et les couleurs fonctionnelles.
-- **Lisibilité préservée** : Windows XP et Cherry Blossom utilisent automatiquement une palette claire avec texte sombre ; les autres thèmes conservent des contrastes élevés sur fond sombre.
-- **Systray synchronisé avec les thèmes** : le clic gauche et le clic droit utilisent la même palette que l’application et se mettent à jour immédiatement lorsqu’un thème ou une couleur est sélectionné.
-- **Bouton de déconnexion clarifié** : lorsqu’une session est active, l’action « Se déconnecter » utilise désormais la couleur danger plutôt que la couleur d’accent du thème.
-- Les corrections audio de la **1.3.1** restent conservées : changement de périphérique à chaud et synchronisation complète du Muet entre l’application et le systray.
+DuoVoice includes complete interface palettes that apply to the main window, tray panel, tray menu, and dialogs:
 
-## Fonctionnalités principales
+- DuoVoice
+- Windows XP
+- Axolotl
+- Cherry Blossom
+- Sage
+- Ocean
 
-- audio bidirectionnel simultané sur le LAN ;
-- transport PCM mono 48 kHz / 16 bits, trames de 10 ms ;
-- sélection et mémorisation du microphone et de la sortie audio ;
-- volume distant 0–100 %, avec option jusqu’à 200 % ;
-- muet disponible même hors connexion ;
-- réduction de bruit RNNoise réglable et persistante ;
-- détection automatique des autres PC DuoVoice ;
-- nom de client personnalisable et diffusé sur le réseau ;
-- ajout d’adresses IPv4 manuelles et favoris persistants ;
-- reconnexion et resynchronisation du flux audio après coupure/reconnexion d’un seul côté ;
-- mesure RTT réelle pendant la connexion ;
-- mini-interface de contrôle depuis le systray ;
-- fermeture vers le tray ou fermeture complète au choix ;
-- démarrage automatique Windows/Linux ;
-- option indépendante « Démarrer minimisé dans le tray » ;
-- couleur et échelle d’interface persistantes ;
-- échelle indépendante et sécurisée du mini-panneau systray ;
-- mise à jour automatique signée via GitHub Releases ;
-- journal borné à 2 Mo avec une seule archive `duovoice.log.1`.
+The theme system separates accent, success, danger, update, text, surface, and border colors so status colors remain readable and consistent.
 
-## Réseau
+## System tray
 
-DuoVoice utilise :
+The tray icon is enabled by default on a fresh installation.
 
-- UDP `39471` pour la découverte ;
-- UDP `39472` pour l’audio et les sondes de latence ;
-- TCP `39473` sur `127.0.0.1` uniquement pour empêcher plusieurs instances locales.
+Left click opens the compact DuoVoice control panel with quick access to connection, mute, the main window, settings, and quit controls.
 
-Si un pare-feu bloque DuoVoice, autorisez les ports UDP 39471 et 39472 sur le réseau privé/local.
+Right click opens a custom DuoVoice-styled menu with shortcuts to the main window, settings, the GitHub project page, and quit.
 
-## Installation des dépendances
+The tray UI follows the selected theme, language, and tray scale.
 
-Depuis la racine du projet :
+## Updates and version rollback
+
+DuoVoice uses Tauri's signed updater and GitHub Releases.
+
+The app checks for updates:
+
+- once at startup;
+- every 5 minutes while DuoVoice is running;
+- whenever the user manually requests a check.
+
+Checks are asynchronous and do not interrupt audio streaming or device discovery. Updates are never installed automatically.
+
+The installed version shown in Settings is clickable. DuoVoice can list older signed GitHub Releases and reinstall one of them. The visible release label comes from the GitHub Release **name**, while the Git tag is kept as the technical version identifier.
+
+## Network ports
+
+DuoVoice uses:
+
+- UDP `39471` for peer discovery;
+- UDP `39472` for audio transport and latency probes;
+- TCP `39473` on `127.0.0.1` only to prevent multiple local DuoVoice instances.
+
+If a firewall blocks DuoVoice, allow UDP ports `39471` and `39472` on the private/local network.
+
+## Audio format
+
+The current audio transport uses mono PCM at 48 kHz / 16-bit with short frames intended for low-latency LAN communication.
+
+## Development
+
+Requirements include Node.js/npm, Rust, and the platform dependencies required by Tauri.
+
+Install frontend dependencies:
 
 ```bash
 npm install
 ```
 
-`node_modules` ne doit jamais être commit dans Git. Le `.gitignore` du projet l’exclut volontairement.
-
-Si une ancienne version du dépôt suivait déjà `node_modules`, nettoyez une seule fois l’index Git :
-
-```bash
-git rm -r --cached node_modules
-```
-
-puis réinstallez localement avec `npm install`.
-
-## Développement
-
-Frontend :
+Run the frontend development server:
 
 ```bash
 npm run dev
 ```
 
-Application Tauri :
+Run DuoVoice through Tauri in development mode:
 
 ```bash
 npm run tauri -- dev
 ```
 
-Build local :
+Build the application locally:
 
 ```bash
 npm run tauri -- build
 ```
 
-## GitHub Actions
+`node_modules` is intentionally excluded from Git.
 
-Les workflows sont volontairement **manuels uniquement**.
+## Platform packages
 
-Un commit ou un **Push origin** ne lance aucun build automatiquement.
+The release workflow can produce, depending on the target platform:
 
-Pour lancer un build :
+- Windows NSIS installer (`.exe`)
+- Windows MSI package (`.msi`)
+- Linux AppImage
+- Linux Debian package (`.deb`)
 
-1. pousser les fichiers sur GitHub ;
-2. ouvrir l’onglet **Actions** ;
-3. choisir **Build DuoVoice** ;
-4. cliquer sur **Run workflow**.
+Linux tray behavior can vary slightly depending on the desktop environment, tray/AppIndicator support, and whether the session uses X11 or Wayland.
 
-Pour publier une release :
+## Diagnostics
 
-1. pousser les fichiers sur GitHub ;
-2. ouvrir l’onglet **Actions** ;
-3. choisir **Release DuoVoice** ;
-4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.3.3`.
+DuoVoice writes a bounded diagnostic log containing startup/shutdown events and useful network, audio, and updater errors. Audio packets themselves are not logged.
 
-Le build produit notamment :
+Typical locations:
 
-- Windows : NSIS `.exe` + MSI `.msi` ;
-- Linux : AppImage + `.deb`.
+- Windows: `%LOCALAPPDATA%\\DuoVoice\\duovoice.log`
+- Linux: `$XDG_DATA_HOME/DuoVoice/duovoice.log` or `~/.local/share/DuoVoice/duovoice.log`
 
-Le workflow refuse explicitement un dépôt dans lequel `node_modules` serait suivi par Git. Cela évite notamment les erreurs `tauri: Permission denied` et `vite: Permission denied` sur Linux.
+## Current 1.3.3 changes
 
-## Mise à jour automatique
+- GitHub links are available from the main header, the left-click tray header, and the right-click tray menu.
+- GitHub URLs open without a visible Windows CMD flash.
+- Added persistent application language selection: English, French, Spanish, and German.
+- English is used as the default language on a fresh profile.
+- Main interface and tray interfaces react to language changes together.
+- Added lightweight automatic update checks every 5 minutes, in addition to startup and manual checks.
+- Reworked the public README for people discovering the project rather than for the original local release workflow.
 
-Le fichier public de vérification est :
+## Disclaimer
 
-`https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json`
-
-La clé publique est intégrée à `src-tauri/tauri.conf.json`. La clé privée ne doit jamais être présente dans le dépôt.
-
-Les secrets GitHub Actions nécessaires à la signature sont :
-
-- `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-
-Le workflow de release crée les artefacts de mise à jour et leurs signatures. Sur Windows, le manifeste préfère l’installateur NSIS pour la mise à jour.
-
-Consultez `UPDATER_SETUP.md` pour la procédure de publication.
-
-## Journal de diagnostic
-
-Le journal technique est écrit dans :
-
-- Windows : `%LOCALAPPDATA%\\DuoVoice\\duovoice.log`
-- Linux : `$XDG_DATA_HOME/DuoVoice/duovoice.log` ou `~/.local/share/DuoVoice/duovoice.log`
-
-Il contient uniquement des événements utiles : démarrage, arrêt, erreurs réseau/audio/updater, connexion et déconnexion. Les paquets audio ne sont pas journalisés.
+DuoVoice is a personal project and is provided as-is. Test releases and network/audio behavior in your own environment before relying on it for anything important.
