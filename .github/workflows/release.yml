@@ -4,10 +4,11 @@ on:
   push:
     tags:
       - 'v*.*.*'
+
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to release (example: v3.0.0)'
+        description: 'Git tag to release (example: vX.Y.Z)'
         required: true
         type: string
 
@@ -22,6 +23,7 @@ env:
 jobs:
   windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,14 +49,14 @@ jobs:
           sed -i "s|__TAURI_UPDATER_PUBKEY__|${TAURI_SIGNING_PUBLIC_KEY}|g" src-tauri/tauri.release.conf.json
 
       - name: Publish Windows release
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
@@ -62,10 +64,12 @@ jobs:
           args: --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
+          retryAttempts: 3
 
   linux:
     needs: windows
     runs-on: ubuntu-22.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -102,17 +106,19 @@ jobs:
           sed -i "s|__TAURI_UPDATER_PUBKEY__|${TAURI_SIGNING_PUBLIC_KEY}|g" src-tauri/tauri.release.conf.json
 
       - name: Publish Linux release
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: 'DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}'
+          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseBody: 'DuoVoice update release.'
           releaseDraft: false
           prerelease: false
           projectPath: .
           args: --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
+          retryAttempts: 3
