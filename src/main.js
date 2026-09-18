@@ -18,7 +18,7 @@ const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "1.0.0";
 let connectedPeer = "";
 
 

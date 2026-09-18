@@ -19,7 +19,7 @@ Dans **Settings → Secrets and variables → Actions**, créer :
 
 - `TAURI_SIGNING_PRIVATE_KEY` : contenu de la clé privée.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : mot de passe choisi pour la clé, si applicable.
-- `TAURI_SIGNING_PUBLIC_KEY` : clé publique.
+La clé publique et l'URL du manifeste sont déjà intégrées dans `src-tauri/tauri.release.conf.json`.
 
 ## 3. Première release
 
@@ -27,8 +27,8 @@ Modifier le code, incrémenter la version dans `package.json` et `src-tauri/Carg
 
 ```bash
 git add .
-git commit -m "Release v3.0.0"
-git tag v3.0.0
+git commit -m "Release v1.0.0"
+git tag v1.0.0
 git push origin main --tags
 ```
 
@@ -47,8 +47,8 @@ Exemple :
 
 ```bash
 git add .
-git commit -m "Release v3.0.1"
-git tag v3.0.1
+git commit -m "Release v1.0.1"
+git tag v1.0.1
 git push origin main --tags
 ```
 

@@ -5,9 +5,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "__TAURI_UPDATER_PUBKEY__",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5ODUzNjE0OEU5RjdFN0IKUldSN2ZwK09GRGFGV2Z0YXF4cDdpZ01YMXpDZWRGMkFLUStLUmYzLyt4V1hkR2FNdUhtVURZcUgK",
       "endpoints": [
-        "__TAURI_UPDATER_ENDPOINT__"
+        "https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json"
       ]
     }
   }
