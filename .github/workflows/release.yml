@@ -44,6 +44,19 @@ jobs:
           ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
           sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
 
+      - name: Verify Windows updater configuration
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          p = "src-tauri/tauri.release.conf.json"
+          c = json.load(open(p, encoding="utf-8"))
+          assert c["bundle"]["createUpdaterArtifacts"] is True
+          assert c["plugins"]["updater"]["pubkey"] and "__TAURI" not in c["plugins"]["updater"]["pubkey"]
+          assert c["plugins"]["updater"]["endpoints"][0].startswith("https://github.com/")
+          print("Updater configuration OK")
+          PY
+
       - name: Publish Windows release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
@@ -98,6 +111,19 @@ jobs:
         run: |
           ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
           sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
+
+      - name: Verify Linux updater configuration
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          p = "src-tauri/tauri.release.conf.json"
+          c = json.load(open(p, encoding="utf-8"))
+          assert c["bundle"]["createUpdaterArtifacts"] is True
+          assert c["plugins"]["updater"]["pubkey"] and "__TAURI" not in c["plugins"]["updater"]["pubkey"]
+          assert c["plugins"]["updater"]["endpoints"][0].startswith("https://github.com/")
+          print("Updater configuration OK")
+          PY
 
       - name: Publish Linux release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f

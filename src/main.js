@@ -21,7 +21,7 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const APP_VERSION = "1.1.5";
+const APP_VERSION = "1.1.6";
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 800;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
@@ -92,6 +92,25 @@ function setUiScaleControl(value) {
   $("uiScaleValue").textContent = `${Math.round(scale * 100)}%`;
 }
 
+async function keepScaleActionsVisible() {
+  const actions = $("scaleActions");
+  const scroll = $("settingsScroll");
+  if (!actions || !scroll || $("settingsView").classList.contains("hidden")) return;
+
+  await new Promise(requestAnimationFrame);
+  await new Promise(requestAnimationFrame);
+
+  const scrollRect = scroll.getBoundingClientRect();
+  const actionRect = actions.getBoundingClientRect();
+  const margin = 12;
+  const above = actionRect.top < scrollRect.top + margin;
+  const below = actionRect.bottom > scrollRect.bottom - margin;
+
+  if (above || below) {
+    actions.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  }
+}
+
 async function applyUiScale(value) {
   const numeric = Number(value) || 1;
   const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
@@ -102,6 +121,7 @@ async function applyUiScale(value) {
   try {
     const window = getCurrentWindow();
     await window.setSize(new LogicalSize(Math.round(BASE_WINDOW_WIDTH * scale), Math.round(BASE_WINDOW_HEIGHT * scale)));
+    await keepScaleActionsVisible();
   } catch (e) {
     setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);
   }
@@ -529,19 +549,20 @@ async function installUpdate() {
   if (!banner) return;
 
   banner.disabled = true;
-  banner.textContent = `Téléchargement de v${update.version}…`;
-  setDetails(`Téléchargement de la mise à jour v${update.version}…`);
+  banner.textContent = `Préparation de v${update.version}…`;
+  setDetails(`Préparation du téléchargement de v${update.version}…`);
 
   try {
     let downloaded = 0;
     let total = 0;
 
-    await update.downloadAndInstall((event) => {
+    // Separate download and install so an error can be identified precisely.
+    await update.download((event) => {
       if (event.event === "Started") {
         total = Number(event.data.contentLength || 0);
         downloaded = 0;
         banner.textContent = total > 0 ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`;
-        setDetails("Téléchargement de la mise à jour…");
+        setDetails(total > 0 ? `Téléchargement de la mise à jour… 0%` : "Téléchargement de la mise à jour…");
       } else if (event.event === "Progress") {
         downloaded += Number(event.data.chunkLength || 0);
         if (total > 0) {
@@ -550,19 +571,30 @@ async function installUpdate() {
           setDetails(`Téléchargement de la mise à jour… ${percent}%`);
         }
       } else if (event.event === "Finished") {
-        banner.textContent = "Installation terminée. Redémarrage…";
-        setLastUpdateNow();
-        $("lastUpdate").textContent = formatLastUpdate();
-        setDetails("Installation terminée. Redémarrage de DuoVoice…");
+        banner.textContent = `Installation de v${update.version}…`;
+        setDetails("Téléchargement terminé. Vérification de la mise à jour…");
       }
-    });
+    }, { timeout: 120000 });
 
-    setDetails("Mise à jour installée. Redémarrage de DuoVoice…");
-    await relaunch();
+    banner.textContent = `Installation de v${update.version}…`;
+    setDetails("Téléchargement terminé. Installation de la mise à jour…");
+    await update.install();
+
+    // Windows exits automatically when the updater installer is launched.
+    // Linux needs an explicit restart after the installation finishes.
+    const isWindows = navigator.userAgent.toLowerCase().includes("windows");
+    if (!isWindows) {
+      setLastUpdateNow();
+      $("lastUpdate").textContent = formatLastUpdate();
+      setDetails("Mise à jour installée. Redémarrage de DuoVoice…");
+      await relaunch();
+    }
   } catch (e) {
+    const message = String(e);
     banner.disabled = false;
     await setUpdateBanner("available", update);
-    setDetails(`Mise à jour impossible : ${e}`);
+    setDetails(`Mise à jour impossible : ${message}`);
+    console.error("DuoVoice updater error:", e, update.rawJson || update);
   }
 }
 
