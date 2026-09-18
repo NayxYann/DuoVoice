@@ -22,7 +22,7 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.0";
+const FALLBACK_VERSION = "1.2.1";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -132,11 +132,20 @@ async function resetUiScale() {
   setDetails("Échelle de l’interface rétablie à 100%.");
 }
 
-async function requestQuit() {
-  const confirmed = window.confirm("Êtes-vous sûr de vouloir quitter DuoVoice ?");
-  if (!confirmed) return;
-  try { await invoke("quit_app"); }
-  catch (e) { setDetails(`Impossible de quitter DuoVoice : ${e}`); }
+function setAppQuitConfirmation(open) {
+  const layer = $("appQuitConfirm");
+  layer.classList.toggle("open", open);
+  layer.setAttribute("aria-hidden", String(!open));
+  if (open) $("cancelAppQuit").focus();
+}
+
+async function confirmAppQuit() {
+  try {
+    await invoke("quit_app");
+  } catch (e) {
+    setAppQuitConfirmation(false);
+    setDetails(`Impossible de quitter DuoVoice : ${e}`);
+  }
 }
 
 function setLastUpdateNow() {
@@ -659,7 +668,17 @@ $("output").addEventListener("change", () => localStorage.setItem("duovoice.outp
 $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
 });
-$("quitBtn").addEventListener("click", requestQuit);
+$("quitBtn").addEventListener("click", () => setAppQuitConfirmation(true));
+$("cancelAppQuit").addEventListener("click", () => setAppQuitConfirmation(false));
+$("confirmAppQuit").addEventListener("click", confirmAppQuit);
+$("appQuitConfirm").addEventListener("click", event => {
+  if (event.target === $("appQuitConfirm")) setAppQuitConfirmation(false);
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && $("appQuitConfirm").classList.contains("open")) {
+    setAppQuitConfirmation(false);
+  }
+});
 loadAppVersion();
 $("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
 $("applyUiScale").addEventListener("click", async () => { await applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
@@ -716,6 +735,7 @@ initializeWindow().catch(e => {
 });
 
 listen("open-settings", showSettings).catch(() => {});
+listen("open-main", showMain).catch(() => {});
 
 async function refreshFromTray() {
   try {

@@ -1,6 +1,6 @@
 [package]
 name = "duovoice"
-version = "1.2.0"
+version = "1.2.1"
 description = "Low-latency LAN intercom for Windows and Linux"
 authors = ["DuoVoice"]
 edition = "2021"

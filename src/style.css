@@ -1070,3 +1070,128 @@ body::-webkit-scrollbar,
   height: 0;
   display: none;
 }
+
+
+/* In-app quit confirmation: same visual language as the compact tray panel. */
+.app-confirm-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #080a0db8;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease;
+}
+
+.app-confirm-layer.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-confirm-card {
+  width: min(360px, 100%);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #191d24 0%, #12151a 100%);
+  box-shadow: 0 22px 60px #00000099;
+  text-align: center;
+  transform: translateY(8px) scale(.98);
+  transition: transform .16s ease;
+}
+
+.app-confirm-layer.open .app-confirm-card {
+  transform: translateY(0) scale(1);
+}
+
+.app-confirm-card > strong {
+  margin-top: 2px;
+  font-size: 16px;
+}
+
+.app-confirm-card > p {
+  max-width: 290px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-confirm-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--danger-border);
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: #ee9aa4;
+}
+
+.app-power-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.app-power-icon::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+}
+
+.app-power-icon::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 1px;
+  width: 2px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.app-confirm-actions {
+  width: 100%;
+  margin-top: 6px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.app-confirm-actions button {
+  height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #1c2028;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.app-confirm-actions button:hover {
+  background: #232833;
+}
+
+.app-confirm-actions .danger {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: #f0a2ab;
+}
+
+.app-confirm-actions .danger:hover {
+  border-color: var(--danger);
+  background: #4a1b23;
+}

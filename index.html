@@ -161,7 +161,7 @@
           </div>
           <div class="settings-info">
             <span>Version installée</span>
-            <strong id="appVersion">v1.2.0</strong>
+            <strong id="appVersion">v1.2.1</strong>
           </div>
           <div class="settings-info">
             <span>Historique</span>
@@ -245,6 +245,19 @@
         </section>
       </div>
     </section>
+
+
+    <div id="appQuitConfirm" class="app-confirm-layer" aria-hidden="true">
+      <div class="app-confirm-card" role="dialog" aria-modal="true" aria-labelledby="appQuitTitle">
+        <div class="app-confirm-icon" aria-hidden="true"><span class="app-power-icon"></span></div>
+        <strong id="appQuitTitle">Quitter DuoVoice ?</strong>
+        <p>L’application et l’audio seront complètement arrêtés.</p>
+        <div class="app-confirm-actions">
+          <button id="cancelAppQuit" type="button">Annuler</button>
+          <button id="confirmAppQuit" class="danger" type="button">Quitter</button>
+        </div>
+      </div>
+    </div>
   </main>
   <script type="module" src="/src/main.js"></script>
 </body>

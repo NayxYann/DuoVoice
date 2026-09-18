@@ -1,18 +1,12 @@
-# DuoVoice 1.2.0
+# DuoVoice 1.2.1
 
-## Nouveautés 1.2.0
+## Nouveautés 1.2.1
 
-- Panneau systray réellement indépendant et compact (build Vite multi-page).
-- Accueil compacté pour être entièrement visible à l’ouverture sans défilement.
-
-- Nouveau panneau de contrôle rapide compact dans la zone de notification.
-- Connexion/déconnexion à un hôte, mode muet, ouverture de l’app et accès direct aux paramètres.
-- Fermeture complète avec confirmation intégrée au panneau.
-- Scrollbars masquées dans toute l’interface tout en conservant le défilement à la molette/trackpad.
-
-
-DuoVoice est un intercom vocal local pour Windows et Linux. Il fonctionne directement sur le réseau local, sans compte ni serveur central.
-
+- Panneau systray légèrement agrandi et plus aéré, tout en restant compact.
+- Le bouton **Ouvrir** du systray revient systématiquement sur l’accueil ; **Paramètres** ouvre uniquement les paramètres.
+- Nouvelle confirmation de fermeture intégrée à l’application, centrée et harmonisée avec le design DuoVoice.
+- Nettoyage ciblé du code, notamment suppression de l’affectation Rust inutile sur `last_seq`.
+- Les favoris restent stockés sous `duovoice.favorites` et ne sont pas réinitialisés par la mise à jour.
 ## Fonctionnalités
 
 - audio bidirectionnel simultané sur le LAN ;

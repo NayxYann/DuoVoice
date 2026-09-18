@@ -652,7 +652,6 @@ fn start_audio(
                                         "Remote audio stream restarted (seq {prev} -> {}), resynchronizing",
                                         packet.seq
                                     ));
-                                    last_seq = None;
                                     if let Ok(mut q) = rx_queue_net.try_lock() {
                                         q.clear();
                                     }
@@ -894,6 +893,8 @@ fn show_main_window_inner(app: &tauri::AppHandle, settings: bool) -> Result<(), 
     window.set_focus().map_err(|e| e.to_string())?;
     if settings {
         app.emit("open-settings", ()).map_err(|e| e.to_string())?;
+    } else {
+        app.emit("open-main", ()).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1019,7 +1020,7 @@ fn main() {
                                 let _ = w.hide();
                                 return;
                             }
-                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(244, 322));
+                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(264, 324));
                             let width = f64::from(size.width);
                             let height = f64::from(size.height);
                             // The Windows notification area normally sits against the right
