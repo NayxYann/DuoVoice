@@ -701,7 +701,7 @@ fn quit_app(app: tauri::AppHandle) {
 
 fn acquire_single_instance() -> Option<TcpListener> {
     match TcpListener::bind((Ipv4Addr::LOCALHOST, INSTANCE_PORT)) {
-        Ok(listener) => Some(listener)
+        Ok(listener) => Some(listener),
         Err(_) => {
             if let Ok(mut stream) = TcpStream::connect((Ipv4Addr::LOCALHOST, INSTANCE_PORT)) {
                 use std::io::Write;
