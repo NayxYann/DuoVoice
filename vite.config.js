@@ -8,7 +8,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL("index.html", import.meta.url)),
-        tray: fileURLToPath(new URL("tray.html", import.meta.url))
+        tray: fileURLToPath(new URL("tray.html", import.meta.url)),
+        trayMenu: fileURLToPath(new URL("tray-menu.html", import.meta.url))
       }
     }
   }

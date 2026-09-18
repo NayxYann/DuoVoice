@@ -1,18 +1,17 @@
-# DuoVoice 1.2.3
+# DuoVoice 1.2.4
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.3
+## Nouveautés 1.2.4
 
-- Mini-panneau systray légèrement abaissé tout en restant détaché de la barre des tâches et centré sur l’icône DuoVoice.
-- Nom de machine : bouton d’application plus lisible, état **à appliquer** puis coche verte **appliqué** après validation.
-- Échelles de l’application et du systray : bouton **Appliquer** passant visuellement en état validé après application.
-- Bouton **Rétablir par défaut** automatiquement grisé et désactivé quand les deux échelles sont déjà à 100 %, puis réactivé dès qu’un réglage s’en écarte.
-- Mise à jour disponible désormais signalée par un bandeau rose-violet distinct de l’état « aucune mise à jour ».
-- Retour visuel harmonisé sur les icônes et boutons compacts cliquables (pression, halo bref, états actifs).
-- Le bouton de rechargement des machines tourne pendant la recherche puis confirme visuellement la fin de l’actualisation.
-- Échelle du systray toujours limitée à **90 / 100 / 110 / 120 %** et repositionnement recalculé selon sa taille réelle.
-- Nom de machine personnalisable, favoris persistants, workflows GitHub manuels et correctifs audio/réseau des versions précédentes conservés.
+- **Nom de machine plus explicite** : le bouton utilise maintenant une coche dans les deux états. La coche est **verte et cliquable** uniquement lorsqu’un nouveau nom attend d’être validé ; elle devient **grise et désactivée** dès que le nom affiché est déjà appliqué.
+- **Icônes recentrées** dans les boutons carrés et les tuiles du contrôle rapide, avec un alignement plus stable pendant les animations de clic et de rechargement.
+- **Palette harmonisée** entre l’application principale, le mini-panneau systray et les confirmations : mêmes teintes sémantiques pour le rouge/danger, le vert/validation et les états neutres. Le rose-violet reste réservé à la détection d’une mise à jour disponible.
+- **Nouveau menu clic droit du systray entièrement personnalisé** : le menu natif Windows est remplacé par une petite popup DuoVoice reprenant les mêmes formes, espacements, couleurs, survols et retours de clic que l’application.
+- Le menu clic droit ne contient plus « Contrôle rapide » : il propose uniquement **Ouvrir DuoVoice**, **Paramètres** et **Quitter**.
+- La popup clic droit est **davantage surélevée** par rapport à la barre des tâches et légèrement décalée horizontalement, tout en restant automatiquement contrainte à l’écran.
+- Le mini-panneau du clic gauche reste centré sur l’icône DuoVoice et conserve un très fin espace au-dessus de la barre des tâches.
+- Les comportements introduits en 1.2.3 sont conservés : retours visuels sur les actions, animation de rechargement des machines, validation claire des échelles, bouton de réinitialisation grisé quand les valeurs sont déjà par défaut, mise à jour disponible rose-violet, échelle systray limitée à **90 / 100 / 110 / 120 %**, nom réseau personnalisable et favoris persistants.
 
 ## Fonctionnalités principales
 
@@ -103,7 +102,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.3`.
+5. saisir le tag voulu, par exemple `v1.2.4`.
 
 Le build produit notamment :
 

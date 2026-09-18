@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for DuoVoice desktop windows",
-  "windows": ["main", "tray"],
+  "windows": [
+    "main",
+    "tray",
+    "tray-menu"
+  ],
   "permissions": [
     "core:default",
     "autostart:default",

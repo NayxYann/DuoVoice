@@ -13,7 +13,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{
-    menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     Emitter, Manager, State,
 };
@@ -1008,7 +1007,7 @@ fn main() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "tray" {
+                if window.label() == "tray" || window.label() == "tray-menu" {
                     api.prevent_close();
                     let _ = window.hide();
                     return;
@@ -1023,7 +1022,7 @@ fn main() {
                 }
             }
             if let tauri::WindowEvent::Focused(false) = event {
-                if window.label() == "tray" {
+                if window.label() == "tray" || window.label() == "tray-menu" {
                     let _ = window.hide();
                 }
             }
@@ -1044,93 +1043,119 @@ fn main() {
                 }
             });
 
-            let quick = MenuItem::with_id(app, "quick", "Contrôle rapide", true, None::<&str>)?;
-            let show = MenuItem::with_id(app, "show", "Ouvrir DuoVoice", true, None::<&str>)?;
-            let settings = MenuItem::with_id(app, "settings", "Paramètres", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quick, &show, &settings, &quit])?;
-
-            // Do not unwrap default_window_icon(): a missing icon must not crash the whole app.
+            // The right-click menu is rendered by DuoVoice itself instead of the
+            // native Windows menu so it can share the same spacing, colors and
+            // interaction language as the rest of the application.
             let icon = app.default_window_icon().cloned()
                 .ok_or_else(|| tauri::Error::AssetNotFound("DuoVoice tray icon".into()))?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
-                .menu(&menu)
                 .tooltip("DuoVoice")
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, rect, .. } = event {
+                    if let TrayIconEvent::Click { button, button_state: MouseButtonState::Up, position, rect, .. } = event {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("tray") {
-                            if w.is_visible().unwrap_or(false) {
-                                let _ = w.hide();
-                                return;
-                            }
-                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 348));
-                            let width = size.width as i32;
-                            let height = size.height as i32;
 
-                            // Center the popup on the tray icon click and keep it entirely inside
-                            // the monitor work area. On Windows the work area stops above the
-                            // taskbar, so the panel sits cleanly above it instead of overlapping it.
-                            let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
-                            let icon_center_x = monitor.as_ref().map(|monitor| {
-                                let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
-                                let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
-                                icon_position.x + icon_size.width as i32 / 2
-                            }).unwrap_or_else(|| position.x.round() as i32);
+                        match button {
+                            MouseButton::Left => {
+                                if let Some(menu) = app.get_webview_window("tray-menu") {
+                                    let _ = menu.hide();
+                                }
+                                if let Some(w) = app.get_webview_window("tray") {
+                                    if w.is_visible().unwrap_or(false) {
+                                        let _ = w.hide();
+                                        return;
+                                    }
 
-                            let mut x = icon_center_x - width / 2;
-                            let mut y = position.y.round() as i32 - height - 4;
+                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 348));
+                                    let width = size.width as i32;
+                                    let height = size.height as i32;
+                                    let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
+                                    let icon_center_x = monitor.as_ref().map(|monitor| {
+                                        let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
+                                        let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
+                                        icon_position.x + icon_size.width as i32 / 2
+                                    }).unwrap_or_else(|| position.x.round() as i32);
 
-                            if let Some(monitor) = monitor {
-                                let work = monitor.work_area();
-                                let left = work.position.x;
-                                let top = work.position.y;
-                                let right = left + work.size.width as i32;
-                                let bottom = top + work.size.height as i32;
-                                const GAP: i32 = 4;
+                                    let mut x = icon_center_x - width / 2;
+                                    let mut y = position.y.round() as i32 - height - 3;
 
-                                x = x.clamp(left + GAP, (right - width - GAP).max(left + GAP));
-                                // Anchor the panel to the usable desktop edge above the taskbar.
-                                y = bottom - height - GAP;
-                                if y < top + GAP {
-                                    y = top + GAP;
+                                    if let Some(monitor) = monitor {
+                                        let work = monitor.work_area();
+                                        let left = work.position.x;
+                                        let top = work.position.y;
+                                        let right = left + work.size.width as i32;
+                                        let bottom = top + work.size.height as i32;
+                                        const EDGE_GAP: i32 = 4;
+                                        const TASKBAR_GAP: i32 = 3;
+
+                                        x = x.clamp(left + EDGE_GAP, (right - width - EDGE_GAP).max(left + EDGE_GAP));
+                                        // Keep the quick panel visually close to the taskbar while
+                                        // still detached from it by a thin, consistent gap.
+                                        y = bottom - height - TASKBAR_GAP;
+                                        if y < top + EDGE_GAP {
+                                            y = top + EDGE_GAP;
+                                        }
+                                    }
+
+                                    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+                                    let _ = w.show();
+                                    let _ = w.set_focus();
                                 }
                             }
+                            MouseButton::Right => {
+                                if let Some(quick) = app.get_webview_window("tray") {
+                                    let _ = quick.hide();
+                                }
+                                if let Some(w) = app.get_webview_window("tray-menu") {
+                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(190, 154));
+                                    let width = size.width as i32;
+                                    let height = size.height as i32;
+                                    let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
+                                    let icon_center_x = monitor.as_ref().map(|monitor| {
+                                        let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
+                                        let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
+                                        icon_position.x + icon_size.width as i32 / 2
+                                    }).unwrap_or_else(|| position.x.round() as i32);
 
-                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                })
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "quick" => {
-                            if let Some(w) = app.get_webview_window("tray") {
-                                let _ = w.center();
-                                let _ = w.show();
-                                let _ = w.set_focus();
+                                    // Anchor the custom context menu a little higher and with its
+                                    // right edge slightly past the tray icon center. This feels less
+                                    // cramped than the native menu while remaining inside the monitor.
+                                    let mut x = icon_center_x - width + 30;
+                                    let mut y = position.y.round() as i32 - height - 18;
+
+                                    if let Some(monitor) = monitor {
+                                        let work = monitor.work_area();
+                                        let left = work.position.x;
+                                        let top = work.position.y;
+                                        let right = left + work.size.width as i32;
+                                        let bottom = top + work.size.height as i32;
+                                        const EDGE_GAP: i32 = 6;
+                                        const RAISE_GAP: i32 = 18;
+
+                                        x = x.clamp(left + EDGE_GAP, (right - width - EDGE_GAP).max(left + EDGE_GAP));
+                                        y = bottom - height - RAISE_GAP;
+                                        if y < top + EDGE_GAP {
+                                            y = top + EDGE_GAP;
+                                        }
+                                    }
+
+                                    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+                                    let _ = w.show();
+                                    let _ = w.set_focus();
+                                }
                             }
+                            _ => {}
                         }
-                        "show" => {
-                            if let Err(e) = show_main_window_inner(app, false) {
-                                app_log(&format!("Tray show error: {e}"));
-                            }
-                        }
-                        "settings" => {
-                            if let Err(e) = show_main_window_inner(app, true) {
-                                app_log(&format!("Tray settings error: {e}"));
-                            }
-                        }
-                        "quit" => app.exit(0),
-                        _ => {}
                     }
                 })
                 .build(app)?;
 
             if let Some(w) = app.get_webview_window("tray") {
+                let _ = w.hide();
+                let _ = w.set_skip_taskbar(true);
+            }
+            if let Some(w) = app.get_webview_window("tray-menu") {
                 let _ = w.hide();
                 let _ = w.set_skip_taskbar(true);
             }

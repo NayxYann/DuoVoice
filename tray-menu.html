@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DuoVoice</title>
+</head>
+<body>
+  <main class="tray-menu-panel" role="menu" aria-label="Menu DuoVoice">
+    <button id="menuOpen" class="tray-menu-item" type="button" role="menuitem">
+      <span class="menu-icon home-icon" aria-hidden="true"></span>
+      <span>Ouvrir DuoVoice</span>
+    </button>
+    <button id="menuSettings" class="tray-menu-item" type="button" role="menuitem">
+      <span class="menu-icon settings-menu-icon" aria-hidden="true"></span>
+      <span>Paramètres</span>
+    </button>
+    <div class="tray-menu-separator" aria-hidden="true"></div>
+    <button id="menuQuit" class="tray-menu-item danger" type="button" role="menuitem">
+      <svg class="menu-power" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M6.4 5.6a8 8 0 1 0 11.2 0"/></svg>
+      <span>Quitter</span>
+    </button>
+  </main>
+  <script type="module" src="/src/tray-menu.js"></script>
+</body>
+</html>

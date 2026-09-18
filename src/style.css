@@ -8,11 +8,15 @@
   --accent: #a78bfa;
   --accent-soft: #a78bfa22;
   --accent-focus: #a78bfa2e;
-  --danger: #d95762;
-  --danger-soft: #3a171d;
-  --danger-border: #7f2d39;
+  --danger: #e77984;
+  --danger-soft: #3a1d24;
+  --danger-border: #71343f;
+  --danger-text: #f09aa3;
+  --success: #78cc9d;
   --success-soft: #102e20;
   --success-border: #1f6c47;
+  --update: #c084fc;
+  --update-alt: #f472b6;
   --panel: #15181e;
   --panel-soft: #101319;
   --border: #272d37;
@@ -166,12 +170,12 @@ p {
 
 .online {
   background: var(--success-soft);
-  color: #78cc9d;
+  color: var(--success);
 }
 
 .offline {
   background: var(--danger-soft);
-  color: #e79aa2;
+  color: var(--danger-text);
 }
 
 .icon-btn,
@@ -215,15 +219,15 @@ p {
   padding: 0;
   border-color: var(--danger-border);
   background: var(--danger-soft);
-  color: #e58b95;
+  color: var(--danger);
   font-size: 0;
   line-height: 0;
 }
 
 .quit-btn:hover:not(:disabled) {
   border-color: var(--danger);
-  background: #4a1b23;
-  color: #efadb4;
+  background: color-mix(in srgb, var(--danger-soft) 76%, #000);
+  color: var(--danger-text);
 }
 
 .quit-btn::before,
@@ -277,14 +281,14 @@ p {
 .update-banner.current {
   border-color: var(--success-border);
   background: var(--success-soft);
-  color: #78cc9d;
+  color: var(--success);
   cursor: pointer;
 }
 
 .update-banner.available {
-  border-color: #c084fc;
-  background: linear-gradient(100deg, #3a1f4f 0%, #472044 48%, #43213c 100%);
-  box-shadow: inset 0 1px 0 #ffffff0b, 0 0 0 1px #f472b61a, 0 0 22px #c084fc16;
+  border-color: var(--update);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--update) 24%, #15181e) 0%, color-mix(in srgb, var(--update-alt) 22%, #15181e) 100%);
+  box-shadow: inset 0 1px 0 #ffffff0b, 0 0 0 1px color-mix(in srgb, var(--update-alt) 12%, transparent), 0 0 22px color-mix(in srgb, var(--update) 9%, transparent);
   color: #f6d9ff;
   cursor: pointer;
 }
@@ -292,7 +296,7 @@ p {
 .update-banner.error {
   border-color: var(--danger-border);
   background: var(--danger-soft);
-  color: #e79aa2;
+  color: var(--danger-text);
   cursor: pointer;
 }
 
@@ -534,8 +538,8 @@ select:focus {
 
 .favorite-item.available .favorite-dot,
 .favorite-item.active .favorite-dot {
-  background: #57c98a;
-  box-shadow: 0 0 7px #57c98a66;
+  background: var(--success);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--success) 40%, transparent);
 }
 
 .favorite-info {
@@ -566,7 +570,7 @@ select:focus {
 }
 
 .favorite-item.available .favorite-status {
-  color: #65ce96;
+  color: var(--success);
 }
 
 .favorite-actions {
@@ -593,25 +597,25 @@ select:focus {
 }
 
 .favorite-connect {
-  border-color: #1f7a4d;
-  background: #123b28;
-  color: #69cf99;
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
   font-size: 14px;
 }
 
 .favorite-connect:hover:not(:disabled) {
-  background: #175336;
+  background: color-mix(in srgb, var(--success-soft) 72%, var(--success));
 }
 
 .favorite-disconnect {
   border-color: var(--danger-border);
   background: var(--danger-soft);
-  color: #e58b95;
+  color: var(--danger);
   font-size: 18px;
 }
 
 .favorite-disconnect:hover:not(:disabled) {
-  background: #4a1b23;
+  background: color-mix(in srgb, var(--danger-soft) 76%, #000);
 }
 
 .favorites-empty {
@@ -835,7 +839,7 @@ input[type="range"] {
 }
 
 .mute-btn.active {
-  background: #3a2027;
+  background: var(--danger-soft);
 }
 
 .mute-icon {
@@ -1159,7 +1163,7 @@ body::-webkit-scrollbar,
   border: 1px solid var(--danger-border);
   border-radius: 12px;
   background: var(--danger-soft);
-  color: #ee9aa4;
+  color: var(--danger-text);
 }
 
 
@@ -1198,12 +1202,12 @@ body::-webkit-scrollbar,
 .app-confirm-actions .danger {
   border-color: var(--danger-border);
   background: var(--danger-soft);
-  color: #f0a2ab;
+  color: var(--danger-text);
 }
 
 .app-confirm-actions .danger:hover {
   border-color: var(--danger);
-  background: #4a1b23;
+  background: color-mix(in srgb, var(--danger-soft) 76%, #000);
 }
 
 .tray-scale-line { margin-top: 18px; }
@@ -1251,7 +1255,7 @@ button:not(:disabled):active,
 #refresh.success-flash {
   border-color: var(--success-border);
   background: var(--success-soft);
-  color: #78cc9d;
+  color: var(--success);
 }
 
 .client-name-save.is-dirty {
@@ -1263,13 +1267,13 @@ button:not(:disabled):active,
 .client-name-save.is-applied {
   border-color: var(--success-border);
   background: var(--success-soft);
-  color: #78cc9d;
+  color: var(--success);
 }
 
 .scale-actions .primary.is-applied {
   border: 1px solid var(--success-border);
   background: var(--success-soft);
-  color: #82d6a7;
+  color: var(--success);
   cursor: default;
 }
 
@@ -1290,4 +1294,66 @@ button:not(:disabled):active,
   0% { transform: scale(.96); box-shadow: 0 0 0 0 #4ade8000; }
   48% { transform: scale(1.035); box-shadow: 0 0 0 4px #4ade8020; }
   100% { transform: scale(1); box-shadow: 0 0 0 0 #4ade8000; }
+}
+
+
+/* 1.2.4 — unified semantic colors and pixel-stable icon alignment. */
+.icon-btn,
+.add-btn,
+.favorite-action,
+.client-name-save {
+  align-items: center;
+  justify-items: center;
+  justify-content: center;
+  align-content: center;
+  line-height: 1;
+  text-align: center;
+  text-rendering: geometricPrecision;
+}
+
+#refresh,
+#favoriteBtn,
+.client-name-save {
+  transform-origin: 50% 50%;
+}
+
+/* The name validation control uses the same check in both states:
+   green means there is a change to apply, grey means it is already applied. */
+.client-name-save.is-dirty {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+  opacity: 1;
+  cursor: pointer;
+}
+
+.client-name-save.is-dirty:hover:not(:disabled) {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success-soft) 72%, var(--success));
+}
+
+.client-name-save.is-applied,
+.client-name-save.is-applied:disabled {
+  border-color: #2b313b;
+  background: #1a1e25;
+  color: #68717f;
+  opacity: .72;
+  cursor: default;
+  filter: none;
+}
+
+#refresh.success-flash {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.validation-pop {
+  animation-name: duo-validation-pop-124;
+}
+
+@keyframes duo-validation-pop-124 {
+  0% { transform: scale(.96); box-shadow: 0 0 0 0 transparent; }
+  48% { transform: scale(1.035); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }

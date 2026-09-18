@@ -6,13 +6,18 @@
   --accent-soft: #a78bfa24;
   --accent-border: #a78bfa70;
   --panel: #15181e;
-  --surface: #1b1f27;
-  --surface-2: #20252e;
-  --border: #2b313c;
+  --surface: #1c2028;
+  --surface-2: #232833;
+  --border: #272d37;
   --text: #f4f6f8;
-  --muted: #858e9d;
+  --muted: #7f8794;
   --success: #78cc9d;
-  --danger: #ef8793;
+  --success-soft: #102e20;
+  --success-border: #1f6c47;
+  --danger: #e77984;
+  --danger-soft: #3a1d24;
+  --danger-border: #71343f;
+  --danger-text: #f09aa3;
   --tray-scale: 1;
 }
 
@@ -82,7 +87,7 @@ button:active { transform: translateY(1px); }
 .tray-status { gap: 6px; color: var(--muted); font-size: 10.5px; line-height: 1; }
 .tray-status i { width: 6px; height: 6px; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 2px currentColor inset; }
 .tray-status.online { color: var(--success); }
-.tray-status.offline { color: #d18b94; }
+.tray-status.offline { color: var(--danger); }
 
 .icon-button {
   position: relative;
@@ -96,7 +101,7 @@ button:active { transform: translateY(1px); }
   color: #98a1af;
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.icon-button:hover { background: var(--surface-2); color: white; border-color: #39414e; }
+.icon-button:hover { background: var(--surface-2); color: white; border-color: #303641; }
 .close-button::before, .close-button::after {
   content: "";
   position: absolute;
@@ -125,9 +130,9 @@ button:active { transform: translateY(1px); }
   outline: none;
   appearance: none;
   -webkit-appearance: none;
-  border: 1px solid #2e3541;
+  border: 1px solid #303641;
   border-radius: 8px;
-  background-color: #1a1e25;
+  background-color: #1c2028;
   background-image: linear-gradient(45deg, transparent 50%, #8993a1 50%), linear-gradient(135deg, #8993a1 50%, transparent 50%);
   background-position: calc(100% - 14px) 12px, calc(100% - 9px) 12px;
   background-size: 5px 5px;
@@ -135,7 +140,7 @@ button:active { transform: translateY(1px); }
   color: #e6e9ee;
   font-size: 10px;
 }
-.tray-peer-select:hover { border-color: #3a4350; }
+.tray-peer-select:hover { border-color: #3b4350; }
 
 .action-grid {
   display: grid;
@@ -156,10 +161,10 @@ button:active { transform: translateY(1px); }
   color: #d9dde4;
   transition: background .15s ease, border-color .15s ease, color .15s ease, transform .1s ease;
 }
-.action-tile:hover { background: var(--surface-2); border-color: #39414e; color: white; }
+.action-tile:hover { background: var(--surface-2); border-color: #303641; color: white; }
 .action-tile.primary { border-color: var(--accent-border); background: var(--accent-soft); color: white; }
 .action-tile.primary:hover { border-color: var(--accent); }
-.action-tile.disconnect { border-color: #6a3540; background: #342027; color: #f0a1aa; }
+.action-tile.disconnect { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
 .action-tile.active { border-color: var(--accent-border); background: var(--accent-soft); color: white; }
 .tile-label { width: 100%; overflow: hidden; font-size: 10px; font-weight: 650; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -252,7 +257,7 @@ button:active { transform: translateY(1px); }
   font-weight: 600;
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
-.quit-button:hover { border-color: #493039; background: #261a1f; color: #e9949f; }
+.quit-button:hover { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
 
 
 .power-svg {
@@ -301,7 +306,7 @@ button:active { transform: translateY(1px); }
   margin: 0 auto 9px;
   justify-content: center;
   border-radius: 10px;
-  background: #342027;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 .confirm-card strong { display: block; font-size: 12px; }
@@ -318,9 +323,9 @@ button:active { transform: translateY(1px); }
   font-weight: 650;
 }
 .confirm-actions button:hover { background: var(--surface-2); }
-.confirm-actions .danger { border-color: #713742; background: #3a2027; color: #ffadb6; }
+.confirm-actions .danger { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
 
-/* 1.2.3 — quick panel action feedback matches the main app. */
+/* 1.2.4 — quick panel feedback and semantic colors match the main app. */
 .icon-button,
 .action-tile,
 .quit-button,
@@ -334,4 +339,21 @@ button:active { transform: translateY(1px); }
 .confirm-actions button:not(:disabled):active {
   transform: scale(.965);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+
+/* Keep every glyph/constructed icon optically centered inside its action tile. */
+.action-tile {
+  text-align: center;
+}
+
+.tile-icon {
+  flex: 0 0 19px;
+  margin: 0 auto;
+  transform-origin: 50% 50%;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
 }

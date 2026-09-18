@@ -24,7 +24,7 @@ const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.3";
+const FALLBACK_VERSION = "1.2.4";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -53,6 +53,7 @@ function applyAppColor(name) {
   document.documentElement.style.setProperty("--accent-focus", `${color}2e`);
   localStorage.setItem(COLOR_KEY, name);
   emitTo("tray", "theme-changed", { color: name }).catch(() => {});
+  emitTo("tray-menu", "theme-changed", { color: name }).catch(() => {});
   document.querySelectorAll(".color-choice").forEach(b => b.classList.toggle("active", b.dataset.color === name));
 }
 
@@ -76,11 +77,16 @@ function updateClientNameVisual(applied = false) {
   const button = $("saveClientName");
   if (!input || !button) return;
   const isCurrent = input.value.trim() === appliedClientName;
-  button.classList.toggle("is-applied", isCurrent && Boolean(appliedClientName));
+
+  // One icon, two unmistakable states: green = a change can be applied,
+  // grey = the displayed name is already active and there is nothing to do.
+  button.textContent = "✓";
+  button.classList.toggle("is-applied", isCurrent);
   button.classList.toggle("is-dirty", !isCurrent);
-  button.textContent = isCurrent && appliedClientName ? "✓" : "→";
-  button.title = isCurrent && appliedClientName ? "Nom appliqué" : "Appliquer ce nom";
+  button.disabled = isCurrent;
+  button.title = isCurrent ? "Nom déjà appliqué" : "Valider ce nouveau nom";
   button.setAttribute("aria-label", button.title);
+
   if (applied && isCurrent) {
     button.classList.remove("validation-pop");
     void button.offsetWidth;
@@ -106,6 +112,7 @@ async function loadClientName() {
 async function saveClientName() {
   const input = $("clientName");
   const button = $("saveClientName");
+  if (button.disabled) return;
   try {
     button.disabled = true;
     const applied = await invoke("set_client_name", { name: input.value });
@@ -117,8 +124,7 @@ async function saveClientName() {
   } catch (e) {
     setDetails(`Nom de la machine : ${e}`);
     input.focus();
-  } finally {
-    button.disabled = false;
+    updateClientNameVisual();
   }
 }
 
