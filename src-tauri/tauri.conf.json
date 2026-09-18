@@ -11,7 +11,6 @@
 
   "app": {
     "withGlobalTauri": false,
-
     "windows": [
       {
         "title": "DuoVoice",
@@ -22,7 +21,6 @@
         "minHeight": 600
       }
     ],
-
     "security": {
       "csp": null
     }
@@ -36,7 +34,6 @@
       "appimage",
       "deb"
     ],
-
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
@@ -44,7 +41,9 @@
   },
 
   "plugins": {
-    "updater": {},
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU5ODUzNjE0OEU5RjdFN0IKUldSN2ZwK09GRGFGV2Z0YXF4cDdpZ01YMXpDZWRGMkFLUStLUmYzLyt4V1hkR2FNdUhtVURZcUgK"
+    },
     "autostart": null,
     "process": {}
   }
