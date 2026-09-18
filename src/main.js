@@ -6,6 +6,7 @@ import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
+import { COLOR_KEY, THEME_KEY, PALETTE, THEMES, applyThemeVariables, normalizeThemeName } from "./theme.js";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
@@ -16,7 +17,6 @@ const MANUAL_KEY = "duovoice.manualIps";
 const VOLUME_KEY = "duovoice.volume";
 const BOOST_KEY = "duovoice.boostVolume";
 const MUTE_KEY = "duovoice.muted";
-const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
@@ -27,7 +27,7 @@ const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.3.1";
+const FALLBACK_VERSION = "1.3.2";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -41,16 +41,7 @@ let appliedInputDevice = null;
 let appliedOutputDevice = null;
 let switchingAudioDevice = false;
 
-const PALETTE = {
-  violet: "#a78bfa",
-  rose: "#f472b6",
-  bleu: "#60a5fa",
-  vert: "#4ade80",
-  jaune: "#facc15",
-  orange: "#fb923c",
-  cyan: "#22d3ee",
-  ardoise: "#94a3b8"
-};
+
 
 // Canonical SVG set used by dynamic controls. Keeping the markup here prevents
 // dynamic state changes from falling back to unrelated Unicode/CSS icons.
@@ -70,29 +61,68 @@ const NAV_ICONS = {
 };
 const iconLabel = (icon, label) => `${icon}<span>${label}</span>`;
 
+function syncThemeControls(themeName, colorName) {
+  document.querySelectorAll(".color-choice").forEach((button) => {
+    button.classList.toggle("active", themeName === "duovoice" && button.dataset.color === colorName);
+  });
+  document.querySelectorAll(".theme-choice").forEach((button) => {
+    button.classList.toggle("active", button.dataset.theme === themeName);
+  });
+}
+
+function broadcastTheme(themeName, colorName) {
+  const payload = { theme: themeName, color: colorName };
+  emitTo("tray", "theme-changed", payload).catch(() => {});
+  emitTo("tray-menu", "theme-changed", payload).catch(() => {});
+}
+
+function applyVisualTheme(themeName, { persist = true, broadcast = true } = {}) {
+  const colorName = localStorage.getItem(COLOR_KEY) || "violet";
+  const normalized = applyThemeVariables(document.documentElement, themeName, colorName);
+  if (persist) localStorage.setItem(THEME_KEY, normalized);
+  syncThemeControls(normalized, colorName);
+  if (broadcast) broadcastTheme(normalized, colorName);
+  return normalized;
+}
+
 function applyAppColor(name) {
-  const color = PALETTE[name] || PALETTE.violet;
-  document.documentElement.style.setProperty("--accent", color);
-  document.documentElement.style.setProperty("--accent-soft", `${color}22`);
-  document.documentElement.style.setProperty("--accent-border", `${color}70`);
-  document.documentElement.style.setProperty("--accent-focus", `${color}2e`);
-  localStorage.setItem(COLOR_KEY, name);
-  emitTo("tray", "theme-changed", { color: name }).catch(() => {});
-  emitTo("tray-menu", "theme-changed", { color: name }).catch(() => {});
-  document.querySelectorAll(".color-choice").forEach(b => b.classList.toggle("active", b.dataset.color === name));
+  const colorName = Object.prototype.hasOwnProperty.call(PALETTE, name) ? name : "violet";
+  localStorage.setItem(COLOR_KEY, colorName);
+  localStorage.setItem(THEME_KEY, "duovoice");
+  applyThemeVariables(document.documentElement, "duovoice", colorName);
+  syncThemeControls("duovoice", colorName);
+  broadcastTheme("duovoice", colorName);
 }
 
 function initColors() {
   const box = $("colorChoices");
-  if (!box) return;
-  for (const [name, color] of Object.entries(PALETTE)) {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "color-choice"; b.dataset.color = name;
-    b.title = name; b.style.setProperty("--swatch", color);
-    b.addEventListener("click", () => applyAppColor(name));
-    box.appendChild(b);
+  if (box) {
+    for (const [name, color] of Object.entries(PALETTE)) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "color-choice"; b.dataset.color = name;
+      b.title = name; b.style.setProperty("--swatch", color);
+      b.addEventListener("click", () => applyAppColor(name));
+      box.appendChild(b);
+    }
   }
-  applyAppColor(localStorage.getItem(COLOR_KEY) || "violet");
+
+  const themeBox = $("themeChoices");
+  if (themeBox) {
+    for (const [name, theme] of Object.entries(THEMES)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "theme-choice";
+      button.dataset.theme = name;
+      button.title = theme.description;
+      const swatches = theme.preview.map((value) => `<i style="--theme-swatch:${value}"></i>`).join("");
+      button.innerHTML = `<span class="theme-preview">${swatches}</span><span class="theme-choice-copy"><strong>${theme.label}</strong><small>${theme.description}</small></span>`;
+      button.addEventListener("click", () => applyVisualTheme(name));
+      themeBox.appendChild(button);
+    }
+  }
+
+  const savedTheme = normalizeThemeName(localStorage.getItem(THEME_KEY) || "duovoice");
+  applyVisualTheme(savedTheme, { persist: false, broadcast: true });
 }
 
 function setDetails(text) { $("details").textContent = text; }
@@ -729,6 +759,7 @@ async function connectToAddress(address) {
     connectedPeer = address;
     $("peer").value = address;
     button.textContent = "Se déconnecter";
+    button.classList.add("disconnect-state");
     $("status").innerHTML = '<span class="status-dot"></span>Connecté';
     $("status").className = "status online";
     setDetails("Audio bidirectionnel actif.");
@@ -738,6 +769,7 @@ async function connectToAddress(address) {
     connected = false;
     connectedPeer = "";
     button.textContent = "Se connecter";
+    button.classList.remove("disconnect-state");
     $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
     $("status").className = "status offline";
     reportError("Audio connect", e);
@@ -755,6 +787,7 @@ async function disconnect() {
   connected = false;
   connectedPeer = "";
   $("connect").textContent = "Se connecter";
+  $("connect").classList.remove("disconnect-state");
   $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
   $("status").className = "status offline";
   $("latency").textContent = "— ms";
@@ -1221,6 +1254,7 @@ async function refreshFromTray() {
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
     $("connect").textContent = connected ? "Se déconnecter" : "Se connecter";
+    $("connect").classList.toggle("disconnect-state", connected);
     $("status").innerHTML = `<span class="status-dot"></span>${connected ? "Connecté" : "Hors ligne"}`;
     $("status").className = `status ${connected ? "online" : "offline"}`;
     $("peer").value = connectedPeer;

@@ -2,13 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import "./tray.css";
+import { COLOR_KEY, THEME_KEY, applyThemeVariables, normalizeThemeName } from "./theme.js";
 
 const $ = (id) => document.getElementById(id);
-const COLOR_KEY = "duovoice.color";
 const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
-const PALETTE = { violet: "#a78bfa", rose: "#f472b6", bleu: "#60a5fa", vert: "#4ade80", jaune: "#facc15", orange: "#fb923c", cyan: "#22d3ee", ardoise: "#94a3b8" };
 
 let peers = [];
 let connected = false;
@@ -30,11 +29,10 @@ function applyTrayScale(value) {
 
 applyTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1");
 
-function applyColor(name) {
-  const color = PALETTE[name] || PALETTE.violet;
-  document.documentElement.style.setProperty("--accent", color);
-  document.documentElement.style.setProperty("--accent-soft", `${color}24`);
-  document.documentElement.style.setProperty("--accent-border", `${color}70`);
+function applyTheme(themeName, colorName) {
+  const theme = normalizeThemeName(themeName || localStorage.getItem(THEME_KEY) || "duovoice");
+  const color = colorName || localStorage.getItem(COLOR_KEY) || "violet";
+  applyThemeVariables(document.documentElement, theme, color);
 }
 
 function favoriteAddresses() {
@@ -194,7 +192,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("storage", (event) => {
-  if (event.key === COLOR_KEY) applyColor(event.newValue || "violet");
+  if (event.key === COLOR_KEY || event.key === THEME_KEY) applyTheme();
   if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
 });
 
@@ -221,10 +219,10 @@ window.addEventListener("blur", () => {
   setQuitConfirmation(false);
   stopPolling();
 });
-listen("theme-changed", (event) => applyColor(event.payload?.color || "violet")).catch(() => {});
+listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payload?.color)).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
 listen("audio-state-changed", refreshState).catch(() => {});
 
-applyColor(localStorage.getItem(COLOR_KEY) || "violet");
+applyTheme(localStorage.getItem(THEME_KEY) || "duovoice", localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();
 refreshState();

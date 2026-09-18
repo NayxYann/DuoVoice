@@ -5,9 +5,12 @@
   --accent: #a78bfa;
   --accent-soft: #a78bfa20;
   --accent-border: #a78bfa66;
+  --panel: #15181e;
+  --panel-soft: #101319;
   --surface: #1c2028;
   --surface-hover: #232833;
   --border: #272d37;
+  --border-strong: #303641;
   --text: #eef1f5;
   --muted: #8992a0;
   --danger: #e77984;
@@ -63,7 +66,7 @@ button { font: inherit; }
 }
 
 .tray-menu-item:hover {
-  border-color: #303641;
+  border-color: var(--border-strong);
   background: var(--surface-hover);
   color: #fff;
 }
@@ -158,3 +161,10 @@ button { font: inherit; }
 }
 .home-icon::before, .home-icon::after,
 .settings-menu-icon::before, .settings-menu-icon::after { display: none !important; }
+
+/* 1.3.2 — context tray menu uses the shared Themes++ palette. */
+:root { --bg:#0d0f13; --panel:#15181e; --panel-soft:#101319; --on-accent:#fff; --shadow:#00000033; }
+.tray-menu-panel { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, var(--bg)) 0%, var(--panel-soft) 100%); border-color: var(--border); color: var(--text); box-shadow: 0 14px 30px var(--shadow); }
+.tray-menu-item { color: var(--text); }
+.tray-menu-item:hover { border-color: var(--border-strong); background: var(--surface-hover); color: var(--text); }
+.tray-menu-separator { background: var(--border); }
