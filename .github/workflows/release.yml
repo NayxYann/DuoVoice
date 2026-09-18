@@ -1,4 +1,4 @@
-name: Release DuoVoice
+name: Release DuoVoice !
 
 on:
   push:
