@@ -1,16 +1,20 @@
-# DuoVoice 1.2.9
+# DuoVoice 1.3.0
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## Nouveautés 1.2.9
+## Nouveautés 1.3.0
 
-- **Refonte complète des icônes** : tous les pictogrammes cliquables ont été revus et remplacés par une famille SVG cohérente inspirée des conventions Lucide (traits arrondis, même épaisseur et même grille 24×24).
-- **Une action = une seule icône** : Paramètres, Fermer, Actualiser, Valider, Favoris, Ajouter, Muet, Accueil/Ouvrir, Connexion et Quitter utilisent désormais le même pictogramme partout où l’action apparaît.
-- **Paramètres unifiés** : suppression des anciens engrenages Unicode/CSS différents entre l’application, le panneau clic gauche et le menu clic droit.
-- **Muet unifié** : même microphone SVG dans l’application principale et le systray ; la barre diagonale apparaît uniquement quand le mode Muet est actif.
-- **Systray nettoyé** : les anciennes icônes dessinées en CSS (croix, connexion, micro, fenêtre, accueil, engrenage) sont remplacées par des SVG centrés et lisibles.
-- **Ordre des options inversé** dans Paramètres → Démarrage : « Afficher l’icône dans le systray » apparaît maintenant avant « Démarrer minimisé dans le tray », ce qui rend la dépendance entre les deux réglages plus claire.
-- Toutes les fonctions et préférences de la 1.2.8 sont conservées.
+- **Passe de stabilisation complète après la 1.2.9** : correction de la régression JavaScript qui interrompait l’initialisation de l’application après la migration des icônes.
+- **Updater rétabli** : la recherche, l’affichage et l’installation des nouvelles versions fonctionnent de nouveau normalement.
+- **Détection des périphériques audio rétablie** : les listes microphone / sortie sont de nouveau chargées au démarrage.
+- **Détection réseau et connexion distante rétablies** : découverte LAN, favoris, connexion et état audio ne sont plus bloqués par l’erreur d’initialisation.
+- **Préférences de démarrage fiabilisées** : « Démarrer minimisé dans le tray » est de nouveau enregistré et restauré correctement ; désactiver l’option ouvre normalement la fenêtre au démarrage.
+- **Préférence d’icône systray conservée** : l’icône reste activée par défaut après installation et le choix utilisateur reste persistant.
+- **Icônes 1.2.9 conservées** : la famille SVG unifiée reste inchangée ; les icônes dynamiques utilisent désormais les mêmes SVG sans casser le code métier.
+- **Retour à une version précédente** : dans Paramètres → Version, le numéro de version installé est maintenant cliquable. DuoVoice affiche les anciennes releases stables compatibles disposant d’un `latest.json` signé.
+- **Downgrade signé** : une version précédente sélectionnée est téléchargée et installée via l’updater Tauri en conservant la vérification de signature.
+- **Confirmation intégrée** avant l’installation d’une ancienne version, sans popup système native.
+- **Workflows GitHub toujours manuels** : Push origin ne déclenche ni build ni release automatiquement.
 
 ## Fonctionnalités principales
 
@@ -101,7 +105,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.2.9`.
+5. saisir le tag voulu, par exemple `v1.3.0`.
 
 Le build produit notamment :
 

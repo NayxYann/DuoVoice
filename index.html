@@ -13,7 +13,7 @@
         <div>
           <div class="brand-title-row">
             <h1>DuoVoice</h1>
-            <span class="brand-version">1.2.9</span>
+            <span class="brand-version">1.3.0</span>
           </div>
           <p>Intercom local</p>
         </div>
@@ -168,10 +168,13 @@
             <h3>Version</h3>
             <p>Version actuellement installée et mises à jour.</p>
           </div>
-          <div class="settings-info">
+          <button id="versionSelector" class="settings-info version-selector" type="button" title="Choisir une autre version" aria-haspopup="dialog">
             <span>Version installée</span>
-            <strong id="appVersion">v1.2.9</strong>
-          </div>
+            <span class="version-selector-value">
+              <strong id="appVersion">v1.3.0</strong>
+              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+            </span>
+          </button>
           <div class="settings-info">
             <span>Historique</span>
             <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
@@ -271,6 +274,31 @@
       </div>
     </section>
 
+
+    <div id="versionPicker" class="app-confirm-layer version-picker-layer" aria-hidden="true">
+      <div class="version-picker-card" role="dialog" aria-modal="true" aria-labelledby="versionPickerTitle">
+        <div class="version-picker-head">
+          <div>
+            <strong id="versionPickerTitle">Choisir une version</strong>
+            <p>Réinstallez une version précédente signée de DuoVoice.</p>
+          </div>
+          <button id="closeVersionPicker" class="icon-btn compact" type="button" title="Fermer" aria-label="Fermer">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <div id="versionList" class="version-list" aria-live="polite">
+          <div class="version-loading">Recherche des versions disponibles…</div>
+        </div>
+        <p id="versionPickerStatus" class="version-picker-status"></p>
+        <div id="versionRollbackConfirm" class="version-rollback-confirm hidden">
+          <p>Installer <strong id="rollbackVersionLabel">cette version</strong> ?</p>
+          <div class="app-confirm-actions">
+            <button id="cancelRollback" type="button">Annuler</button>
+            <button id="confirmRollback" class="danger" type="button">Installer</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="appQuitConfirm" class="app-confirm-layer" aria-hidden="true">
       <div class="app-confirm-card" role="dialog" aria-modal="true" aria-labelledby="appQuitTitle">

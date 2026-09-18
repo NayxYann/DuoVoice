@@ -25,7 +25,7 @@ const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.2.9";
+const FALLBACK_VERSION = "1.3.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -46,6 +46,24 @@ const PALETTE = {
   cyan: "#22d3ee",
   ardoise: "#94a3b8"
 };
+
+// Canonical SVG set used by dynamic controls. Keeping the markup here prevents
+// dynamic state changes from falling back to unrelated Unicode/CSS icons.
+const iconSvg = (content) => `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">${content}</svg>`;
+const UI_ICONS = {
+  check: iconSvg('<path d="m20 6-11 11-5-5"/>'),
+  star: iconSvg('<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/>'),
+  link: iconSvg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+  x: iconSvg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+  refresh: iconSvg('<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M16 8h5V3"/>'),
+  download: iconSvg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>'),
+  alert: iconSvg('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'),
+};
+const NAV_ICONS = {
+  back: iconSvg('<path d="m15 18-6-6 6-6"/>'),
+  settings: iconSvg('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>'),
+};
+const iconLabel = (icon, label) => `${icon}<span>${label}</span>`;
 
 function applyAppColor(name) {
   const color = PALETTE[name] || PALETTE.violet;
@@ -303,6 +321,123 @@ function formatLastUpdate() {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Date de mise à jour : non disponible";
   return `Dernière mise à jour : ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+const RELEASES_API = "https://api.github.com/repos/NayxYann/DuoVoice/releases?per_page=30";
+let rollbackVersion = "";
+let rollbackBusy = false;
+
+function parseSemver(value) {
+  const match = String(value || "").trim().replace(/^v/i, "").match(/^(\d+)\.(\d+)\.(\d+)$/);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareSemver(a, b) {
+  const av = parseSemver(a), bv = parseSemver(b);
+  if (!av || !bv) return 0;
+  for (let i = 0; i < 3; i += 1) {
+    if (av[i] !== bv[i]) return av[i] - bv[i];
+  }
+  return 0;
+}
+
+function setVersionPicker(open) {
+  const layer = $("versionPicker");
+  layer.classList.toggle("open", open);
+  layer.setAttribute("aria-hidden", String(!open));
+  if (!open) {
+    rollbackVersion = "";
+    $("versionRollbackConfirm").classList.add("hidden");
+    $("versionPickerStatus").textContent = "";
+    $("versionPickerStatus").classList.remove("error");
+  }
+}
+
+function formatReleaseDate(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "Release stable";
+  return `Publiée le ${date.toLocaleDateString("fr-FR")}`;
+}
+
+async function loadPreviousVersions() {
+  const list = $("versionList");
+  const status = $("versionPickerStatus");
+  list.innerHTML = '<div class="version-loading">Recherche des versions disponibles…</div>';
+  status.textContent = "";
+  status.classList.remove("error");
+
+  try {
+    const response = await fetch(RELEASES_API, {
+      headers: { Accept: "application/vnd.github+json" },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`);
+    const releases = await response.json();
+    const previous = releases
+      .filter(release => !release.draft && !release.prerelease)
+      .map(release => ({
+        version: String(release.tag_name || "").replace(/^v/i, ""),
+        date: release.published_at,
+        hasUpdater: Array.isArray(release.assets) && release.assets.some(asset => asset.name === "latest.json"),
+      }))
+      .filter(release => release.hasUpdater && parseSemver(release.version) && compareSemver(release.version, appVersion) < 0)
+      .sort((a, b) => compareSemver(b.version, a.version));
+
+    list.innerHTML = "";
+    if (!previous.length) {
+      list.innerHTML = '<div class="version-empty">Aucune version précédente installable n’a été trouvée.</div>';
+      return;
+    }
+
+    for (const release of previous) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "version-option";
+      button.innerHTML = `<span class="version-option-main"><strong>v${release.version}</strong><small>${formatReleaseDate(release.date)}</small></span>${UI_ICONS.download}`;
+      button.addEventListener("click", () => {
+        rollbackVersion = release.version;
+        $("rollbackVersionLabel").textContent = `DuoVoice v${release.version}`;
+        $("versionRollbackConfirm").classList.remove("hidden");
+        $("versionPickerStatus").textContent = "";
+      });
+      list.appendChild(button);
+    }
+  } catch (e) {
+    reportError("Version history", e);
+    list.innerHTML = '<div class="version-empty">Impossible de récupérer l’historique des versions.</div>';
+    status.textContent = String(e);
+    status.classList.add("error");
+  }
+}
+
+async function openVersionPicker() {
+  setVersionPicker(true);
+  await loadPreviousVersions();
+}
+
+async function installPreviousVersion() {
+  if (!rollbackVersion || rollbackBusy) return;
+  rollbackBusy = true;
+  const confirm = $("confirmRollback");
+  const cancel = $("cancelRollback");
+  const close = $("closeVersionPicker");
+  const status = $("versionPickerStatus");
+  confirm.disabled = true; cancel.disabled = true; close.disabled = true;
+  status.classList.remove("error");
+  status.textContent = `Téléchargement et installation de v${rollbackVersion}…`;
+
+  try {
+    const installed = await invoke("install_version", { version: rollbackVersion });
+    setLastUpdateNow();
+    status.textContent = `DuoVoice v${installed} installé. Redémarrage…`;
+    if (!navigator.userAgent.toLowerCase().includes("windows")) await relaunch();
+  } catch (e) {
+    reportError("Version rollback", e);
+    status.textContent = `Installation impossible : ${String(e)}`;
+    status.classList.add("error");
+    confirm.disabled = false; cancel.disabled = false; close.disabled = false;
+    rollbackBusy = false;
+  }
 }
 
 function loadFavorites() {
@@ -825,10 +960,24 @@ $("confirmAppQuit").addEventListener("click", confirmAppQuit);
 $("appQuitConfirm").addEventListener("click", event => {
   if (event.target === $("appQuitConfirm")) setAppQuitConfirmation(false);
 });
+$("versionSelector").addEventListener("click", openVersionPicker);
+$("closeVersionPicker").addEventListener("click", () => { if (!rollbackBusy) setVersionPicker(false); });
+$("cancelRollback").addEventListener("click", () => {
+  rollbackVersion = "";
+  $("versionRollbackConfirm").classList.add("hidden");
+  $("versionPickerStatus").textContent = "";
+});
+$("confirmRollback").addEventListener("click", installPreviousVersion);
+$("versionPicker").addEventListener("click", event => {
+  if (event.target === $("versionPicker") && !rollbackBusy) setVersionPicker(false);
+});
 document.addEventListener("keydown", event => {
-  if (event.key === "Escape" && $("appQuitConfirm").classList.contains("open")) {
-    setAppQuitConfirmation(false);
+  if (event.key !== "Escape") return;
+  if ($("versionPicker").classList.contains("open") && !rollbackBusy) {
+    setVersionPicker(false);
+    return;
   }
+  if ($("appQuitConfirm").classList.contains("open")) setAppQuitConfirmation(false);
 });
 loadAppVersion();
 $("uiScale").addEventListener("input", () => {

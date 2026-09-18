@@ -16,6 +16,7 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     Emitter, Manager, State,
 };
+use tauri_plugin_updater::UpdaterExt;
 
 const DISCOVERY_PORT: u16 = 39471;
 const AUDIO_PORT: u16 = 39472;
@@ -981,6 +982,52 @@ fn quit_app(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+async fn install_version(app: tauri::AppHandle, version: String) -> Result<String, String> {
+    let cleaned = version.trim().trim_start_matches('v');
+    let parts: Vec<&str> = cleaned.split('.').collect();
+    if parts.len() != 3
+        || parts.iter().any(|part| part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()))
+    {
+        return Err("Version invalide".into());
+    }
+
+    let endpoint = format!(
+        "https://github.com/NayxYann/DuoVoice/releases/download/v{cleaned}/latest.json"
+    )
+    .parse()
+    .map_err(|e| format!("URL de version invalide : {e}"))?;
+
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(|e| format!("Configuration updater : {e}"))?
+        .version_comparator(|current, release| release.version != current)
+        .restart_after_install(true)
+        .build()
+        .map_err(|e| format!("Initialisation updater : {e}"))?;
+
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Recherche de v{cleaned} : {e}"))?
+        .ok_or_else(|| format!("La release v{cleaned} ne fournit pas de mise à jour compatible"))?;
+
+    let found = update.version.clone();
+    if found.trim_start_matches('v') != cleaned {
+        return Err(format!(
+            "La release demandée est v{cleaned}, mais son manifeste annonce v{found}"
+        ));
+    }
+
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| format!("Installation de v{cleaned} : {e}"))?;
+
+    Ok(found.trim_start_matches('v').to_string())
+}
+
+#[tauri::command]
 fn hide_window_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
@@ -1037,7 +1084,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
+            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
