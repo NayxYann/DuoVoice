@@ -223,6 +223,21 @@ listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payloa
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
 listen("audio-state-changed", refreshState).catch(() => {});
 
+
+async function openProjectGithub() {
+  await invoke("open_project_github").catch(() => {});
+}
+
+const trayGithubBrand = $("trayGithubBrand");
+if (trayGithubBrand) {
+  trayGithubBrand.addEventListener("click", openProjectGithub);
+  trayGithubBrand.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProjectGithub();
+    }
+  });
+}
 applyTheme(localStorage.getItem(THEME_KEY) || "duovoice", localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();
 refreshState();

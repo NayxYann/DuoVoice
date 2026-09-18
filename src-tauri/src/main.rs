@@ -146,7 +146,7 @@ fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
     const QUICK_WIDTH: f64 = 280.0;
     const QUICK_HEIGHT: f64 = 348.0;
     const MENU_WIDTH: f64 = 190.0;
-    const MENU_HEIGHT: f64 = 154.0;
+    const MENU_HEIGHT: f64 = 198.0;
     let scale = scale.clamp(0.9, 1.2);
 
     if let Some(window) = app.get_webview_window("tray") {
@@ -982,6 +982,30 @@ fn quit_app(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn open_project_github() -> Result<(), String> {
+    const URL: &str = "https://github.com/NayxYann/DuoVoice";
+
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("cmd")
+        .args(["/C", "start", "", URL])
+        .spawn();
+
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open")
+        .arg(URL)
+        .spawn();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = std::process::Command::new("xdg-open")
+        .arg(URL)
+        .spawn();
+
+    result
+        .map(|_| ())
+        .map_err(|e| format!("Impossible d’ouvrir GitHub : {e}"))
+}
+
+#[tauri::command]
 async fn install_version(app: tauri::AppHandle, version: String) -> Result<String, String> {
     let cleaned = version.trim().trim_start_matches('v');
     let parts: Vec<&str> = cleaned.split('.').collect();
@@ -1084,7 +1108,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, install_version, hide_window_to_tray, log_client_error
+            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1189,7 +1213,7 @@ fn main() {
                                     let _ = quick.hide();
                                 }
                                 if let Some(w) = app.get_webview_window("tray-menu") {
-                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(190, 154));
+                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(190, 198));
                                     let width = size.width as i32;
                                     let height = size.height as i32;
                                     let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();

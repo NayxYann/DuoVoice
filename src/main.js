@@ -27,7 +27,7 @@ const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.3.2";
+const FALLBACK_VERSION = "1.3.3";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -342,6 +342,25 @@ function recordInstalledVersion() {
   }
 }
 
+
+async function openProjectGithub() {
+  try {
+    await invoke("open_project_github");
+  } catch (e) {
+    reportError("GitHub", e);
+  }
+}
+
+function bindGithubLink(element) {
+  if (!element) return;
+  element.addEventListener("click", openProjectGithub);
+  element.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProjectGithub();
+    }
+  });
+}
 async function loadAppVersion() {
   try { appVersion = await getVersion(); }
   catch { appVersion = FALLBACK_VERSION; }
@@ -1086,6 +1105,7 @@ document.addEventListener("keydown", event => {
   }
   if ($("appQuitConfirm").classList.contains("open")) setAppQuitConfirmation(false);
 });
+bindGithubLink($("githubBrand"));
 loadAppVersion();
 $("uiScale").addEventListener("input", () => {
   setUiScaleControl($("uiScale").value);

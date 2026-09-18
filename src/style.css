@@ -103,6 +103,19 @@ p {
   gap: 12px;
 }
 
+
+.brand-link {
+  cursor: pointer;
+  border-radius: 12px;
+  outline: none;
+  transition: filter .15s ease, transform .12s ease;
+}
+.brand-link:hover .brand-title-row h1,
+.brand-link:focus-visible .brand-title-row h1 { color: var(--accent); }
+.brand-link:hover .brand-mark,
+.brand-link:focus-visible .brand-mark { filter: brightness(1.08); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 34%, transparent); }
+.brand-link:active { transform: translateY(1px); }
+.brand-link:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
 .brand-mark {
   width: 40px;
   height: 40px;

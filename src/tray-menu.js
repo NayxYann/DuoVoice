@@ -33,6 +33,10 @@ async function openMain(settings) {
 
 document.getElementById("menuOpen").addEventListener("click", () => openMain(false));
 document.getElementById("menuSettings").addEventListener("click", () => openMain(true));
+document.getElementById("menuGithub").addEventListener("click", async () => {
+  await invoke("open_project_github").catch(() => {});
+  await getCurrentWindow().hide().catch(() => {});
+});
 document.getElementById("menuQuit").addEventListener("click", () => invoke("quit_app"));
 
 document.addEventListener("keydown", (event) => {

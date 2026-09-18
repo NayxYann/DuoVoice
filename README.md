@@ -1,4 +1,13 @@
-# DuoVoice 1.3.2
+# DuoVoice 1.3.3
+
+## Nouveautés 1.3.3
+
+- La zone **logo + DuoVoice + version** de l’application principale ouvre maintenant la page GitHub officielle du projet.
+- Le mini-panel systray (clic gauche) reprend exactement le même comportement sur son en-tête **logo + nom + version**.
+- Le menu systray clic droit ajoute une entrée **Page GitHub** avec l’icône GitHub.
+- Les trois accès utilisent le navigateur système et gardent la même logique visuelle de survol / focus.
+- Les thèmes et la palette de la 1.3.2 restent inchangés.
+
 
 DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows et Linux, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
@@ -101,7 +110,7 @@ Pour publier une release :
 2. ouvrir l’onglet **Actions** ;
 3. choisir **Release DuoVoice** ;
 4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.3.2`.
+5. saisir le tag voulu, par exemple `v1.3.3`.
 
 Le build produit notamment :
 

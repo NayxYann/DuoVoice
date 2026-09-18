@@ -68,6 +68,19 @@ button:active { transform: translateY(1px); }
 .tray-header { justify-content: space-between; gap: 12px; }
 .tray-brand { min-width: 0; gap: 10px; }
 
+
+.tray-brand-link {
+  cursor: pointer;
+  border-radius: 10px;
+  outline: none;
+  transition: transform .12s ease;
+}
+.tray-brand-link:hover .tray-name-row strong,
+.tray-brand-link:focus-visible .tray-name-row strong { color: var(--accent); }
+.tray-brand-link:hover .tray-mark,
+.tray-brand-link:focus-visible .tray-mark { filter: brightness(1.08); box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 34%, transparent); }
+.tray-brand-link:active { transform: translateY(1px); }
+.tray-brand-link:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 38%, transparent); }
 .tray-mark {
   width: 32px;
   height: 32px;
