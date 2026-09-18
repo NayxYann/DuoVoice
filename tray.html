@@ -12,41 +12,38 @@
         <div class="tray-mark">D</div>
         <div class="tray-title">
           <strong>DuoVoice</strong>
-          <span>Intercom local</span>
+          <span id="trayStatus" class="tray-status offline"><i></i>Hors ligne</span>
         </div>
       </div>
       <button id="closeTray" class="tray-close" type="button" aria-label="Fermer">×</button>
     </header>
 
-    <div class="tray-status-row">
-      <span id="trayStatus" class="tray-status offline"><i></i>Hors ligne</span>
-      <span id="trayPeerName" class="tray-peer-name">Aucun correspondant</span>
-    </div>
+    <div id="trayPeerName" class="tray-peer-name">Aucun correspondant</div>
 
     <select id="trayPeer" class="tray-peer-select" aria-label="Ordinateur distant">
       <option value="">Choisir un PC…</option>
     </select>
 
-    <section class="quick-grid">
-      <button id="quickConnect" class="quick-tile accent-tile" type="button">
+    <div class="quick-actions">
+      <button id="quickConnect" class="quick-action accent-action" type="button">
         <span class="quick-icon">↔</span>
         <span id="quickConnectText">Se connecter</span>
       </button>
-      <button id="quickMute" class="quick-tile" type="button">
+      <button id="quickMute" class="quick-action" type="button">
         <span class="quick-icon">🎙</span>
         <span id="quickMuteText">Muet</span>
       </button>
-      <button id="openApp" class="quick-tile" type="button">
+      <button id="openApp" class="quick-action" type="button">
         <span class="quick-icon">▣</span>
-        <span>Ouvrir</span>
+        <span>Ouvrir DuoVoice</span>
       </button>
-      <button id="openSettings" class="quick-tile" type="button">
-        <span class="quick-icon">⚙</span>
-        <span>Paramètres</span>
-      </button>
-    </section>
+    </div>
 
-    <button id="quitTray" class="tray-quit" type="button">Quitter DuoVoice</button>
+    <footer class="tray-footer">
+      <button id="openSettings" type="button">Paramètres</button>
+      <span></span>
+      <button id="quitTray" type="button">Quitter</button>
+    </footer>
   </main>
   <script type="module" src="/src/tray.js"></script>
 </body>

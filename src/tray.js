@@ -52,8 +52,8 @@ function updateStatus() {
   const peer = peers.find(p => p.address === remote);
   $("trayPeerName").textContent = peer ? peer.name : (remote || "Aucun correspondant");
   $("quickConnectText").textContent = connected ? "Déconnecter" : "Se connecter";
-  $("quickConnect").classList.toggle("danger-tile", connected);
-  $("quickConnect").classList.toggle("accent-tile", !connected);
+  $("quickConnect").classList.toggle("danger-action", connected);
+  $("quickConnect").classList.toggle("accent-action", !connected);
 }
 
 async function refreshState() {
@@ -64,7 +64,7 @@ async function refreshState() {
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted));
     $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
-    $("quickMute").classList.toggle("active-tile", muted);
+    $("quickMute").classList.toggle("active-action", muted);
     updateStatus();
   } catch {}
 }
@@ -107,7 +107,7 @@ async function toggleMute() {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
-    $("quickMute").classList.toggle("active-tile", muted);
+    $("quickMute").classList.toggle("active-action", muted);
     await emit("audio-state-changed");
   } catch (e) {
     invoke("log_client_error", { message: `Tray mute: ${String(e)}` }).catch(() => {});

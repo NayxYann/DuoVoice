@@ -22,7 +22,7 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const FALLBACK_VERSION = "1.1.7";
+const FALLBACK_VERSION = "1.1.8";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 800;
@@ -99,39 +99,20 @@ function setUiScaleControl(value) {
 async function applyUiScale(value) {
   const numeric = Number(value) || 1;
   const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
-  const scroll = $("settingsScroll");
-  const scaleCard = $("scaleActions")?.closest(".card");
-  const settingsVisible = !$("settingsView").classList.contains("hidden");
-  const anchorTop = settingsVisible && scroll && scaleCard ? scaleCard.getBoundingClientRect().top : null;
-  const previousScale = Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
 
+  // DuoVoice is laid out on a fixed 1080 × 800 design canvas. The same scale
+  // factor is applied to the canvas and to the native window, so every element
+  // keeps exactly the same relative position at every UI size.
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
   localStorage.setItem(SCALE_KEY, String(scale));
 
   try {
     const window = getCurrentWindow();
-    await window.setSize(new LogicalSize(Math.round(BASE_WINDOW_WIDTH * scale), Math.round(BASE_WINDOW_HEIGHT * scale)));
-
-    // Keep the scale card at the exact same screen position. The page is zoomed
-    // around its top-left corner, so the scroll offset has to be compensated
-    // proportionally instead of scrolling the buttons into view afterwards.
-    if (scroll && scaleCard && anchorTop !== null) {
-      await new Promise(requestAnimationFrame);
-      await new Promise(requestAnimationFrame);
-      const newTop = scaleCard.getBoundingClientRect().top;
-      const zoom = scale / previousScale;
-      const delta = newTop - anchorTop;
-      if (Math.abs(delta) > 0.5 && zoom > 0) {
-        scroll.scrollTop += delta / zoom;
-      }
-      await new Promise(requestAnimationFrame);
-      const correctedTop = scaleCard.getBoundingClientRect().top;
-      const remaining = correctedTop - anchorTop;
-      if (Math.abs(remaining) > 0.5) {
-        scroll.scrollTop += remaining / zoom;
-      }
-    }
+    await window.setSize(new LogicalSize(
+      Math.round(BASE_WINDOW_WIDTH * scale),
+      Math.round(BASE_WINDOW_HEIGHT * scale)
+    ));
   } catch (e) {
     reportError("UI scale", e);
     setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);

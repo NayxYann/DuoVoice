@@ -1,4 +1,4 @@
-# DuoVoice 1.1.7
+# DuoVoice 1.1.8
 
 DuoVoice est un intercom vocal local pour Windows et Linux. Il fonctionne directement sur le réseau local, sans compte ni serveur central.
 

@@ -983,10 +983,14 @@ fn main() {
                                 let _ = w.hide();
                                 return;
                             }
-                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(332, 286));
+                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(260, 300));
                             let width = f64::from(size.width);
                             let height = f64::from(size.height);
-                            let x = f64::from(position.x) - width / 2.0;
+                            // The Windows notification area normally sits against the right
+                            // edge of the screen. Aligning the popup's right edge with the click
+                            // keeps the compact panel fully visible instead of placing half of it
+                            // outside the monitor.
+                            let x = f64::from(position.x) - width + 12.0;
                             let y = f64::from(position.y) - height - 8.0;
                             let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
                                 x.round() as i32,

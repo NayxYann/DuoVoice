@@ -28,16 +28,11 @@ body {
   margin: 0;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
   overflow: hidden;
   background: #0d0f13;
   color: var(--text);
   font: 14px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  zoom: var(--ui-scale);
 }
 
 button,
@@ -75,14 +70,15 @@ p {
 }
 
 .app {
-  width: 100%;
-  max-width: 1120px;
-  height: 100vh;
-  margin: 0 auto;
+  width: 1080px;
+  height: 800px;
+  margin: 0;
   padding: 24px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform: scale(var(--ui-scale));
+  transform-origin: top left;
 }
 
 .app-header {
@@ -306,12 +302,13 @@ p {
 }
 
 #mainView {
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-gutter: stable;
+  margin-right: -24px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .main-grid {
+  padding-right: 24px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 13px;
@@ -871,11 +868,11 @@ input[type="range"] {
 
 #settingsScroll {
   min-height: 0;
-  padding: 0 2px 2px 0;
+  margin-right: -24px;
+  padding: 0 24px 2px 0;
   flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
 }
 
 #settingsScroll > .card {
@@ -1020,10 +1017,6 @@ input[type="range"] {
 }
 
 @media (max-width: 760px) {
-  .app {
-    padding: 18px;
-  }
-
   .main-grid {
     grid-template-columns: 1fr;
   }
