@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -21,14 +22,12 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const SCALE_KEY = "duovoice.uiScale";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const APP_VERSION = "1.1.7";
+const FALLBACK_VERSION = "1.1.7";
+let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 800;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 let connectedPeer = "";
-
-
-
 
 const PALETTE = {
   violet: "#a78bfa",
@@ -66,6 +65,10 @@ function initColors() {
 
 function setDetails(text) { $("details").textContent = text; }
 
+function reportError(scope, error) {
+  invoke("log_client_error", { message: `${scope}: ${String(error)}` }).catch(() => {});
+}
+
 function updateHeaderMode() {
   const settings = !$(`settingsView`).classList.contains("hidden");
   const button = $("settingsBtn");
@@ -98,7 +101,8 @@ async function applyUiScale(value) {
   const scale = SCALE_VALUES.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 1);
   const scroll = $("settingsScroll");
   const scaleCard = $("scaleActions")?.closest(".card");
-  const anchorTop = scroll && scaleCard ? scaleCard.getBoundingClientRect().top : null;
+  const settingsVisible = !$("settingsView").classList.contains("hidden");
+  const anchorTop = settingsVisible && scroll && scaleCard ? scaleCard.getBoundingClientRect().top : null;
   const previousScale = Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
 
   document.documentElement.style.setProperty("--ui-scale", String(scale));
@@ -129,6 +133,7 @@ async function applyUiScale(value) {
       }
     }
   } catch (e) {
+    reportError("UI scale", e);
     setDetails(`Impossible d’adapter la fenêtre à l’échelle ${Math.round(scale * 100)}% : ${e}`);
   }
 }
@@ -159,10 +164,18 @@ function setLastUpdateNow() {
 
 function recordInstalledVersion() {
   const previous = localStorage.getItem("duovoice.installedVersion");
-  if (previous !== APP_VERSION) {
-    localStorage.setItem("duovoice.installedVersion", APP_VERSION);
+  if (previous !== appVersion) {
+    localStorage.setItem("duovoice.installedVersion", appVersion);
     setLastUpdateNow();
   }
+}
+
+async function loadAppVersion() {
+  try { appVersion = await getVersion(); }
+  catch { appVersion = FALLBACK_VERSION; }
+  recordInstalledVersion();
+  $("appVersion").textContent = `v${appVersion}`;
+  $("lastUpdate").textContent = formatLastUpdate();
 }
 
 function formatLastUpdate() {
@@ -287,16 +300,20 @@ function toggleFavorite() {
 
 async function loadAutostart() {
   try { $("autostart").checked = await isAutostartEnabled(); }
-  catch (e) { $("autostartDetails").textContent = `Autostart indisponible : ${e}`; }
+  catch (e) { reportError("Autostart status", e); $("autostartDetails").textContent = `Autostart indisponible : ${e}`; }
 }
 
 function loadAudioPreferences() {
   const savedVolume = Math.max(0, Math.min(200, Number(localStorage.getItem(VOLUME_KEY) ?? 100)));
   const boost = localStorage.getItem(BOOST_KEY) === "true";
+  const muted = localStorage.getItem(MUTE_KEY) === "true";
   $("boostVolume").checked = boost;
+  $("volume").max = boost ? 200 : 100;
   $("volume").value = boost ? savedVolume : Math.min(savedVolume, 100);
   updateVolumeUi();
-  updateMuteUi(localStorage.getItem(MUTE_KEY) === "true");
+  updateMuteUi(muted);
+  applyVolume();
+  invoke("set_mute", { muted }).catch(e => reportError("Mute restore", e));
 }
 
 function updateVolumeUi() {
@@ -333,6 +350,7 @@ async function applyNoiseSettings() {
   try {
     await invoke("set_noise_reduction", { enabled, intensity });
   } catch (e) {
+    reportError("Noise reduction", e);
     setDetails(`Réduction de bruit : ${e}`);
   }
 }
@@ -340,7 +358,7 @@ async function applyNoiseSettings() {
 async function applyVolume() {
   const volume = Number($("volume").value) / 100;
   try { await invoke("set_volume", { volume }); }
-  catch (e) { setDetails(`Volume : ${e}`); }
+  catch (e) { reportError("Volume", e); setDetails(`Volume : ${e}`); }
 }
 
 function updateMuteUi(muted) {
@@ -360,7 +378,7 @@ async function loadDevices() {
     const savedOutput = localStorage.getItem("duovoice.output");
     if (savedInput && [...input.options].some(o => o.value === savedInput)) input.value = savedInput;
     if (savedOutput && [...output.options].some(o => o.value === savedOutput)) output.value = savedOutput;
-  } catch (e) { setDetails(`Audio indisponible : ${e}`); }
+  } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
 }
 
 async function loadPeers(manual = false) {
@@ -376,7 +394,7 @@ async function loadPeers(manual = false) {
     for (const [address, p] of peerCache) if (!p.manual && now - p.seenAt > 15000) peerCache.delete(address);
     renderPeers();
     if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
-  } catch (e) { setDetails(`Détection réseau : ${e}`); }
+  } catch (e) { reportError("Peer discovery", e); setDetails(`Détection réseau : ${e}`); }
   finally { if (manual) { refresh.disabled = false; refresh.textContent = "↻"; } }
 }
 
@@ -438,6 +456,7 @@ async function connectToAddress(address) {
     button.textContent = "Se connecter";
     $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
     $("status").className = "status offline";
+    reportError("Audio connect", e);
     setDetails(`Connexion impossible : ${e}`);
     renderFavorites();
   } finally {
@@ -460,6 +479,7 @@ async function disconnect() {
     await invoke("stop_audio");
     setDetails(oldPeer ? "Déconnecté." : "Audio arrêté.");
   } catch (e) {
+    reportError("Audio disconnect", e);
     setDetails(`Déconnexion : ${e}`);
   } finally {
     disconnecting = false;
@@ -488,7 +508,6 @@ async function connect() {
 
 
 let updateChecking = false;
-let updateCheckToken = 0;
 
 async function setUpdateBanner(status, update = null, error = "") {
   updateState = { status, update };
@@ -520,18 +539,11 @@ async function setUpdateBanner(status, update = null, error = "") {
 async function checkForUpdates() {
   if (updateChecking) return;
   updateChecking = true;
-  const token = ++updateCheckToken;
   await setUpdateBanner("checking");
   setDetails("Recherche des mises à jour…");
 
   try {
-    const update = await Promise.race([
-      check(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Délai de vérification dépassé (10 s).")), 10000))
-    ]);
-    if (token !== updateCheckToken) return;
-    localStorage.setItem("duovoice.lastUpdateCheck", new Date().toISOString());
-
+    const update = await check({ timeout: 10_000 });
     if (update) {
       await setUpdateBanner("available", update);
       setDetails(`Mise à jour v${update.version} disponible.`);
@@ -540,11 +552,11 @@ async function checkForUpdates() {
       setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
     }
   } catch (e) {
-    if (token !== updateCheckToken) return;
+    reportError("Updater check", e);
     await setUpdateBanner("error", null, String(e));
     setDetails(`Vérification des mises à jour impossible : ${String(e)}`);
   } finally {
-    if (token === updateCheckToken) updateChecking = false;
+    updateChecking = false;
   }
 }
 
@@ -599,6 +611,7 @@ async function installUpdate() {
     const message = String(e);
     banner.disabled = false;
     await setUpdateBanner("available", update);
+    reportError("Updater install", e);
     setDetails(`Mise à jour impossible : ${message}`);
     console.error("DuoVoice updater error:", e, update.rawJson || update);
   }
@@ -632,7 +645,7 @@ $("mute").addEventListener("click", async () => {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
-  } catch (e) { setDetails(`Muet : ${e}`); }
+  } catch (e) { reportError("Mute", e); setDetails(`Muet : ${e}`); }
 });
 
 $("noiseEnabled").addEventListener("change", applyNoiseSettings);
@@ -666,33 +679,18 @@ $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
 });
 $("quitBtn").addEventListener("click", requestQuit);
-recordInstalledVersion();
-$("appVersion").textContent = `v${APP_VERSION}`;
-$("lastUpdate").textContent = formatLastUpdate();
+loadAppVersion();
 $("uiScale").addEventListener("input", () => setUiScaleControl($("uiScale").value));
 $("applyUiScale").addEventListener("click", async () => { await applyUiScale($("uiScale").value); setDetails(`Échelle de l’interface appliquée : ${$("uiScaleValue").textContent}.`); });
 $("resetUiScale").addEventListener("click", resetUiScale);
 updateHeaderMode();
-loadUiScale();
-applyUiScale($("uiScale").value);
-
-listen("focus-window", async () => {
-  try {
-    const window = getCurrentWindow();
-    await window.setSkipTaskbar(false);
-    await window.show();
-    await window.unminimize();
-    await window.setFocus();
-  } catch (e) {
-    setDetails(`Impossible de remettre DuoVoice au premier plan : ${e}`);
-  }
-}).catch(() => {});
 
 $("autostart").addEventListener("change", async e => {
   try {
     if (e.target.checked) await enableAutostart(); else await disableAutostart();
     $("autostartDetails").textContent = e.target.checked ? "Démarrage automatique activé." : "Démarrage automatique désactivé.";
   } catch (err) {
+    reportError("Autostart", err);
     e.target.checked = await isAutostartEnabled().catch(() => false);
     $("autostartDetails").textContent = `Impossible de modifier l'autostart : ${err}`;
   }
@@ -700,16 +698,40 @@ $("autostart").addEventListener("change", async e => {
 
 $("startHidden").checked = localStorage.getItem("duovoice.startHidden") === "true";
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || "tray";
-if ($("startHidden").checked) {
-  invoke("hide_window_to_tray").catch((e) => setDetails(`Impossible de démarrer dans le tray : ${e}`));
+
+async function applyWindowPreferences() {
+  const closeAction = $("closeAction").value;
+  try { await invoke("set_close_action", { action: closeAction }); }
+  catch (e) { setDetails(`Réglage fermeture : ${e}`); }
+
+  try {
+    if ($("startHidden").checked) await invoke("hide_window_to_tray");
+    else await invoke("show_main_window", { settings: false });
+  } catch (e) {
+    setDetails(`Affichage de DuoVoice impossible : ${e}`);
+  }
 }
 
-$("startHidden").addEventListener("change", () => localStorage.setItem("duovoice.startHidden", String($("startHidden").checked)));
+$("startHidden").addEventListener("change", () => {
+  localStorage.setItem("duovoice.startHidden", String($("startHidden").checked));
+});
+
 $("closeAction").addEventListener("change", async () => {
   const value = $("closeAction").value;
   localStorage.setItem("duovoice.closeAction", value);
   try { await invoke("set_close_action", { action: value }); }
   catch (e) { setDetails(`Réglage fermeture : ${e}`); }
+});
+
+async function initializeWindow() {
+  loadUiScale();
+  await applyUiScale($("uiScale").value);
+  await applyWindowPreferences();
+}
+
+initializeWindow().catch(e => {
+  reportError("Window initialization", e);
+  setDetails(`Initialisation de la fenêtre impossible : ${e}`);
 });
 
 listen("open-settings", showSettings).catch(() => {});
@@ -729,25 +751,6 @@ async function refreshFromTray() {
   } catch {}
 }
 
-listen("tray-open-main", async () => {
-  try {
-    const w = getCurrentWindow();
-    await w.setSkipTaskbar(false);
-    await w.show();
-    await w.unminimize();
-    await w.setFocus();
-  } catch {}
-});
-listen("tray-open-settings", async () => {
-  try {
-    const w = getCurrentWindow();
-    await w.setSkipTaskbar(false);
-    await w.show();
-    await w.unminimize();
-    await w.setFocus();
-    showSettings();
-  } catch {}
-});
 listen("audio-state-changed", refreshFromTray).catch(() => {});
 
 loadManualIps();
@@ -758,7 +761,13 @@ loadAudioPreferences();
 loadNoisePreferences();
 initColors();
 loadPeers();
-setInterval(() => loadPeers(false), 3000);
-setInterval(updateLatency, 1000);
+setInterval(() => { if (!document.hidden) loadPeers(false); }, 3000);
+setInterval(() => { if (!document.hidden) updateLatency(); }, 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    loadPeers(false);
+    updateLatency();
+  }
+});
 updateLatency();
 checkForUpdates();

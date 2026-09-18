@@ -1,19 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for DuoVoice",
-  "windows": [
-    "main"
-  ],
+  "description": "Permissions for DuoVoice desktop windows",
+  "windows": ["main", "tray"],
   "permissions": [
     "core:default",
     "autostart:default",
     "updater:default",
     "process:default",
-    "core:window:allow-show",
-    "core:window:allow-unminimize",
-    "core:window:allow-set-focus",
-    "core:window:allow-set-skip-taskbar",
     "core:window:allow-hide",
     "core:window:allow-set-size"
   ]

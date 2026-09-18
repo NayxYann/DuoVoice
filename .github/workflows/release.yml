@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to release (example: v3.0.0)'
+        description: 'Git tag to release (example: v1.1.7)'
         required: true
         type: string
 
@@ -23,10 +23,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: |
+          if git ls-files node_modules | grep -q .; then
+            echo "::error::node_modules must not be committed. Run: git rm -r --cached node_modules"
+            exit 1
+          fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -34,26 +42,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
-      - name: Configure updater endpoint
-        shell: bash
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
-          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
-
-      - name: Verify Windows updater configuration
+      - name: Verify updater configuration
         shell: bash
         run: |
           python - <<'PY'
           import json
-          p = "src-tauri/tauri.release.conf.json"
-          c = json.load(open(p, encoding="utf-8"))
-          assert c["bundle"]["createUpdaterArtifacts"] is True
-          assert c["plugins"]["updater"]["pubkey"] and "__TAURI" not in c["plugins"]["updater"]["pubkey"]
-          assert c["plugins"]["updater"]["endpoints"][0].startswith("https://github.com/")
+          base = json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))
+          release = json.load(open("src-tauri/tauri.release.conf.json", encoding="utf-8"))
+          updater = base["plugins"]["updater"]
+          assert release["bundle"]["createUpdaterArtifacts"] is True
+          assert updater["pubkey"] and "__TAURI" not in updater["pubkey"]
+          assert updater["endpoints"] == ["https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json"]
           print("Updater configuration OK")
           PY
 
@@ -61,8 +62,6 @@ jobs:
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
@@ -73,6 +72,7 @@ jobs:
           args: --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: true
           retryAttempts: 3
 
   linux:
@@ -80,10 +80,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: |
+          if git ls-files node_modules | grep -q .; then
+            echo "::error::node_modules must not be committed. Run: git rm -r --cached node_modules"
+            exit 1
+          fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -102,29 +110,19 @@ jobs:
             patchelf
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
-      - name: Fix Tauri CLI permissions
-        run: chmod +x node_modules/.bin/tauri
-
-      - name: Configure updater endpoint
-        shell: bash
-        env:
-          REPO: ${{ github.repository }}
-        run: |
-          ENDPOINT="https://github.com/${REPO}/releases/latest/download/latest.json"
-          sed -i "s|__TAURI_UPDATER_ENDPOINT__|${ENDPOINT}|g" src-tauri/tauri.release.conf.json
-
-      - name: Verify Linux updater configuration
+      - name: Verify updater configuration
         shell: bash
         run: |
           python - <<'PY'
           import json
-          p = "src-tauri/tauri.release.conf.json"
-          c = json.load(open(p, encoding="utf-8"))
-          assert c["bundle"]["createUpdaterArtifacts"] is True
-          assert c["plugins"]["updater"]["pubkey"] and "__TAURI" not in c["plugins"]["updater"]["pubkey"]
-          assert c["plugins"]["updater"]["endpoints"][0].startswith("https://github.com/")
+          base = json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))
+          release = json.load(open("src-tauri/tauri.release.conf.json", encoding="utf-8"))
+          updater = base["plugins"]["updater"]
+          assert release["bundle"]["createUpdaterArtifacts"] is True
+          assert updater["pubkey"] and "__TAURI" not in updater["pubkey"]
+          assert updater["endpoints"] == ["https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json"]
           print("Updater configuration OK")
           PY
 
@@ -132,8 +130,6 @@ jobs:
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "DuoVoice ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"

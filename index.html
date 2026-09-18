@@ -4,9 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DuoVoice</title>
-
-
-
 </head>
 <body>
   <main class="app">
@@ -21,9 +18,9 @@
       <div class="header-actions">
         <span id="status" class="status offline"><span class="status-dot"></span>Hors ligne</span>
         <div class="header-icons">
-        <button id="settingsBtn" class="icon-btn" title="Paramètres" aria-label="Paramètres">⚙</button>
-        <button id="quitBtn" class="icon-btn quit-btn" title="Quitter DuoVoice" aria-label="Quitter DuoVoice">×</button>
-      </div>
+          <button id="settingsBtn" class="icon-btn" type="button" title="Paramètres" aria-label="Paramètres">⚙</button>
+          <button id="quitBtn" class="icon-btn quit-btn" type="button" title="Quitter DuoVoice" aria-label="Quitter DuoVoice">×</button>
+        </div>
       </div>
     </header>
 
@@ -31,121 +28,120 @@
 
     <section id="mainView">
       <div class="main-grid">
-      <section class="card connection-card">
-        <div class="section-title">
-          <div>
-            <h2>Connexion</h2>
-            <p>Choisissez le PC avec lequel communiquer.</p>
-          </div>
-          <button id="refresh" class="icon-btn compact" title="Actualiser la détection" aria-label="Actualiser la détection">↻</button>
-        </div>
-
-        <label for="peer">Ordinateur distant</label>
-        <div class="peer-row">
-          <select id="peer"><option value="">Recherche d'un PC…</option></select>
-          <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled>☆</button>
-        </div>
-
-        <div class="favorites-panel">
-          <div class="favorites-title"><span>☆ Favoris</span><span class="favorites-hint">Actions rapides</span></div>
-          <div id="favoritesList"></div>
-        </div>
-
-        <div class="manual-row">
-          <input id="manualIp" type="text" inputmode="decimal" placeholder="Adresse IP, ex. 192.168.1.25">
-          <button id="addIp" class="add-btn" title="Ajouter cette IP" aria-label="Ajouter cette IP">+</button>
-        </div>
-        <p class="hint">Vous pouvez aussi ajouter directement une adresse IP.</p>
-
-        <button id="connect" class="primary">Se connecter</button>
-      </section>
-
-      <section class="card audio-card">
-        <div class="section-title">
-          <div>
-            <h2>Audio</h2>
-            <p>Microphone et sortie du PC.</p>
-          </div>
-        </div>
-
-        <label for="input">Microphone</label>
-        <select id="input"></select>
-
-        <label for="output">Sortie audio</label>
-        <select id="output"></select>
-
-        <div class="noise-control">
-          <div class="noise-line">
+        <section class="card connection-card">
+          <div class="section-title">
             <div>
-              <strong>Réduction de bruit</strong>
-              <span id="noiseStatus" class="noise-status">Désactivée</span>
+              <h2>Connexion</h2>
+              <p>Choisissez le PC avec lequel communiquer.</p>
             </div>
-            <div class="noise-actions">
-              <label class="switch-row noise-switch-row">
-                <input id="noiseEnabled" type="checkbox">
-                <span class="switch"></span>
-                <span class="sr-only">Activer la réduction de bruit</span>
-              </label>
-              <button id="noiseSettings" class="icon-btn compact" type="button" title="Réglages de la réduction de bruit" aria-label="Réglages de la réduction de bruit">⚙</button>
+            <button id="refresh" class="icon-btn compact" type="button" title="Actualiser la détection" aria-label="Actualiser la détection">↻</button>
+          </div>
+
+          <label for="peer">Ordinateur distant</label>
+          <div class="peer-row">
+            <select id="peer"><option value="">Recherche d'un PC…</option></select>
+            <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled>☆</button>
+          </div>
+
+          <div class="favorites-panel">
+            <div class="favorites-title"><span>☆ Favoris</span><span class="favorites-hint">Actions rapides</span></div>
+            <div id="favoritesList"></div>
+          </div>
+
+          <div class="manual-row">
+            <input id="manualIp" type="text" inputmode="decimal" placeholder="Adresse IP, ex. 192.168.1.25">
+            <button id="addIp" class="add-btn" type="button" title="Ajouter cette IP" aria-label="Ajouter cette IP">+</button>
+          </div>
+          <p class="hint">Vous pouvez aussi ajouter directement une adresse IP.</p>
+          <button id="connect" class="primary" type="button">Se connecter</button>
+        </section>
+
+        <section class="card audio-card">
+          <div class="section-title">
+            <div>
+              <h2>Audio</h2>
+              <p>Microphone et sortie du PC.</p>
             </div>
           </div>
-          <div id="noisePopover" class="noise-popover hidden">
-            <div class="popover-heading">
+
+          <label for="input">Microphone</label>
+          <select id="input"></select>
+
+          <label for="output">Sortie audio</label>
+          <select id="output"></select>
+
+          <div class="noise-control">
+            <div class="noise-line">
               <div>
-                <strong>Réglages</strong>
-                <span>RNNoise · traitement local</span>
+                <strong>Réduction de bruit</strong>
+                <span id="noiseStatus" class="noise-status">Désactivée</span>
               </div>
-              <strong id="noiseIntensityValue">65%</strong>
+              <div class="noise-actions">
+                <label class="switch-row noise-switch-row">
+                  <input id="noiseEnabled" type="checkbox">
+                  <span class="switch"></span>
+                  <span class="sr-only">Activer la réduction de bruit</span>
+                </label>
+                <button id="noiseSettings" class="icon-btn compact" type="button" title="Réglages de la réduction de bruit" aria-label="Réglages de la réduction de bruit">⚙</button>
+              </div>
             </div>
-            <div class="volume-line">
-              <label for="noiseIntensity">Intensité</label>
-              <span class="subtle">Plus fort = suppression plus marquée</span>
+            <div id="noisePopover" class="noise-popover hidden">
+              <div class="popover-heading">
+                <div>
+                  <strong>Réglages</strong>
+                  <span>RNNoise · traitement local</span>
+                </div>
+                <strong id="noiseIntensityValue">65%</strong>
+              </div>
+              <div class="volume-line">
+                <label for="noiseIntensity">Intensité</label>
+                <span class="subtle">Plus fort = suppression plus marquée</span>
+              </div>
+              <input id="noiseIntensity" type="range" min="0" max="100" step="1" value="65">
+              <div class="noise-presets">
+                <button type="button" data-noise-preset="0.35">Naturel</button>
+                <button type="button" data-noise-preset="0.65">Équilibré</button>
+                <button type="button" data-noise-preset="0.9">Agressif</button>
+              </div>
+              <p class="hint">La réduction est appliquée au micro avant l'envoi réseau. Le curseur dose le mélange entre le signal brut et le signal traité.</p>
             </div>
-            <input id="noiseIntensity" type="range" min="0" max="100" step="1" value="65">
-            <div class="noise-presets">
-              <button type="button" data-noise-preset="0.35">Naturel</button>
-              <button type="button" data-noise-preset="0.65">Équilibré</button>
-              <button type="button" data-noise-preset="0.9">Agressif</button>
+          </div>
+
+          <div class="volume-line">
+            <label for="volume">Volume distant</label>
+            <strong id="volumeValue">100%</strong>
+          </div>
+          <input id="volume" type="range" min="0" max="100" step="1" value="100">
+
+          <label class="switch-row">
+            <input id="boostVolume" type="checkbox">
+            <span class="switch"></span>
+            <span>Autoriser le volume au-dessus de 100%</span>
+          </label>
+
+          <button id="mute" class="secondary mute-btn" type="button">
+            <span class="mute-icon">🎙</span><span id="muteText">Muet</span>
+          </button>
+        </section>
+
+        <section class="card state-card">
+          <div class="section-title">
+            <div>
+              <h2>État</h2>
+              <p id="details">Recherche des ordinateurs sur le réseau local…</p>
             </div>
-            <p class="hint">La réduction est appliquée au micro avant l'envoi réseau. Le curseur dose le mélange entre le signal brut et le signal traité.</p>
           </div>
-        </div>
-
-        <div class="volume-line">
-          <label for="volume">Volume distant</label>
-          <strong id="volumeValue">100%</strong>
-        </div>
-        <input id="volume" type="range" min="0" max="100" step="1" value="100">
-
-        <label class="switch-row">
-          <input id="boostVolume" type="checkbox">
-          <span class="switch"></span>
-          <span>Autoriser le volume au-dessus de 100%</span>
-        </label>
-
-        <button id="mute" class="secondary mute-btn" type="button">
-          <span class="mute-icon">🎙</span><span id="muteText">Muet</span>
-        </button>
-      </section>
-
-      <section class="card state-card">
-        <div class="section-title">
-          <div>
-            <h2>État</h2>
-            <p id="details">Recherche des ordinateurs sur le réseau local…</p>
+          <div class="state-grid">
+            <div class="state-item">
+              <span>Latence audio</span>
+              <strong id="latency">— ms</strong>
+            </div>
+            <div class="state-item">
+              <span>Mode</span>
+              <strong id="mode">LAN direct</strong>
+            </div>
           </div>
-        </div>
-        <div class="state-grid">
-          <div class="state-item">
-            <span>Latence audio</span>
-            <strong id="latency">— ms</strong>
-          </div>
-          <div class="state-item">
-            <span>Mode</span>
-            <strong id="mode">LAN direct</strong>
-          </div>
-        </div>
-      </section>
+        </section>
       </div>
     </section>
 
@@ -158,104 +154,98 @@
       </div>
 
       <div id="settingsScroll">
-      <section class="card">
-        <div class="card-heading">
-          <h3>Version</h3>
-          <p>Version actuellement installée et mises à jour.</p>
-        </div>
-        <div class="settings-info">
-          <span>Version installée</span>
-          <strong id="appVersion">v1.1.7</strong>
-        </div>
-        <div class="settings-info">
-          <span>Historique</span>
-          <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-heading">
-          <h3>Démarrage</h3>
-          <p>Contrôlez le comportement au lancement.</p>
-        </div>
-        <label class="switch-row">
-          <input id="autostart" type="checkbox">
-          <span class="switch"></span>
-          <span>Démarrer DuoVoice avec Windows/Linux</span>
-        </label>
-        <label class="switch-row">
-          <input id="startHidden" type="checkbox">
-          <span class="switch"></span>
-          <span>Démarrer minimisé dans le tray</span>
-        </label>
-        <p id="autostartDetails" class="hint">Les réglages sont enregistrés automatiquement.</p>
-      </section>
-
-      <section class="card">
-        <div class="card-heading">
-          <h3>Fermeture</h3>
-          <p>Choisissez ce que fait le bouton X.</p>
-        </div>
-        <label for="closeAction">Action du bouton fermer</label>
-        <select id="closeAction">
-          <option value="tray">Réduire dans le tray</option>
-          <option value="quit">Quitter DuoVoice</option>
-        </select>
-        <p class="hint">En mode tray, DuoVoice disparaît aussi de la barre des tâches.</p>
-      </section>
-
-      <section class="card">
-        <div class="card-heading">
-          <h3>Apparence</h3>
-          <p>Choisissez une couleur douce pour l’interface.</p>
-        </div>
-        <div id="colorChoices" class="color-choices" aria-label="Couleur de l'application"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-heading">
-          <h3>Échelle de l’interface</h3>
-          <p>Ajustez la taille générale de DuoVoice selon votre écran et votre confort.</p>
-        </div>
-        <div class="volume-line scale-line">
-          <label for="uiScale">Taille</label>
-          <strong id="uiScaleValue">100%</strong>
-        </div>
-        <div class="scale-control">
-          <input id="uiScale" class="stepped-range" type="range" min="0.8" max="1.3" step="0.1" value="1">
-          <div class="scale-labels" aria-hidden="true">
-            <span>80%</span><span>90%</span><span>100%</span><span>110%</span><span>120%</span><span>130%</span>
+        <section class="card">
+          <div class="card-heading">
+            <h3>Version</h3>
+            <p>Version actuellement installée et mises à jour.</p>
           </div>
-        </div>
-        <div id="scaleActions" class="scale-actions" aria-label="Actions de l'échelle de l'interface">
-          <button id="resetUiScale" class="secondary scale-action" type="button">Rétablir par défaut</button>
-          <button id="applyUiScale" class="primary scale-action" type="button">Appliquer les modifications</button>
-        </div>
-      </section>
+          <div class="settings-info">
+            <span>Version installée</span>
+            <strong id="appVersion">v1.1.7</strong>
+          </div>
+          <div class="settings-info">
+            <span>Historique</span>
+            <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
+          </div>
+        </section>
 
-      <section class="card">
-        <div class="card-heading">
-          <h3>Audio</h3>
-          <p>Les périphériques, le volume et la réduction de bruit sont conservés entre les lancements.</p>
-        </div>
-        <div class="settings-info">
-          <span>Volume enregistré</span>
-          <strong id="savedVolume">100%</strong>
-        </div>
-        <div class="settings-info">
-          <span>Réduction de bruit</span>
-          <strong id="savedNoise">Désactivée</strong>
-        </div>
-      </section>
+        <section class="card">
+          <div class="card-heading">
+            <h3>Démarrage</h3>
+            <p>Contrôlez le comportement au lancement.</p>
+          </div>
+          <label class="switch-row">
+            <input id="autostart" type="checkbox">
+            <span class="switch"></span>
+            <span>Démarrer DuoVoice avec Windows/Linux</span>
+          </label>
+          <label class="switch-row">
+            <input id="startHidden" type="checkbox">
+            <span class="switch"></span>
+            <span>Démarrer minimisé dans le tray</span>
+          </label>
+          <p id="autostartDetails" class="hint">Les réglages sont enregistrés automatiquement.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
+            <h3>Fermeture</h3>
+            <p>Choisissez ce que fait le bouton X.</p>
+          </div>
+          <label for="closeAction">Action du bouton fermer</label>
+          <select id="closeAction">
+            <option value="tray">Réduire dans le tray</option>
+            <option value="quit">Quitter DuoVoice</option>
+          </select>
+          <p class="hint">En mode tray, DuoVoice disparaît aussi de la barre des tâches.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
+            <h3>Apparence</h3>
+            <p>Choisissez une couleur douce pour l’interface.</p>
+          </div>
+          <div id="colorChoices" class="color-choices" aria-label="Couleur de l'application"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
+            <h3>Échelle de l’interface</h3>
+            <p>Ajustez la taille générale de DuoVoice selon votre écran et votre confort.</p>
+          </div>
+          <div class="volume-line scale-line">
+            <label for="uiScale">Taille</label>
+            <strong id="uiScaleValue">100%</strong>
+          </div>
+          <div class="scale-control">
+            <input id="uiScale" class="stepped-range" type="range" min="0.8" max="1.3" step="0.1" value="1">
+            <div class="scale-labels" aria-hidden="true">
+              <span>80%</span><span>90%</span><span>100%</span><span>110%</span><span>120%</span><span>130%</span>
+            </div>
+          </div>
+          <div id="scaleActions" class="scale-actions" aria-label="Actions de l'échelle de l'interface">
+            <button id="resetUiScale" class="secondary scale-action" type="button">Rétablir par défaut</button>
+            <button id="applyUiScale" class="primary scale-action" type="button">Appliquer les modifications</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
+            <h3>Audio</h3>
+            <p>Les périphériques, le volume et la réduction de bruit sont conservés entre les lancements.</p>
+          </div>
+          <div class="settings-info">
+            <span>Volume enregistré</span>
+            <strong id="savedVolume">100%</strong>
+          </div>
+          <div class="settings-info">
+            <span>Réduction de bruit</span>
+            <strong id="savedNoise">Désactivée</strong>
+          </div>
+        </section>
       </div>
     </section>
   </main>
   <script type="module" src="/src/main.js"></script>
-
-
-
-
-
-
 </body>
 </html>

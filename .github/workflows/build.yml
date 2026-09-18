@@ -22,10 +22,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Verify repository hygiene
+        shell: bash
+        run: |
+          if git ls-files node_modules | grep -q .; then
+            echo "::error::node_modules must not be committed. Run: git rm -r --cached node_modules"
+            exit 1
+          fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -45,14 +53,14 @@ jobs:
             patchelf
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Build Tauri application
         run: npm run tauri -- build
 
       - name: Upload Windows installers
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |
@@ -62,7 +70,7 @@ jobs:
 
       - name: Upload Linux packages
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: |

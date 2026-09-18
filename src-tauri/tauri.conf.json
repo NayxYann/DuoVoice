@@ -11,12 +11,14 @@
     "withGlobalTauri": false,
     "windows": [
       {
+        "label": "main",
         "title": "DuoVoice",
         "width": 1080,
         "height": 800,
         "resizable": true,
         "minWidth": 820,
-        "minHeight": 600
+        "minHeight": 600,
+        "visible": false
       },
       {
         "label": "tray",
@@ -40,20 +42,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis",
-      "msi",
-      "appimage",
-      "deb"
-    ],
-    "icon": [
-      "icons/icon.png",
-      "icons/icon.ico"
-    ]
+    "targets": ["nsis", "msi", "appimage", "deb"],
+    "icon": ["icons/icon.png", "icons/icon.ico"]
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0OUYwQUNBODVDMDZERjUKUldUMWJjQ0Z5Z3FmeEhESFZnREdMQ0hRSzJZVFFVQnlHOTU2c29lZlVRbTZJN0V4OGRKUEVLWUsK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM0OUYwQUNBODVDMDZERjUKUldUMWJjQ0Z5Z3FmeEhESFZnREdMQ0hRSzJZVFFVQnlHOTU2c29lZlVRbTZJN0V4OGRKUEVLWUsK",
+      "endpoints": [
+        "https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json"
+      ]
     },
     "autostart": null,
     "process": {}

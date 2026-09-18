@@ -45,7 +45,7 @@ function renderPeers() {
   if (peers.some(p => p.address === selected)) select.value = selected;
 }
 
-function updateStatus(status) {
+function updateStatus() {
   const el = $("trayStatus");
   el.className = `tray-status ${connected ? "online" : "offline"}`;
   el.innerHTML = `<i></i>${connected ? "Connecté" : "Hors ligne"}`;
@@ -90,11 +90,14 @@ async function connectSelected() {
       const input = localStorage.getItem("duovoice.input") || null;
       const output = localStorage.getItem("duovoice.output") || null;
       await invoke("start_audio", { remote: address, input, output });
+      const volume = Math.max(0, Math.min(2, Number(localStorage.getItem("duovoice.volume") ?? 100) / 100));
+      await invoke("set_volume", { volume });
       connected = true; remote = address;
     }
     await emit("audio-state-changed");
     await refreshState();
   } catch (e) {
+    invoke("log_client_error", { message: `Tray connect: ${String(e)}` }).catch(() => {});
     $("trayPeerName").textContent = `Erreur : ${e}`;
   } finally { busy = false; }
 }
@@ -106,12 +109,19 @@ async function toggleMute() {
     $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
     $("quickMute").classList.toggle("active-tile", muted);
     await emit("audio-state-changed");
-  } catch (e) { $("trayPeerName").textContent = `Muet : ${e}`; }
+  } catch (e) {
+    invoke("log_client_error", { message: `Tray mute: ${String(e)}` }).catch(() => {});
+    $("trayPeerName").textContent = `Muet : ${e}`;
+  }
 }
 
 async function openMain(settings = false) {
-  await emit(settings ? "tray-open-settings" : "tray-open-main");
-  await getCurrentWindow().hide();
+  try {
+    await invoke("show_main_window", { settings });
+    await getCurrentWindow().hide();
+  } catch (e) {
+    $("trayPeerName").textContent = `Ouverture impossible : ${e}`;
+  }
 }
 
 $("trayPeer").addEventListener("change", async () => {
@@ -127,10 +137,28 @@ $("quitTray").addEventListener("click", () => invoke("quit_app"));
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY) applyColor(event.newValue || "violet");
 });
+let peerTimer = null;
+let stateTimer = null;
+
+function startPolling() {
+  if (peerTimer || stateTimer) return;
+  refreshPeers();
+  refreshState();
+  peerTimer = setInterval(refreshPeers, 3000);
+  stateTimer = setInterval(refreshState, 1500);
+}
+
+function stopPolling() {
+  if (peerTimer) clearInterval(peerTimer);
+  if (stateTimer) clearInterval(stateTimer);
+  peerTimer = null;
+  stateTimer = null;
+}
+
+window.addEventListener("focus", startPolling);
+window.addEventListener("blur", stopPolling);
 listen("theme-changed", (event) => applyColor(event.payload?.color || "violet")).catch(() => {});
 
 applyColor(localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();
 refreshState();
-setInterval(refreshPeers, 3000);
-setInterval(refreshState, 1500);

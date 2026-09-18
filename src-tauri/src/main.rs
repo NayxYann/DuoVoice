@@ -25,9 +25,12 @@ const PING_MAGIC: &[u8; 4] = b"DVP1";
 const PONG_MAGIC: &[u8; 4] = b"DVP2";
 const SAMPLE_RATE: u32 = 48_000;
 const FRAME_SAMPLES: usize = 480;
+const JITTER_START_FRAMES: usize = 4;
+const JITTER_TARGET_FRAMES: usize = 6;
+const JITTER_MAX_FRAMES: usize = 12;
 const INSTANCE_PORT: u16 = 39473;
 
-#[derive(Clone, Serialize)]
+#[derive(Serialize)]
 struct DeviceLists {
     inputs: Vec<String>,
     outputs: Vec<String>,
@@ -48,10 +51,8 @@ struct AudioState {
     noise_enabled: Arc<std::sync::atomic::AtomicBool>,
     noise_intensity: Arc<Mutex<f32>>,
     remote: Arc<Mutex<Option<SocketAddr>>>,
-    paused: Arc<std::sync::atomic::AtomicBool>,
 }
 
-#[derive(Clone)]
 struct DiscoveredPeer {
     peer: Peer,
     last_seen: Instant,
@@ -63,14 +64,11 @@ struct DiscoveryState {
 
 struct AudioEngine {
     stop: Arc<std::sync::atomic::AtomicBool>,
-    volume: Arc<Mutex<f32>>,
-    muted: Arc<std::sync::atomic::AtomicBool>,
     _input: Stream,
     _output: Stream,
     _network: thread::JoinHandle<()>,
 }
 
-#[derive(Clone)]
 struct Packet {
     seq: u32,
     samples: Vec<i16>,
@@ -106,7 +104,10 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
 
         let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT)) {
             Ok(s) => s,
-            Err(_) => return,
+            Err(e) => {
+                app_log(&format!("Discovery bind error on UDP {DISCOVERY_PORT}: {e}"));
+                return;
+            }
         };
         let _ = socket.set_broadcast(true);
         let _ = socket.set_read_timeout(Some(Duration::from_millis(500)));
@@ -137,7 +138,10 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
                     }
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut || e.kind() == io::ErrorKind::WouldBlock => {}
-                Err(_) => break,
+                Err(e) => {
+                    app_log(&format!("Discovery receive error: {e}"));
+                    break;
+                }
             }
         }
     });
@@ -226,15 +230,40 @@ fn push_packet(socket: &UdpSocket, remote: SocketAddr, seq: &mut u32, samples: &
 }
 
 fn read_packet(buf: &[u8]) -> Option<Packet> {
-    if buf.len() < 12 || &buf[..4] != MAGIC { return None; }
+    if buf.len() < 12 || &buf[..4] != MAGIC {
+        return None;
+    }
     let seq = u32::from_be_bytes(buf[4..8].try_into().ok()?);
+    let sample_rate = u16::from_be_bytes(buf[8..10].try_into().ok()?) as u32;
     let count = u16::from_be_bytes(buf[10..12].try_into().ok()?) as usize;
-    if buf.len() < 12 + count * 2 { return None; }
+    if sample_rate != SAMPLE_RATE || count != FRAME_SAMPLES || buf.len() < 12 + count * 2 {
+        return None;
+    }
     let mut samples = Vec::with_capacity(count);
     for chunk in buf[12..12 + count * 2].chunks_exact(2) {
         samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
     }
     Some(Packet { seq, samples })
+}
+
+fn next_playback_sample(queue: &mut VecDeque<i16>, ready: &mut bool) -> i16 {
+    if *ready && queue.is_empty() {
+        *ready = false;
+    }
+    if !*ready {
+        if queue.len() >= FRAME_SAMPLES * JITTER_START_FRAMES {
+            *ready = true;
+        } else {
+            return 0;
+        }
+    }
+    match queue.pop_front() {
+        Some(sample) => sample,
+        None => {
+            *ready = false;
+            0
+        }
+    }
 }
 
 fn denoise_frame(
@@ -287,28 +316,50 @@ fn start_audio(
     output: Option<String>,
 ) -> Result<(), String> {
     stop_audio_inner(&state)?;
+
     let host = cpal::default_host();
     let input_device = choose_device(&host, input.as_deref(), true)?;
     let output_device = choose_device(&host, output.as_deref(), false)?;
     let in_cfg = choose_stream_config(&input_device, true)?;
     let out_cfg = choose_stream_config(&output_device, false)?;
-    app_log(&format!("Audio config: input={} {:?} {}ch, output={} {:?} {}ch", input_device.description().ok().map(|d| d.name().to_string()).unwrap_or_default(), in_cfg.sample_format(), in_cfg.channels(), output_device.description().ok().map(|d| d.name().to_string()).unwrap_or_default(), out_cfg.sample_format(), out_cfg.channels()));
+    let remote_addr: SocketAddr = format!("{}:{}", remote, AUDIO_PORT)
+        .parse()
+        .map_err(|e| format!("Adresse distante invalide: {e}"))?;
 
-    let remote_addr: SocketAddr = format!("{}:{}", remote, AUDIO_PORT).parse().map_err(|e| format!("Adresse distante invalide: {e}"))?;
-    *state.remote.lock().unwrap() = Some(remote_addr);
-    let tx = UdpSocket::bind(("0.0.0.0", 0)).map_err(|e| e.to_string())?;
-    tx.set_nonblocking(true).ok();
-    let rx = UdpSocket::bind(("0.0.0.0", AUDIO_PORT)).map_err(|e| format!("Port audio {} indisponible: {}", AUDIO_PORT, e))?;
-    rx.set_nonblocking(true).ok();
+    app_log(&format!(
+        "Audio connect: remote={}, input={} {:?} {}ch, output={} {:?} {}ch",
+        remote_addr,
+        input_device
+            .description()
+            .ok()
+            .map(|d| d.name().to_string())
+            .unwrap_or_default(),
+        in_cfg.sample_format(),
+        in_cfg.channels(),
+        output_device
+            .description()
+            .ok()
+            .map(|d| d.name().to_string())
+            .unwrap_or_default(),
+        out_cfg.sample_format(),
+        out_cfg.channels()
+    ));
+
+    let tx = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
+        .map_err(|e| format!("Socket d'envoi audio impossible: {e}"))?;
+    tx.set_nonblocking(true)
+        .map_err(|e| format!("Configuration socket d'envoi impossible: {e}"))?;
+
+    let rx = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, AUDIO_PORT))
+        .map_err(|e| format!("Port audio {AUDIO_PORT} indisponible: {e}"))?;
+    rx.set_nonblocking(true)
+        .map_err(|e| format!("Configuration socket de réception impossible: {e}"))?;
 
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // Keep volume/mute state alive even while disconnected so the controls
-    // remain functional and the chosen values are reused on the next call.
     let volume = Arc::clone(&state.volume);
     let muted = Arc::clone(&state.muted);
     let noise_enabled = Arc::clone(&state.noise_enabled);
     let noise_intensity = Arc::clone(&state.noise_intensity);
-    let paused = Arc::clone(&state.paused);
 
     let input_samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(FRAME_SAMPLES * 2)));
     let tx_buf = Arc::clone(&input_samples);
@@ -322,102 +373,238 @@ fn start_audio(
         SampleFormat::F32 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
-            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(input_config, move |data: &[f32], _| {
-                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx_buf.lock().unwrap().clear();
-                    return;
-                }
-                let mut b = tx_buf.lock().unwrap();
-                for frame in data.chunks(input_channels.max(1)) {
-                    let avg = frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32;
-                    b.push((avg.clamp(-1.0, 1.0) * 32767.0) as i16);
-                }
-                while b.len() >= FRAME_SAMPLES {
-                    let mut processed = [0i16; FRAME_SAMPLES];
-                    if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                        let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
-                    } else {
-                        processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[f32], _| {
+                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                        tx_buf.lock().unwrap().clear();
+                        denoiser = None;
+                        delayed_dry = None;
+                        return;
                     }
-                    push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                    b.drain(..FRAME_SAMPLES);
-                }
-            }, |_| {}, None)
-        },
+
+                    let mut b = tx_buf.lock().unwrap();
+                    for frame in data.chunks(input_channels.max(1)) {
+                        let avg = frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32;
+                        b.push((avg.clamp(-1.0, 1.0) * 32767.0) as i16);
+                    }
+                    while b.len() >= FRAME_SAMPLES {
+                        let mut processed = [0i16; FRAME_SAMPLES];
+                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+                            let intensity = *noise_intensity.lock().unwrap();
+                            denoise_frame(
+                                &mut denoiser,
+                                &mut delayed_dry,
+                                &b[..FRAME_SAMPLES],
+                                intensity,
+                                &mut processed,
+                            );
+                        } else {
+                            denoiser = None;
+                            delayed_dry = None;
+                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+                        }
+                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
+                        b.drain(..FRAME_SAMPLES);
+                    }
+                },
+                |e| app_log(&format!("Microphone stream error: {e}")),
+                None,
+            )
+        }
         SampleFormat::I16 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
-            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(input_config, move |data: &[i16], _| {
-                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx_buf.lock().unwrap().clear();
-                    return;
-                }
-                let mut b = tx_buf.lock().unwrap();
-                for frame in data.chunks(input_channels.max(1)) {
-                    let avg = frame.iter().map(|&x| x as i32).sum::<i32>() / frame.len().max(1) as i32;
-                    b.push(avg.clamp(-32768, 32767) as i16);
-                }
-                while b.len() >= FRAME_SAMPLES {
-                    let mut processed = [0i16; FRAME_SAMPLES];
-                    if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                        let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
-                    } else {
-                        processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[i16], _| {
+                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                        tx_buf.lock().unwrap().clear();
+                        denoiser = None;
+                        delayed_dry = None;
+                        return;
                     }
-                    push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                    b.drain(..FRAME_SAMPLES);
-                }
-            }, |_| {}, None)
-        },
+
+                    let mut b = tx_buf.lock().unwrap();
+                    for frame in data.chunks(input_channels.max(1)) {
+                        let avg = frame.iter().map(|&x| x as i32).sum::<i32>()
+                            / frame.len().max(1) as i32;
+                        b.push(avg.clamp(-32768, 32767) as i16);
+                    }
+                    while b.len() >= FRAME_SAMPLES {
+                        let mut processed = [0i16; FRAME_SAMPLES];
+                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+                            let intensity = *noise_intensity.lock().unwrap();
+                            denoise_frame(
+                                &mut denoiser,
+                                &mut delayed_dry,
+                                &b[..FRAME_SAMPLES],
+                                intensity,
+                                &mut processed,
+                            );
+                        } else {
+                            denoiser = None;
+                            delayed_dry = None;
+                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+                        }
+                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
+                        b.drain(..FRAME_SAMPLES);
+                    }
+                },
+                |e| app_log(&format!("Microphone stream error: {e}")),
+                None,
+            )
+        }
         SampleFormat::U16 => {
             let mut denoiser = None;
             let mut delayed_dry = None;
-            let paused_in = Arc::clone(&paused);
             let noise_enabled = Arc::clone(&noise_enabled);
             let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(input_config, move |data: &[u16], _| {
-                if paused_in.load(std::sync::atomic::Ordering::Relaxed) || muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                    tx_buf.lock().unwrap().clear();
-                    return;
-                }
-                let mut b = tx_buf.lock().unwrap();
-                for frame in data.chunks(input_channels.max(1)) {
-                    let avg = frame.iter().map(|&x| x as i32 - 32768).sum::<i32>() / frame.len().max(1) as i32;
-                    b.push(avg.clamp(-32768, 32767) as i16);
-                }
-                while b.len() >= FRAME_SAMPLES {
-                    let mut processed = [0i16; FRAME_SAMPLES];
-                    if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                        let intensity = *noise_intensity.lock().unwrap();
-                        denoise_frame(&mut denoiser, &mut delayed_dry, &b[..FRAME_SAMPLES], intensity, &mut processed);
-                    } else {
-                        processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[u16], _| {
+                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
+                        tx_buf.lock().unwrap().clear();
+                        denoiser = None;
+                        delayed_dry = None;
+                        return;
                     }
-                    push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                    b.drain(..FRAME_SAMPLES);
-                }
-            }, |_| {}, None)
-        },
+
+                    let mut b = tx_buf.lock().unwrap();
+                    for frame in data.chunks(input_channels.max(1)) {
+                        let avg = frame.iter().map(|&x| x as i32 - 32768).sum::<i32>()
+                            / frame.len().max(1) as i32;
+                        b.push(avg.clamp(-32768, 32767) as i16);
+                    }
+                    while b.len() >= FRAME_SAMPLES {
+                        let mut processed = [0i16; FRAME_SAMPLES];
+                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+                            let intensity = *noise_intensity.lock().unwrap();
+                            denoise_frame(
+                                &mut denoiser,
+                                &mut delayed_dry,
+                                &b[..FRAME_SAMPLES],
+                                intensity,
+                                &mut processed,
+                            );
+                        } else {
+                            denoiser = None;
+                            delayed_dry = None;
+                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
+                        }
+                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
+                        b.drain(..FRAME_SAMPLES);
+                    }
+                },
+                |e| app_log(&format!("Microphone stream error: {e}")),
+                None,
+            )
+        }
         _ => return Err("Format audio non pris en charge".into()),
-    }.map_err(|e| format!("Ouverture du micro impossible: {e}"))?;
+    }
+    .map_err(|e| format!("Ouverture du micro impossible: {e}"))?;
 
     let output_config: StreamConfig = out_cfg.clone().into();
     let output_channels = output_config.channels as usize;
-    let rx_queue = Arc::new(Mutex::new(VecDeque::<i16>::with_capacity(FRAME_SAMPLES * 40)));
+    let rx_queue = Arc::new(Mutex::new(VecDeque::<i16>::with_capacity(
+        FRAME_SAMPLES * JITTER_MAX_FRAMES,
+    )));
+    let output_volume = Arc::clone(&volume);
+
+    let output_stream = match out_cfg.sample_format() {
+        SampleFormat::F32 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [f32], _| {
+                    let vol = *output_volume.lock().unwrap();
+                    if let Ok(mut queue) = q.try_lock() {
+                        for frame in data.chunks_mut(output_channels.max(1)) {
+                            let sample = next_playback_sample(&mut queue, &mut ready);
+                            let value = sample as f32 / 32768.0 * vol;
+                            for s in frame {
+                                *s = value;
+                            }
+                        }
+                    } else {
+                        data.fill(0.0);
+                    }
+                },
+                |e| app_log(&format!("Output stream error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::I16 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [i16], _| {
+                    let vol = *output_volume.lock().unwrap();
+                    if let Ok(mut queue) = q.try_lock() {
+                        for frame in data.chunks_mut(output_channels.max(1)) {
+                            let sample = next_playback_sample(&mut queue, &mut ready);
+                            let value = (sample as f32 * vol).clamp(-32768.0, 32767.0) as i16;
+                            for s in frame {
+                                *s = value;
+                            }
+                        }
+                    } else {
+                        data.fill(0);
+                    }
+                },
+                |e| app_log(&format!("Output stream error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::U16 => {
+            let q = Arc::clone(&rx_queue);
+            let mut ready = false;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [u16], _| {
+                    let vol = *output_volume.lock().unwrap();
+                    if let Ok(mut queue) = q.try_lock() {
+                        for frame in data.chunks_mut(output_channels.max(1)) {
+                            let sample = next_playback_sample(&mut queue, &mut ready);
+                            let value = (sample as f32 * vol + 32768.0).clamp(0.0, 65535.0) as u16;
+                            for s in frame {
+                                *s = value;
+                            }
+                        }
+                    } else {
+                        data.fill(32768);
+                    }
+                },
+                |e| app_log(&format!("Output stream error: {e}")),
+                None,
+            )
+        }
+        _ => return Err("Format de sortie non pris en charge".into()),
+    }
+    .map_err(|e| format!("Ouverture de la sortie impossible: {e}"))?;
+
+    // Start both device streams before spawning the UDP receive thread. If a
+    // device refuses to start, all sockets/streams are dropped here and the
+    // fixed audio port cannot be left occupied by an orphan receive thread.
+    input_stream
+        .play()
+        .map_err(|e| format!("Démarrage du micro impossible: {e}"))?;
+    output_stream
+        .play()
+        .map_err(|e| format!("Démarrage de la sortie impossible: {e}"))?;
+
     let rx_queue_net = Arc::clone(&rx_queue);
     let stop_net = Arc::clone(&stop);
-    let paused_net = Arc::clone(&paused);
     let network = thread::spawn(move || {
         let mut buf = [0u8; 4096];
         let mut last_seq: Option<u32> = None;
+
         while !stop_net.load(std::sync::atomic::Ordering::Relaxed) {
             match rx.recv_from(&mut buf) {
                 Ok((n, sender)) => {
@@ -428,116 +615,60 @@ fn start_audio(
                         let _ = rx.send_to(&pong, sender);
                         continue;
                     }
-                    if paused_net.load(std::sync::atomic::Ordering::Relaxed) {
-                        if let Ok(mut q) = rx_queue_net.try_lock() { q.clear(); }
+
+                    if sender.ip() != remote_addr.ip() {
                         continue;
                     }
+
                     if let Some(packet) = read_packet(&buf[..n]) {
                         if let Some(prev) = last_seq {
                             let delta = packet.seq.wrapping_sub(prev);
-                            if delta == 0 || delta > u32::MAX / 2 { continue; }
+                            if delta == 0 || delta > u32::MAX / 2 {
+                                continue;
+                            }
                         }
                         last_seq = Some(packet.seq);
+
                         if let Ok(mut q) = rx_queue_net.try_lock() {
                             q.extend(packet.samples);
-                            let max_samples = FRAME_SAMPLES * 40;
-                            while q.len() > max_samples { q.pop_front(); }
+                            if q.len() > FRAME_SAMPLES * JITTER_MAX_FRAMES {
+                                let target = FRAME_SAMPLES * JITTER_TARGET_FRAMES;
+                                while q.len() > target {
+                                    q.pop_front();
+                                }
+                            }
                         }
                     }
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => thread::sleep(Duration::from_millis(1)),
-                Err(_) => break,
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(1));
+                }
+                Err(e) => {
+                    app_log(&format!("Audio receive error: {e}"));
+                    break;
+                }
             }
         }
     });
 
-    let output_volume = Arc::clone(&volume);
-    let output_stop = Arc::clone(&stop);
-    let output_paused = Arc::clone(&paused);
-    let output_stream = match out_cfg.sample_format() {
-        SampleFormat::F32 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(output_config, move |data: &mut [f32], _| {
-                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0.0; } return; }
-                let vol = *output_volume.lock().unwrap();
-                if let Ok(mut queue) = q.try_lock() {
-                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
-                    for frame in data.chunks_mut(output_channels.max(1)) {
-                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
-                        let value = sample as f32 / 32768.0 * vol;
-                        for s in frame { *s = value; }
-                    }
-                } else {
-                    for s in data.iter_mut() { *s = 0.0; }
-                }
-                if output_stop.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0.0; } }
-            }, |_| {}, None)
-        },
-        SampleFormat::I16 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
-                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 0; } return; }
-                let vol = *output_volume.lock().unwrap();
-                if let Ok(mut queue) = q.try_lock() {
-                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
-                    for frame in data.chunks_mut(output_channels.max(1)) {
-                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
-                        let value = (sample as f32 * vol).clamp(-32768.0, 32767.0) as i16;
-                        for s in frame { *s = value; }
-                    }
-                } else {
-                    for s in data.iter_mut() { *s = 0; }
-                }
-            }, |_| {}, None)
-        },
-        SampleFormat::U16 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(output_config, move |data: &mut [u16], _| {
-                if output_paused.load(std::sync::atomic::Ordering::Relaxed) { for s in data.iter_mut() { *s = 32768; } return; }
-                let vol = *output_volume.lock().unwrap();
-                if let Ok(mut queue) = q.try_lock() {
-                    if !ready && queue.len() >= FRAME_SAMPLES * 4 { ready = true; }
-                    for frame in data.chunks_mut(output_channels.max(1)) {
-                        let sample = if ready { queue.pop_front().unwrap_or(0) } else { 0 };
-                        let value = (sample as f32 * vol + 32768.0).clamp(0.0, 65535.0) as u16;
-                        for s in frame { *s = value; }
-                    }
-                } else {
-                    for s in data.iter_mut() { *s = 32768; }
-                }
-            }, |_| {}, None)
-        },
-        _ => return Err("Format de sortie non pris en charge".into()),
-    }.map_err(|e| format!("Ouverture de la sortie impossible: {e}"))?;
-
-    input_stream.play().map_err(|e| e.to_string())?;
-    output_stream.play().map_err(|e| e.to_string())?;
-
-    state.paused.store(false, std::sync::atomic::Ordering::Relaxed);
-    *state.engine.lock().unwrap() = Some(AudioEngine { stop, volume, muted, _input: input_stream, _output: output_stream, _network: network });
+    *state.remote.lock().unwrap() = Some(remote_addr);
+    *state.engine.lock().unwrap() = Some(AudioEngine {
+        stop,
+        _input: input_stream,
+        _output: output_stream,
+        _network: network,
+    });
+    app_log(&format!("Audio connected to {remote_addr}"));
     Ok(())
 }
 
 fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
-    state.paused.store(false, std::sync::atomic::Ordering::Relaxed);
     *state.remote.lock().unwrap() = None;
     if let Some(engine) = state.engine.lock().unwrap().take() {
         engine.stop.store(true, std::sync::atomic::Ordering::Relaxed);
         let _ = engine._network.join();
+        app_log("Audio disconnected");
     }
-    Ok(())
-}
-
-
-#[tauri::command]
-fn set_paused(state: State<'_, AudioState>, paused: bool) -> Result<(), String> {
-    if state.engine.lock().unwrap().is_none() {
-        return Err("Aucune connexion audio active".into());
-    }
-    state.paused.store(paused, std::sync::atomic::Ordering::Relaxed);
     Ok(())
 }
 
@@ -583,20 +714,26 @@ fn measure_latency(state: State<'_, AudioState>) -> Result<f64, String> {
 
 #[tauri::command]
 fn set_noise_reduction(state: State<'_, AudioState>, enabled: bool, intensity: f32) -> Result<(), String> {
-    let value = intensity.clamp(0.0, 1.0);
+    if !intensity.is_finite() {
+        return Err("Intensité de réduction de bruit invalide".into());
+    }
     state.noise_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
-    *state.noise_intensity.lock().unwrap() = value;
+    *state.noise_intensity.lock().unwrap() = intensity.clamp(0.0, 1.0);
     Ok(())
 }
 
 #[tauri::command]
 fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), String> {
-    state.close_to_tray.store(action != "quit", std::sync::atomic::Ordering::Relaxed);
+    match action.as_str() {
+        "tray" => state.close_to_tray.store(true, std::sync::atomic::Ordering::Relaxed),
+        "quit" => state.close_to_tray.store(false, std::sync::atomic::Ordering::Relaxed),
+        _ => return Err("Action de fermeture invalide".into()),
+    }
     Ok(())
 }
 
 
-#[derive(Clone, Serialize)]
+#[derive(Serialize)]
 struct AudioStatus {
     connected: bool,
     muted: bool,
@@ -617,32 +754,24 @@ fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> { stop_audio_i
 
 #[tauri::command]
 fn set_volume(state: State<'_, AudioState>, volume: f32) -> Result<(), String> {
-    let value = volume.clamp(0.0, 2.0);
-    *state.volume.lock().unwrap() = value;
-    if let Some(e) = state.engine.lock().unwrap().as_ref() {
-        *e.volume.lock().unwrap() = value;
+    if !volume.is_finite() {
+        return Err("Volume invalide".into());
     }
+    *state.volume.lock().unwrap() = volume.clamp(0.0, 2.0);
     Ok(())
 }
 
 #[tauri::command]
-fn toggle_mute(state: State<'_, AudioState>) -> Result<bool, String> {
+fn set_mute(state: State<'_, AudioState>, muted: bool) -> bool {
+    state.muted.store(muted, std::sync::atomic::Ordering::Relaxed);
+    muted
+}
+
+#[tauri::command]
+fn toggle_mute(state: State<'_, AudioState>) -> bool {
     let next = !state.muted.load(std::sync::atomic::Ordering::Relaxed);
     state.muted.store(next, std::sync::atomic::Ordering::Relaxed);
-    if let Some(e) = state.engine.lock().unwrap().as_ref() {
-        e.muted.store(next, std::sync::atomic::Ordering::Relaxed);
-    }
-    Ok(next)
-}
-
-#[tauri::command]
-fn set_input(_state: State<'_, AudioState>, _name: String) -> Result<(), String> {
-    Err("Le changement de périphérique à chaud sera ajouté après la V1 de test.".into())
-}
-
-#[tauri::command]
-fn set_output(_state: State<'_, AudioState>, _name: String) -> Result<(), String> {
-    Err("Le changement de périphérique à chaud sera ajouté après la V1 de test.".into())
+    next
 }
 
 fn app_log_path() -> Option<std::path::PathBuf> {
@@ -680,7 +809,8 @@ fn app_log(message: &str) {
     if let Ok(meta) = std::fs::metadata(&path) {
         if meta.len() >= MAX_LOG_SIZE {
             let backup = path.with_extension("log.1");
-            let _ = std::fs::rename(&path, backup);
+            let _ = std::fs::remove_file(&backup);
+            let _ = std::fs::rename(&path, &backup);
         }
     }
 
@@ -712,16 +842,43 @@ fn app_log(message: &str) {
 }
 
 #[tauri::command]
+fn log_client_error(message: String) {
+    let clean = message.replace('\r', " ").replace('\n', " ");
+    app_log(&format!("Frontend: {}", clean.chars().take(1000).collect::<String>()));
+}
+
+fn show_main_window_inner(app: &tauri::AppHandle, settings: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Fenêtre principale introuvable".to_string())?;
+
+    window.set_skip_taskbar(false).map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())?;
+    let _ = window.unminimize();
+    window.set_focus().map_err(|e| e.to_string())?;
+    if settings {
+        app.emit("open-settings", ()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle, settings: bool) -> Result<(), String> {
+    show_main_window_inner(&app, settings)
+}
+
+#[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
 #[tauri::command]
-fn hide_window_to_tray(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_skip_taskbar(true);
-        let _ = window.hide();
-    }
+fn hide_window_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Fenêtre principale introuvable".to_string())?;
+    window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
+    window.hide().map_err(|e| e.to_string())
 }
 
 fn acquire_single_instance() -> Option<TcpListener> {
@@ -752,7 +909,6 @@ fn main() {
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
             volume: Arc::new(Mutex::new(1.0)),
             muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            paused: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_intensity: Arc::new(Mutex::new(0.65)),
             remote: Arc::new(Mutex::new(None)),
@@ -765,7 +921,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, audio_status, set_volume, toggle_mute, set_paused, measure_latency, set_noise_reduction, set_input, set_output, set_close_action, quit_app, hide_window_to_tray
+            list_devices, list_peers, add_manual_peer, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -780,7 +936,7 @@ fn main() {
                     let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
                 } else {
-                    let _ = window.close();
+                    window.app_handle().exit(0);
                 }
             }
             if let tauri::WindowEvent::Focused(false) = event {
@@ -798,7 +954,9 @@ fn main() {
             thread::spawn(move || {
                 for stream in instance_listener.incoming() {
                     if stream.is_ok() {
-                        let _ = focus_app.emit("focus-window", ());
+                        if let Err(e) = show_main_window_inner(&focus_app, false) {
+                            app_log(&format!("Single-instance focus error: {e}"));
+                        }
                     }
                 }
             });
@@ -825,16 +983,15 @@ fn main() {
                                 let _ = w.hide();
                                 return;
                             }
-                            let width = 332.0_f64;
-                            let height = 286.0_f64;
+                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(332, 286));
+                            let width = f64::from(size.width);
+                            let height = f64::from(size.height);
                             let x = f64::from(position.x) - width / 2.0;
-                            // Tauri 2 exposes tray rect position/size as enums, so do not
-                            // access `.y`/`.height` directly. The tray is normally at the
-                            // bottom of the screen, therefore opening above the click point
-                            // gives a compact and predictable placement without depending
-                            // on a particular Physical/Logical variant.
                             let y = f64::from(position.y) - height - 8.0;
-                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x.max(0.0) as i32, y.max(0.0) as i32)));
+                            let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                                x.round() as i32,
+                                y.round() as i32,
+                            )));
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
@@ -850,18 +1007,13 @@ fn main() {
                             }
                         }
                         "show" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.set_skip_taskbar(false);
-                                let _ = w.show();
-                                let _ = w.set_focus();
+                            if let Err(e) = show_main_window_inner(app, false) {
+                                app_log(&format!("Tray show error: {e}"));
                             }
                         }
                         "settings" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.set_skip_taskbar(false);
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                                let _ = app.emit("open-settings", ());
+                            if let Err(e) = show_main_window_inner(app, true) {
+                                app_log(&format!("Tray settings error: {e}"));
                             }
                         }
                         "quit" => app.exit(0),
@@ -875,13 +1027,6 @@ fn main() {
                 let _ = w.set_skip_taskbar(true);
             }
 
-            if let Some(w) = app.get_webview_window("main") {
-                // The frontend preference "Démarrer minimisé dans le tray" controls
-                // both automatic and manual launches. Do not hide unconditionally
-                // here, otherwise a fresh install would start invisibly.
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
 
             app_log("Tauri setup completed");
             Ok(())

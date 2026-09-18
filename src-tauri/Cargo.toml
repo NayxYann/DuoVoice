@@ -1,7 +1,7 @@
 [package]
 name = "duovoice"
 version = "1.1.7"
-description = "Simple low-latency LAN intercom"
+description = "Low-latency LAN intercom for Windows and Linux"
 authors = ["DuoVoice"]
 edition = "2021"
 rust-version = "1.90"
@@ -14,9 +14,7 @@ tauri-build = { version = "2.6", features = [] }
 tauri = { version = "2.11", features = ["tray-icon"] }
 cpal = { version = "0.18.2", features = ["realtime"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 hostname = "0.4"
-crossbeam-channel = "0.5"
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"

@@ -1,0 +1,21 @@
+# Frontend dependencies / build output
+node_modules/
+dist/
+
+# Rust / Tauri build output
+src-tauri/target/
+target/
+
+# Local secrets / signing keys
+.tauri/
+*.key
+*.key.pub
+.env
+.env.*
+
+# Logs / OS / editor noise
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

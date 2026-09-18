@@ -1,59 +1,67 @@
-# DuoVoice updater — mise en place GitHub
+# DuoVoice — publication et updater
 
-Le système d'update est basé sur le plugin officiel Tauri Updater et les GitHub Releases.
+## 1. Clés de signature
 
-## 1. Générer les clés
+La version 1.1.7 utilise la clé publique déjà présente dans `src-tauri/tauri.conf.json`.
 
-Depuis la racine du projet :
+La clé privée correspondante reste uniquement dans GitHub Actions, dans :
 
-```bash
-npm install
-npm run tauri signer generate -- -w ~/.tauri/duovoice.key
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Ne committez jamais la clé privée.
+
+## 2. Configuration
+
+L'endpoint updater est défini directement dans `src-tauri/tauri.conf.json` :
+
+```text
+https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json
 ```
 
-La commande fournit une clé publique et une clé privée. La clé privée ne doit jamais être commitée.
+`src-tauri/tauri.release.conf.json` active uniquement `createUpdaterArtifacts` lors d'une release. Il n'y a plus de placeholder à remplacer par `sed` dans GitHub Actions.
 
-## 2. Secrets GitHub
+## 3. Nettoyage Git obligatoire
 
-Dans **Settings → Secrets and variables → Actions**, créer :
-
-- `TAURI_SIGNING_PRIVATE_KEY` : contenu de la clé privée.
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : mot de passe choisi pour la clé, si applicable.
-- `TAURI_SIGNING_PUBLIC_KEY` : clé publique.
-
-## 3. Première release
-
-Modifier le code, incrémenter la version dans `package.json` et `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`, puis pousser un tag :
+`node_modules` ne doit pas être suivi par Git. Si l'ancien dépôt le contient encore :
 
 ```bash
-git add .
-git commit -m "Release v3.0.0"
-git tag v3.0.0
-git push origin main --tags
+git rm -r --cached node_modules
+git add .gitignore
+git commit -m "chore: stop tracking node_modules"
 ```
 
-Le workflow `.github/workflows/release.yml` :
+Le workflow vérifie ce point avant de construire.
 
-1. construit Windows ;
-2. crée la GitHub Release ;
-3. publie les artefacts signés et `latest.json` ;
-4. construit Linux ensuite et ajoute ses artefacts à la même release.
+## 4. Publier la 1.1.7
 
-Le fichier `latest.json` sert de manifeste à l'application. Il indique la version publiée, l'URL de l'artefact et sa signature.
-
-## 4. À chaque future version
-
-Exemple :
+Après avoir copié les fichiers corrigés :
 
 ```bash
 git add .
-git commit -m "Release v3.0.1"
-git tag v3.0.1
-git push origin main --tags
+git commit -m "release: DuoVoice 1.1.7"
+git push origin main
 ```
 
-Les utilisateurs qui ont DuoVoice installé voient alors automatiquement la nouvelle version dans la bannière en haut de l'application. Cliquer dessus télécharge et installe la mise à jour.
+Si le tag distant `v1.1.7` a bien été supprimé :
 
-## Important
+```bash
+git tag -d v1.1.7 2>/dev/null || true
+git tag v1.1.7
+git push origin v1.1.7
+```
 
-Ne change jamais la clé de signature après une première release destinée aux utilisateurs existants. La clé publique est embarquée dans l'application et sert à vérifier que les nouveaux artefacts sont bien signés avec la clé privée correspondante.
+Le workflow `.github/workflows/release.yml` construit Windows d'abord, puis Linux, afin d'ajouter les plateformes à la même GitHub Release sans lancer les publications en parallèle.
+
+## 5. Vérification de la release
+
+La release doit contenir au minimum :
+
+- installateur Windows NSIS `.exe` ;
+- MSI `.msi` ;
+- signatures `.sig` ;
+- AppImage Linux ;
+- paquet `.deb` ;
+- `latest.json`.
+
+Une version installée avec une autre clé publique ne peut pas accepter une release signée par la nouvelle clé : dans ce cas, une réinstallation manuelle de la build 1.1.7 signée avec la nouvelle paire de clés est nécessaire une fois.

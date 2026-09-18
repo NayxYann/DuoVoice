@@ -8,13 +8,13 @@
     "tauri": "tauri"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4",
-    "vite": "^7.1.5"
+    "@tauri-apps/cli": "2.11.4",
+    "vite": "7.3.6"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-autostart": "^2.5.1",
-    "@tauri-apps/plugin-updater": "^2.11.0",
-    "@tauri-apps/plugin-process": "^2.3.1"
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-autostart": "2.5.1",
+    "@tauri-apps/plugin-process": "2.3.1",
+    "@tauri-apps/plugin-updater": "2.11.0"
   }
 }
