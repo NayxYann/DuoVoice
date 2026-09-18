@@ -9,7 +9,6 @@ const $ = (id) => document.getElementById(id);
 let connected = false;
 let disconnecting = false;
 let updateState = { status: "checking", update: null };
-let updateChecking = false;
 const peerCache = new Map();
 const MANUAL_KEY = "duovoice.manualIps";
 const VOLUME_KEY = "duovoice.volume";
@@ -19,7 +18,7 @@ const COLOR_KEY = "duovoice.color";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.1.1";
 let connectedPeer = "";
 
 
@@ -329,7 +328,6 @@ async function connectToAddress(address) {
     setDetails("Audio bidirectionnel actif.");
     renderFavorites();
     await updateLatency();
-checkForUpdates();
   } catch (e) {
     connected = false;
     connectedPeer = "";
@@ -430,22 +428,45 @@ async function installUpdate() {
   const update = updateState.update;
   if (!update || updateState.status !== "available") return;
   const banner = $("updateBanner");
+  if (!banner) return;
+
   banner.disabled = true;
   banner.textContent = `Téléchargement de v${update.version}…`;
+  setDetails(`Téléchargement de la mise à jour v${update.version}…`);
+
   try {
+    let downloaded = 0;
+    let total = 0;
+
     await update.downloadAndInstall((event) => {
       if (event.event === "Started") {
-        const total = event.data.contentLength || 0;
-        banner.textContent = total ? `Téléchargement de v${update.version} · 0%` : `Téléchargement de v${update.version}…`;
+        total = Number(event.data.contentLength || 0);
+        downloaded = 0;
+        banner.textContent = total > 0
+          ? `Téléchargement de v${update.version} · 0%`
+          : `Téléchargement de v${update.version}…`;
+        setDetails("Téléchargement de la mise à jour…");
       } else if (event.event === "Progress") {
-        const total = event.data.contentLength || 0;
-        const downloaded = event.data.chunkLength || 0;
-        if (total > 0) banner.textContent = `Téléchargement de v${update.version}…`;
+        downloaded += Number(event.data.chunkLength || 0);
+        if (total > 0) {
+          const percent = Math.min(100, Math.round((downloaded / total) * 100));
+          banner.textContent = `Téléchargement de v${update.version} · ${percent}%`;
+          setDetails(`Téléchargement de la mise à jour… ${percent}%`);
+        }
       } else if (event.event === "Finished") {
         banner.textContent = "Installation terminée. Redémarrage…";
+        setDetails("Installation terminée. Redémarrage de DuoVoice…");
       }
     });
-    try { await relaunch(); } catch { window.location.reload(); }
+
+    // Tauri's updater normally terminates/restarts the application on Windows.
+    // On platforms where it returns, explicitly relaunch the updated binary.
+    try {
+      await relaunch();
+    } catch (relaunchError) {
+      setDetails(`Mise à jour installée, mais redémarrage automatique impossible : ${relaunchError}`);
+      window.location.reload();
+    }
   } catch (e) {
     banner.disabled = false;
     await setUpdateBanner("available", update);
@@ -549,3 +570,4 @@ loadPeers();
 setInterval(() => loadPeers(false), 3000);
 setInterval(updateLatency, 1000);
 updateLatency();
+checkForUpdates();

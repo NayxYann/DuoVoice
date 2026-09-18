@@ -1,92 +1,100 @@
 # DuoVoice
 
-**Version actuelle : 1.1.0**
+Version actuelle : **3.0.0**
 
-DuoVoice est un intercom audio **local**, conçu pour Windows et Linux. Il permet de communiquer directement entre deux PC du même réseau local, sans compte ni serveur intermédiaire.
+DuoVoice is a small local-network intercom for Windows and Linux.
 
-## Fonctionnalités
+## V1 test build
 
-- Audio bidirectionnel en temps réel sur le LAN (UDP).
-- Transport PCM mono 48 kHz avec des trames de 10 ms.
-- Sélection du microphone et de la sortie audio.
-- Connexion automatique par découverte LAN et ajout manuel d'une adresse IPv4.
-- Favoris de machines/IP avec état de disponibilité et actions rapides.
-- Volume distant de 0 à 100 %, extensible à 200 % avec l'amplification.
-- Mute disponible même hors connexion.
-- Réduction de bruit **RNNoise** traitée localement avant l'envoi réseau.
-- Intensité RNNoise réglable avec les préréglages Naturel, Équilibré et Agressif.
-- Mesure RTT réelle affichée comme latence audio pendant la connexion.
-- Sélection et mémorisation des périphériques audio.
-- Préférences persistantes : volume, amplification, mute, couleur et réduction de bruit.
-- Interface sombre responsive et redimensionnable avec plusieurs couleurs d'accent.
-- Icône dans le tray système, ouverture par clic gauche et accès aux paramètres depuis le menu du tray.
-- Fermeture dans le tray configurable, avec masquage de la fenêtre de la barre des tâches.
-- Démarrage automatique sous Windows et Linux, avec possibilité de démarrer directement dans le tray.
-- Journal de diagnostic borné à 2 Mo avec une seule archive (`duovoice.log.1`).
-- Vérification et installation des mises à jour via le plugin officiel Tauri Updater et GitHub Releases.
+- Bidirectional LAN audio over UDP.
+- 48 kHz PCM, 10 ms frames.
+- Microphone and output device selection at connection time.
+- Remote volume.
+- Mute.
+- LAN peer discovery.
+- System tray.
+- No account or server.
 
-## Audio et réduction de bruit
+### Important V1 limitation
 
-Le transport audio utilise du PCM brut sur UDP afin de rester simple et léger. Les trames font 480 échantillons à 48 kHz, soit 10 ms. La pile audio sélectionne explicitement une configuration compatible 48 kHz afin de rester stable avec les périphériques supportés par CPAL.
+For the first test build, the selected input and output devices must expose a 48 kHz default configuration. The current transport is intentionally uncompressed PCM so the first build avoids a native Opus toolchain dependency. CPAL provides cross-platform audio I/O (WASAPI on Windows and ALSA/PipeWire paths on Linux). Opus can be added after the basic audio path is validated.
 
-RNNoise fonctionne côté Rust, localement sur le microphone, en mono 48 kHz par blocs de 480 échantillons. Le signal sec est retardé du même bloc que le traitement avant le mélange d'intensité, afin d'éviter l'effet de voix doublée. La fonction peut être activée ou désactivée à chaud et son état est mémorisé.
+### Firewall
 
-## Réseau et pare-feu
+Allow UDP 39471 (discovery) and UDP 39472 (audio) on the local network.
 
-DuoVoice fonctionne uniquement sur le réseau local.
+## GitHub build
 
-- **UDP 39471** : découverte des machines.
-- **UDP 39472** : audio.
+The repository contains `.github/workflows/build.yml`. Push to `main` or run the workflow manually from the Actions tab. Windows installers (`.exe`/`.msi`) and Linux packages (`.AppImage`/`.deb`) are uploaded as workflow artifacts.
 
-Autorisez ces deux ports dans le pare-feu local lorsque nécessaire.
 
-La découverte tourne en arrière-plan et conserve les machines détectées pendant une courte période afin d'éviter les fluctuations d'affichage. Une adresse IPv4 peut également être ajoutée manuellement.
+## Démarrage automatique
 
-## Tray et démarrage
+DuoVoice inclut le plugin officiel Tauri Autostart. Depuis **Réglages**, cochez **Démarrage automatique**. Le réglage est pris en charge sur Windows et Linux. Au démarrage automatique, DuoVoice se lance directement dans le tray.
 
-Dans **Paramètres**, vous pouvez activer le démarrage automatique. Lorsqu'il est lancé par l'autostart, DuoVoice peut démarrer directement dans le tray.
+Le bouton `X` masque également la fenêtre dans le tray au lieu de quitter l'application. Pour quitter complètement, utilisez **Quitter** dans le menu du tray.
 
-Le comportement du bouton **X** est configurable : réduire DuoVoice dans le tray ou quitter complètement l'application. En mode tray, la fenêtre est également retirée de la barre des tâches.
+Le plugin officiel Tauri documente le support Windows/Linux et les commandes enable/disable/is-enabled : https://v2.tauri.app/plugin/autostart/
 
-## Journal de diagnostic
 
-DuoVoice écrit un journal technique pour faciliter le diagnostic des problèmes de démarrage, audio et réseau. Le fichier actif est `duovoice.log`. Il est limité à **2 Mo** et, lors de la rotation, une seule archive `duovoice.log.1` est conservée.
+## Diagnostic Windows
+### Journal de diagnostic
 
-Les événements utiles peuvent notamment concerner le démarrage et l'arrêt, les connexions/déconnexions, les périphériques audio, la découverte réseau, les erreurs RNNoise et les plugins Tauri.
+DuoVoice conserve un journal technique optionnel dans `duovoice.log` pour faciliter le diagnostic des problèmes de démarrage, audio ou réseau. Le fichier est automatiquement limité à **2 Mo**, avec au maximum **une archive** (`duovoice.log.1`) afin d'éviter l'accumulation de fichiers.
+## v0.2.3
+Stability pass: discovery traffic/churn reduced and startup/runtime behavior kept conservative. Audio transport remains PCM/UDP in this build.
 
-## Mise à jour automatique
+## v0.3.0
+Interface refondue, volume jusqu'à 200 %, mute disponible hors connexion, préférences de volume persistantes, affichage de la latence audio estimée et accès Paramètres depuis le tray.
 
-DuoVoice utilise le plugin officiel Tauri Updater. L'application vérifie au lancement si une version plus récente est disponible. Lorsqu'une mise à jour est proposée, la bannière en haut de l'interface permet de lancer son téléchargement et son installation. La version installée est également affichée dans les paramètres.
 
-Le workflow `.github/workflows/release.yml` publie les artefacts Windows et Linux sur une GitHub Release lorsqu'un tag `vX.Y.Z` est poussé. Il génère également le manifeste `latest.json` et les signatures nécessaires à l'updater.
+## v0.3.1
+- Finitions UI : volume adaptatif 0–100 % / 0–200 % et sauvegarde.
+- Palette de couleurs douces personnalisable.
+- Indicateur de latence conservé sans valeur artificielle lorsqu'aucune mesure réelle n'est disponible.
 
-## Build
 
-Le workflow `.github/workflows/build.yml` construit DuoVoice pour Windows et Linux. Les artefacts produits sont :
+## v2.0
 
-- Windows : installateurs `.exe` et `.msi`.
-- Linux : `.AppImage` et `.deb`.
+### Mise à jour UI 1.0
+- Ajout des favoris de machines/IP directement depuis le sélecteur avec l’icône étoile.
+- Les favoris affichent leur disponibilité en temps réel ; un favori disponible est cliquable pour se connecter directement.
+- Les panneaux Connexion et Audio sont alignés à la même hauteur sur la vue large/carrée.
+- Palette d’apparence légèrement plus saturée tout en conservant le thème sombre.
+- Mesure RTT réseau réelle en temps réel pendant une connexion.
+- Palette de couleurs douces persistante.
+- Barre de volume 0–100 %, extension à 200 % lorsque l’amplification est activée.
+- Fenêtre principale carrée par défaut (720 × 720) avec mise en page responsive lors du redimensionnement.
 
-Pour un build local :
 
-```bash
-npm install
-npm run tauri -- build
-```
+## Réduction de bruit
 
-## Publication d'une release
+La version 3.0 conserve les améliorations de la version 2.0.0 et ajoute un journal de diagnostic borné. RNNoise est intégré côté Rust pour traiter le microphone localement avant l'envoi UDP. Le traitement est explicitement mono, 48 kHz, par trames de 480 échantillons (10 ms), conformément au fonctionnement de RNNoise.
 
-Avant la première release, consultez [`UPDATER_SETUP.md`](UPDATER_SETUP.md) pour la génération des clés et la configuration des secrets GitHub.
+Le signal sec est retardé du même bloc de 10 ms que le traitement RNNoise avant le mélange d'intensité. Cela évite de mélanger un signal direct avec sa version retardée, ce qui produirait un effet de voix doublée.
 
-Une release suit le principe :
+La fonction est désactivable à chaud. Son état ON/OFF et son intensité sont sauvegardés localement. Le réglage d'intensité agit comme un mixage entre le signal brut et le signal traité, avec trois préréglages : Naturel, Équilibré et Agressif.
 
-```bash
-git add .
-git commit -m "Release v1.1.0"
-git tag v1.1.0
-git push origin main --tags
-```
+## v3.0 — mise à jour automatique
 
-Pour les versions suivantes, incrémentez la version selon le changement effectué et poussez le tag correspondant.
+DuoVoice 3.0 intègre le plugin officiel Tauri Updater. L'application vérifie au lancement si une version plus récente est disponible. La page principale affiche l'état de mise à jour en haut et une version disponible est cliquable pour lancer le téléchargement et l'installation. Les paramètres affichent également la version installée.
 
-**Important :** la clé privée de signature Tauri ne doit jamais être commitée dans le dépôt.
+### Publication GitHub
+
+Le workflow `.github/workflows/release.yml` publie Windows puis Linux sur une GitHub Release lorsqu'un tag `vX.Y.Z` est poussé. Il génère aussi `latest.json` pour l'updater et les signatures nécessaires.
+
+Avant la première publication :
+
+1. Générer une paire de clés Tauri :
+   `npm run tauri signer generate -- -w ~/.tauri/duovoice.key`
+2. Conserver la clé privée **hors du dépôt**.
+3. Ajouter dans les secrets GitHub du dépôt :
+   - `TAURI_SIGNING_PRIVATE_KEY` : contenu de la clé privée.
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` : mot de passe de la clé si utilisé.
+   - `TAURI_SIGNING_PUBLIC_KEY` : clé publique affichée lors de la génération.
+4. Créer un tag, par exemple `v3.0.0`, puis le pousser :
+   `git tag v3.0.0 && git push origin v3.0.0`
+
+Le workflow remplace automatiquement les placeholders de `src-tauri/tauri.release.conf.json` par l'URL GitHub Releases du dépôt et la clé publique. La clé privée reste uniquement dans les secrets GitHub. Tauri exige une signature pour les mises à jour et le fichier `.sig` doit correspondre exactement à l'artefact publié.
+
+> Important : ne commit jamais la clé privée. Si elle est perdue, les versions déjà installées ne pourront plus vérifier les futures mises à jour avec cette clé.
