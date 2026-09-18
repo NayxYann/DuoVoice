@@ -8,6 +8,7 @@ const COLOR_KEY = "duovoice.color";
 const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
 const PALETTE = { violet: "#a78bfa", rose: "#f472b6", bleu: "#60a5fa", vert: "#4ade80", jaune: "#facc15", orange: "#fb923c", cyan: "#22d3ee", ardoise: "#94a3b8" };
+
 let peers = [];
 let connected = false;
 let remote = "";
@@ -16,44 +17,57 @@ let busy = false;
 function applyColor(name) {
   const color = PALETTE[name] || PALETTE.violet;
   document.documentElement.style.setProperty("--accent", color);
-  document.documentElement.style.setProperty("--accent-soft", `${color}22`);
+  document.documentElement.style.setProperty("--accent-soft", `${color}24`);
+  document.documentElement.style.setProperty("--accent-border", `${color}70`);
 }
 
 function favoriteAddresses() {
   try {
-    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]").map(item => item.address).filter(Boolean);
-  } catch { return []; }
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]").map((item) => item.address).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function renderPeers() {
   const select = $("trayPeer");
-  const selected = select.value;
+  const selected = select.value || remote;
   select.innerHTML = "";
+
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = connected ? "Changer de correspondant…" : "Choisir un PC…";
+  placeholder.textContent = peers.length ? "Choisir un PC…" : "Aucun hôte détecté";
   select.appendChild(placeholder);
 
   const favs = favoriteAddresses();
-  const ordered = [...peers].sort((a,b) => (favs.includes(a.address) ? -1 : 0) - (favs.includes(b.address) ? -1 : 0));
+  const ordered = [...peers].sort((a, b) => Number(favs.includes(b.address)) - Number(favs.includes(a.address)));
   for (const peer of ordered) {
     const option = document.createElement("option");
     option.value = peer.address;
-    option.textContent = `${peer.name} · ${peer.address}`;
+    option.textContent = favs.includes(peer.address) ? `★ ${peer.name}` : peer.name;
+    option.title = peer.address;
     select.appendChild(option);
   }
-  if (peers.some(p => p.address === selected)) select.value = selected;
+
+  if (peers.some((peer) => peer.address === selected)) select.value = selected;
 }
 
 function updateStatus() {
-  const el = $("trayStatus");
-  el.className = `tray-status ${connected ? "online" : "offline"}`;
-  el.innerHTML = `<i></i>${connected ? "Connecté" : "Hors ligne"}`;
-  const peer = peers.find(p => p.address === remote);
-  $("trayPeerName").textContent = peer ? peer.name : (remote || "Aucun correspondant");
-  $("quickConnectText").textContent = connected ? "Déconnecter" : "Se connecter";
-  $("quickConnect").classList.toggle("danger-action", connected);
-  $("quickConnect").classList.toggle("accent-action", !connected);
+  const status = $("trayStatus");
+  status.className = `tray-status ${connected ? "online" : "offline"}`;
+  status.innerHTML = `<i></i>${connected ? "Connecté" : "Hors ligne"}`;
+
+  const peer = peers.find((item) => item.address === remote);
+  $("trayPeerName").textContent = connected ? (peer?.name || remote || "Hôte connecté") : "Aucun hôte connecté";
+
+  const connectButton = $("quickConnect");
+  $("quickConnectText").textContent = connected ? "Déconnecter" : "Connexion";
+  connectButton.classList.toggle("primary", !connected);
+  connectButton.classList.toggle("disconnect", connected);
+
+  if (connected && remote && peers.some((item) => item.address === remote)) {
+    $("trayPeer").value = remote;
+  }
 }
 
 async function refreshState() {
@@ -64,22 +78,30 @@ async function refreshState() {
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted));
     $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
-    $("quickMute").classList.toggle("active-action", muted);
+    $("quickMute").classList.toggle("active", muted);
     updateStatus();
   } catch {}
 }
 
 async function refreshPeers() {
-  try { peers = await invoke("list_peers"); renderPeers(); updateStatus(); } catch {}
+  try {
+    peers = await invoke("list_peers");
+    renderPeers();
+    updateStatus();
+  } catch {}
 }
 
 async function connectSelected() {
   if (busy) return;
   busy = true;
+  const button = $("quickConnect");
+  button.disabled = true;
+
   try {
     if (connected) {
       await invoke("stop_audio");
-      connected = false; remote = "";
+      connected = false;
+      remote = "";
     } else {
       const address = $("trayPeer").value || favoriteAddresses()[0] || peers[0]?.address;
       if (!address) {
@@ -87,19 +109,25 @@ async function connectSelected() {
         $("trayPeer").focus();
         return;
       }
+
       const input = localStorage.getItem("duovoice.input") || null;
       const output = localStorage.getItem("duovoice.output") || null;
       await invoke("start_audio", { remote: address, input, output });
       const volume = Math.max(0, Math.min(2, Number(localStorage.getItem("duovoice.volume") ?? 100) / 100));
       await invoke("set_volume", { volume });
-      connected = true; remote = address;
+      connected = true;
+      remote = address;
     }
+
     await emit("audio-state-changed");
     await refreshState();
-  } catch (e) {
-    invoke("log_client_error", { message: `Tray connect: ${String(e)}` }).catch(() => {});
-    $("trayPeerName").textContent = `Erreur : ${e}`;
-  } finally { busy = false; }
+  } catch (error) {
+    invoke("log_client_error", { message: `Tray connect: ${String(error)}` }).catch(() => {});
+    $("trayPeerName").textContent = `Erreur de connexion`;
+  } finally {
+    busy = false;
+    button.disabled = false;
+  }
 }
 
 async function toggleMute() {
@@ -107,11 +135,10 @@ async function toggleMute() {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     $("quickMuteText").textContent = muted ? "Réactiver" : "Muet";
-    $("quickMute").classList.toggle("active-action", muted);
+    $("quickMute").classList.toggle("active", muted);
     await emit("audio-state-changed");
-  } catch (e) {
-    invoke("log_client_error", { message: `Tray mute: ${String(e)}` }).catch(() => {});
-    $("trayPeerName").textContent = `Muet : ${e}`;
+  } catch (error) {
+    invoke("log_client_error", { message: `Tray mute: ${String(error)}` }).catch(() => {});
   }
 }
 
@@ -119,24 +146,41 @@ async function openMain(settings = false) {
   try {
     await invoke("show_main_window", { settings });
     await getCurrentWindow().hide();
-  } catch (e) {
-    $("trayPeerName").textContent = `Ouverture impossible : ${e}`;
+  } catch (error) {
+    invoke("log_client_error", { message: `Tray open main: ${String(error)}` }).catch(() => {});
   }
 }
 
-$("trayPeer").addEventListener("change", async () => {
-  if ($("trayPeer").value && !connected) await connectSelected();
-});
+function setQuitConfirmation(open) {
+  const layer = $("quitConfirm");
+  layer.classList.toggle("open", open);
+  layer.setAttribute("aria-hidden", String(!open));
+  if (open) $("cancelQuit").focus();
+}
+
 $("quickConnect").addEventListener("click", connectSelected);
 $("quickMute").addEventListener("click", toggleMute);
 $("openApp").addEventListener("click", () => openMain(false));
 $("openSettings").addEventListener("click", () => openMain(true));
 $("closeTray").addEventListener("click", () => getCurrentWindow().hide());
-$("quitTray").addEventListener("click", () => invoke("quit_app"));
+$("quitTray").addEventListener("click", () => setQuitConfirmation(true));
+$("cancelQuit").addEventListener("click", () => setQuitConfirmation(false));
+$("confirmQuit").addEventListener("click", () => invoke("quit_app"));
+$("quitConfirm").addEventListener("click", (event) => {
+  if (event.target === $("quitConfirm")) setQuitConfirmation(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if ($("quitConfirm").classList.contains("open")) setQuitConfirmation(false);
+    else getCurrentWindow().hide();
+  }
+});
 
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY) applyColor(event.newValue || "violet");
 });
+
 let peerTimer = null;
 let stateTimer = null;
 
@@ -156,7 +200,10 @@ function stopPolling() {
 }
 
 window.addEventListener("focus", startPolling);
-window.addEventListener("blur", stopPolling);
+window.addEventListener("blur", () => {
+  setQuitConfirmation(false);
+  stopPolling();
+});
 listen("theme-changed", (event) => applyColor(event.payload?.color || "violet")).catch(() => {});
 
 applyColor(localStorage.getItem(COLOR_KEY) || "violet");

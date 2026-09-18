@@ -15,35 +15,57 @@
           <span id="trayStatus" class="tray-status offline"><i></i>Hors ligne</span>
         </div>
       </div>
-      <button id="closeTray" class="tray-close" type="button" aria-label="Fermer">×</button>
+      <button id="closeTray" class="icon-button close-button" type="button" aria-label="Fermer"></button>
     </header>
 
-    <div id="trayPeerName" class="tray-peer-name">Aucun correspondant</div>
+    <section class="host-card" aria-label="Connexion">
+      <div class="host-copy">
+        <span class="eyebrow">Hôte</span>
+        <strong id="trayPeerName">Aucun hôte connecté</strong>
+      </div>
+      <select id="trayPeer" class="tray-peer-select" aria-label="Choisir un hôte">
+        <option value="">Choisir un PC…</option>
+      </select>
+    </section>
 
-    <select id="trayPeer" class="tray-peer-select" aria-label="Ordinateur distant">
-      <option value="">Choisir un PC…</option>
-    </select>
+    <section class="action-grid" aria-label="Contrôles rapides">
+      <button id="quickConnect" class="action-tile primary" type="button">
+        <span class="tile-icon connect-icon" aria-hidden="true"></span>
+        <span id="quickConnectText" class="tile-label">Connexion</span>
+      </button>
 
-    <div class="quick-actions">
-      <button id="quickConnect" class="quick-action accent-action" type="button">
-        <span class="quick-icon">↔</span>
-        <span id="quickConnectText">Se connecter</span>
+      <button id="quickMute" class="action-tile" type="button">
+        <span class="tile-icon mute-icon" aria-hidden="true"></span>
+        <span id="quickMuteText" class="tile-label">Muet</span>
       </button>
-      <button id="quickMute" class="quick-action" type="button">
-        <span class="quick-icon">🎙</span>
-        <span id="quickMuteText">Muet</span>
+
+      <button id="openApp" class="action-tile" type="button">
+        <span class="tile-icon app-icon" aria-hidden="true"></span>
+        <span class="tile-label">Ouvrir</span>
       </button>
-      <button id="openApp" class="quick-action" type="button">
-        <span class="quick-icon">▣</span>
-        <span>Ouvrir DuoVoice</span>
+
+      <button id="openSettings" class="action-tile" type="button">
+        <span class="tile-icon settings-icon" aria-hidden="true"></span>
+        <span class="tile-label">Paramètres</span>
       </button>
+    </section>
+
+    <button id="quitTray" class="quit-button" type="button">
+      <span class="power-icon" aria-hidden="true"></span>
+      Quitter DuoVoice
+    </button>
+
+    <div id="quitConfirm" class="confirm-layer" aria-hidden="true">
+      <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="quitTitle">
+        <div class="confirm-icon"><span class="power-icon" aria-hidden="true"></span></div>
+        <strong id="quitTitle">Quitter DuoVoice ?</strong>
+        <p>L’application et l’audio seront complètement arrêtés.</p>
+        <div class="confirm-actions">
+          <button id="cancelQuit" type="button">Annuler</button>
+          <button id="confirmQuit" class="danger" type="button">Quitter</button>
+        </div>
+      </div>
     </div>
-
-    <footer class="tray-footer">
-      <button id="openSettings" type="button">Paramètres</button>
-      <span></span>
-      <button id="quitTray" type="button">Quitter</button>
-    </footer>
   </main>
   <script type="module" src="/src/tray.js"></script>
 </body>

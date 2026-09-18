@@ -2,7 +2,7 @@
 
 ## 1. Clés de signature
 
-La version 1.1.8 utilise la clé publique déjà présente dans `src-tauri/tauri.conf.json`.
+La version 1.1.9 utilise la clé publique déjà présente dans `src-tauri/tauri.conf.json`.
 
 La clé privée correspondante reste uniquement dans GitHub Actions, dans :
 
@@ -33,22 +33,22 @@ git commit -m "chore: stop tracking node_modules"
 
 Le workflow vérifie ce point avant de construire.
 
-## 4. Publier la 1.1.8
+## 4. Publier la 1.1.9
 
 Après avoir copié les fichiers corrigés :
 
 ```bash
 git add .
-git commit -m "release: DuoVoice 1.1.8"
+git commit -m "release: DuoVoice 1.1.9"
 git push origin main
 ```
 
-Si le tag distant `v1.1.8` a bien été supprimé :
+Si le tag distant `v1.1.9` a bien été supprimé :
 
 ```bash
-git tag -d v1.1.8 2>/dev/null || true
-git tag v1.1.8
-git push origin v1.1.8
+git tag -d v1.1.9 2>/dev/null || true
+git tag v1.1.9
+git push origin v1.1.9
 ```
 
 Le workflow `.github/workflows/release.yml` construit Windows d'abord, puis Linux, afin d'ajouter les plateformes à la même GitHub Release sans lancer les publications en parallèle.
@@ -64,4 +64,4 @@ La release doit contenir au minimum :
 - paquet `.deb` ;
 - `latest.json`.
 
-Une version installée avec une autre clé publique ne peut pas accepter une release signée par la nouvelle clé : dans ce cas, une réinstallation manuelle de la build 1.1.8 signée avec la nouvelle paire de clés est nécessaire une fois.
+Une version installée avec une autre clé publique ne peut pas accepter une release signée par la nouvelle clé : dans ce cas, une réinstallation manuelle de la build 1.1.9 signée avec la nouvelle paire de clés est nécessaire une fois.

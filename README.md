@@ -1,4 +1,12 @@
-# DuoVoice 1.1.8
+# DuoVoice 1.1.9
+
+## Nouveautés 1.1.9
+
+- Nouveau panneau de contrôle rapide compact dans la zone de notification.
+- Connexion/déconnexion à un hôte, mode muet, ouverture de l’app et accès direct aux paramètres.
+- Fermeture complète avec confirmation intégrée au panneau.
+- Scrollbars masquées dans toute l’interface tout en conservant le défilement à la molette/trackpad.
+
 
 DuoVoice est un intercom vocal local pour Windows et Linux. Il fonctionne directement sur le réseau local, sans compte ni serveur central.
 

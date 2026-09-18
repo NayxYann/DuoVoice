@@ -604,6 +604,7 @@ fn start_audio(
     let network = thread::spawn(move || {
         let mut buf = [0u8; 4096];
         let mut last_seq: Option<u32> = None;
+        let mut last_audio_packet_at: Option<Instant> = None;
 
         while !stop_net.load(std::sync::atomic::Ordering::Relaxed) {
             match rx.recv_from(&mut buf) {
@@ -621,13 +622,48 @@ fn start_audio(
                     }
 
                     if let Some(packet) = read_packet(&buf[..n]) {
+                        let now = Instant::now();
                         if let Some(prev) = last_seq {
                             let delta = packet.seq.wrapping_sub(prev);
-                            if delta == 0 || delta > u32::MAX / 2 {
+                            if delta == 0 {
+                                // Exact duplicate: UDP can occasionally deliver the same
+                                // datagram twice, so there is nothing to play again.
                                 continue;
                             }
+
+                            if delta > u32::MAX / 2 {
+                                // The remote sender starts its sequence counter at zero on
+                                // every audio reconnect. Previously, if only the remote side
+                                // reconnected, this receiver kept the old sequence number and
+                                // rejected the whole new stream as stale. That produced the
+                                // classic one-way-audio state until both PCs reconnected.
+                                //
+                                // A genuine UDP reordering is normally only a few packets.
+                                // Treat a large backwards jump as a restarted stream when the
+                                // new counter is near its beginning, or after a short silence.
+                                let silent_for = last_audio_packet_at
+                                    .map(|t| now.duration_since(t))
+                                    .unwrap_or(Duration::MAX);
+                                let remote_restarted = packet.seq < 256
+                                    || silent_for >= Duration::from_millis(500);
+
+                                if remote_restarted {
+                                    app_log(&format!(
+                                        "Remote audio stream restarted (seq {prev} -> {}), resynchronizing",
+                                        packet.seq
+                                    ));
+                                    last_seq = None;
+                                    if let Ok(mut q) = rx_queue_net.try_lock() {
+                                        q.clear();
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
                         }
+
                         last_seq = Some(packet.seq);
+                        last_audio_packet_at = Some(now);
 
                         if let Ok(mut q) = rx_queue_net.try_lock() {
                             q.extend(packet.samples);
@@ -983,7 +1019,7 @@ fn main() {
                                 let _ = w.hide();
                                 return;
                             }
-                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(260, 300));
+                            let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(244, 322));
                             let width = f64::from(size.width);
                             let height = f64::from(size.height);
                             // The Windows notification area normally sits against the right

@@ -1055,3 +1055,19 @@ input[type="range"] {
     text-align: left;
   }
 }
+
+/* DuoVoice 1.1.9 — keep scrolling available while removing visual scrollbars. */
+html,
+body,
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
