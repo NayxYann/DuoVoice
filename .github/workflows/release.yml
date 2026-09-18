@@ -97,4 +97,4 @@ jobs:
           args: --config src-tauri/tauri.release.conf.json
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
-	  retryAttempts: 3
+          retryAttempts: 3
