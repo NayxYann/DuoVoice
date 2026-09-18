@@ -4,6 +4,7 @@ DuoVoice est une application légère d’intercom audio bidirectionnel pour Win
 
 ## Nouveautés 1.2.9
 
+- **Build Vite corrigé** : suppression de la seconde déclaration de `escapeHtml`, qui provoquait l'erreur `Identifier "escapeHtml" has already been declared` pendant `npm run build`.
 - **Sélecteur de version redessiné** : le contrôle « Version installée » reprend désormais les dimensions, bordures, espacements et états hover de DuoVoice au lieu d’une grande ligne grise.
 - **Titres GitHub affichés dans l’historique** : la liste montre uniquement le champ `name` de chaque GitHub Release (avec repli sur le tag si le titre est vide). Le `tag_name` reste utilisé uniquement en interne pour comparer et installer la bonne version.
 - **Démarrage encore fiabilisé** : un échec non critique de redimensionnement ou de systray ne peut plus empêcher l’ouverture de la fenêtre principale.

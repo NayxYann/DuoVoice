@@ -522,10 +522,6 @@ function renderFavorites() {
   }
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'\"':"&quot;"}[c]));
-}
-
 function renderPeers(preferred = "") {
   const select = $("peer");
   const current = preferred || select.value;
