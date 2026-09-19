@@ -33,7 +33,7 @@ const DEFAULT_CLOSE_ACTION = "tray";
 const FALLBACK_VERSION = "1.4.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 840;
+const BASE_WINDOW_HEIGHT = 760;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
@@ -82,11 +82,17 @@ function broadcastTheme(themeName, colorName) {
   emitTo("tray-menu", "theme-changed", payload).catch(() => {});
 }
 
+function syncNativeTrayTheme(themeName, colorName) {
+  invoke("set_tray_theme_icon", { theme: normalizeThemeName(themeName), color: colorName || "violet" })
+    .catch(error => reportError("Tray theme icon", error));
+}
+
 function applyVisualTheme(themeName, { persist = true, broadcast = true } = {}) {
   const colorName = localStorage.getItem(COLOR_KEY) || "violet";
   const normalized = applyThemeVariables(document.documentElement, themeName, colorName);
   if (persist) localStorage.setItem(THEME_KEY, normalized);
   syncThemeControls(normalized, colorName);
+  syncNativeTrayTheme(normalized, colorName);
   if (broadcast) broadcastTheme(normalized, colorName);
   return normalized;
 }
@@ -97,6 +103,7 @@ function applyAppColor(name) {
   localStorage.setItem(THEME_KEY, "duovoice");
   applyThemeVariables(document.documentElement, "duovoice", colorName);
   syncThemeControls("duovoice", colorName);
+  syncNativeTrayTheme("duovoice", colorName);
   broadcastTheme("duovoice", colorName);
 }
 
@@ -554,10 +561,34 @@ function updateFavoriteButton() {
   button.disabled = !$("peer").value;
 }
 
+function closeCompactPopovers(except = "") {
+  for (const id of ["sessionPopover", "favoritesPopover"]) {
+    if (id === except) continue;
+    const popover = $(id);
+    if (!popover) continue;
+    popover.classList.add("hidden");
+  }
+  $("sessionSummary")?.setAttribute("aria-expanded", String(except === "sessionPopover"));
+  $("favoritesSummary")?.setAttribute("aria-expanded", String(except === "favoritesPopover"));
+}
+
+function toggleCompactPopover(id) {
+  const popover = $(id);
+  if (!popover) return;
+  const willOpen = popover.classList.contains("hidden");
+  closeCompactPopovers(willOpen ? id : "");
+  if (willOpen) popover.classList.remove("hidden");
+  else popover.classList.add("hidden");
+  $("sessionSummary")?.setAttribute("aria-expanded", String(!$("sessionPopover")?.classList.contains("hidden")));
+  $("favoritesSummary")?.setAttribute("aria-expanded", String(!$("favoritesPopover")?.classList.contains("hidden")));
+}
+
 function renderFavorites() {
   const box = $("favoritesList");
   if (!box) return;
   const favorites = loadFavorites().sort((a, b) => a.name.localeCompare(b.name));
+  if ($("favoritesSummaryText")) $("favoritesSummaryText").textContent = t("connection.favoritesCount", { count: favorites.length });
+  if ($("favoritesCount")) $("favoritesCount").textContent = t("connection.favoritesCount", { count: favorites.length });
   box.innerHTML = "";
   if (!favorites.length) {
     box.innerHTML = `<div class="favorites-empty">${({en:'No favorites yet. Select a PC, then use the Favorite button.',fr:'Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.',es:'Aún no hay favoritos. Selecciona un PC y usa el botón Favorito.',de:'Noch keine Favoriten. Wähle einen PC und nutze die Favoriten-Schaltfläche.'})[getLanguage()]}</div>`;
@@ -577,18 +608,31 @@ function renderFavorites() {
     connectBtn.innerHTML = UI_ICONS.link;
     connectBtn.title = isActive ? t("status.connected") : t("connection.connect");
     connectBtn.disabled = !available || isActive;
-    connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
+    connectBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (connected) {
+        const merged = new Set(connectedPeers);
+        merged.add(favorite.address);
+        sessionPeers = new Set([...merged].slice(0, 8));
+        persistSessionPeers();
+        await syncLiveSessionPeers();
+      } else {
+        sessionPeers = new Set([favorite.address]);
+        persistSessionPeers();
+        await connectToAddresses([favorite.address]);
+      }
+    });
 
     const disconnectBtn = document.createElement("button");
     disconnectBtn.type = "button";
     disconnectBtn.className = "favorite-action favorite-disconnect";
     disconnectBtn.innerHTML = UI_ICONS.x;
-    disconnectBtn.title = t("connection.disconnect");
+    disconnectBtn.title = t("group.remove");
     disconnectBtn.disabled = !isActive;
-    disconnectBtn.addEventListener("click", (event) => {
+    disconnectBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      disconnectFromFavorite(favorite.address);
+      await removePeerFromSession(favorite.address);
     });
 
     item.innerHTML = `
@@ -639,14 +683,23 @@ function sessionLabel(address) {
 function renderSessionMembers() {
   const box = $("sessionMembers");
   if (!box) return;
-  $("sessionCount").textContent = sessionPeers.size ? `${sessionPeers.size} / 8` : t("group.duo");
-  $("sessionState").textContent = `${connected ? connectedPeers.length + 1 : 1}`;
+  const members = [...sessionPeers];
+  const remoteCount = members.length;
+  const participantCount = remoteCount ? remoteCount + 1 : (connected ? connectedPeers.length + 1 : 1);
+  const summary = remoteCount === 0
+    ? t("group.none")
+    : remoteCount === 1
+      ? t("group.duoSummary", { count: participantCount })
+      : t("group.groupSummary", { count: participantCount });
+  if ($("sessionSummaryText")) $("sessionSummaryText").textContent = summary;
+  if ($("sessionCount")) $("sessionCount").textContent = t("group.participantCount", { count: remoteCount ? participantCount : 0 });
+  if ($("sessionState")) $("sessionState").textContent = `${connected ? connectedPeers.length + 1 : (remoteCount ? participantCount : 1)}`;
   box.innerHTML = "";
-  $("sessionPanel")?.classList.toggle("empty", !sessionPeers.size);
-  if (!sessionPeers.size) {
-    box.innerHTML = `<div class="session-empty">${t("group.empty")}</div>`;
+
+  if (!remoteCount) {
+    box.innerHTML = `<div class="session-empty">${t("group.none")}</div>`;
   } else {
-    for (const address of sessionPeers) {
+    for (const address of members) {
       const item = document.createElement("div");
       const active = connectedPeers.includes(address);
       const discovered = peerCache.has(address);
@@ -659,7 +712,7 @@ function renderSessionMembers() {
       remove.innerHTML = UI_ICONS.x;
       remove.title = t("group.remove");
       remove.setAttribute("aria-label", remove.title);
-      remove.addEventListener("click", () => removePeerFromSession(address));
+      remove.addEventListener("click", (event) => { event.stopPropagation(); removePeerFromSession(address); });
       item.appendChild(remove);
       box.appendChild(item);
     }
@@ -670,36 +723,51 @@ function renderSessionMembers() {
 
 async function addSelectedPeerToSession() {
   const address = $("peer").value;
-  if (!address || sessionPeers.has(address)) return;
+  if (!address) return;
+  if (connected) {
+    for (const current of connectedPeers) sessionPeers.add(current);
+  }
+  if (sessionPeers.has(address)) {
+    toggleCompactPopover("sessionPopover");
+    return;
+  }
   if (sessionPeers.size >= 8) { setDetails(t("group.limit")); return; }
   sessionPeers.add(address);
   persistSessionPeers();
   renderSessionMembers();
   renderPeers(address);
   if (connected) await syncLiveSessionPeers();
+  if ($("sessionPopover")?.classList.contains("hidden")) toggleCompactPopover("sessionPopover");
 }
 
 async function removePeerFromSession(address) {
+  if (!address) return;
+  if (connected) {
+    for (const current of connectedPeers) sessionPeers.add(current);
+  }
   sessionPeers.delete(address);
   persistSessionPeers();
   if (connected && connectedPeers.includes(address)) {
-    if (!sessionPeers.size) {
-      await disconnect();
-    } else {
+    if (sessionPeers.size) {
       await syncLiveSessionPeers();
+    } else {
+      await disconnect();
     }
   }
   renderSessionMembers();
+  renderFavorites();
   renderPeers();
 }
 
 async function syncLiveSessionPeers() {
   if (!connected) return;
   const targets = [...sessionPeers];
-  if (!targets.length) return;
+  if (!targets.length) { await disconnect(); return; }
   try {
     connectedPeers = await invoke("set_audio_peers", { remotes: targets });
     connectedPeer = connectedPeers[0] || "";
+    sessionPeers = new Set(connectedPeers);
+    persistSessionPeers();
     await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
     renderSessionMembers();
     renderFavorites();
@@ -979,10 +1047,8 @@ async function connectToAddresses(addresses) {
     connected = true;
     connectedPeers = targets;
     connectedPeer = targets[0];
-    if (targets.length > 1 || sessionPeers.size) {
-      sessionPeers = new Set(targets);
-      persistSessionPeers();
-    }
+    sessionPeers = new Set(targets);
+    persistSessionPeers();
     $("peer").value = connectedPeer;
     button.textContent = t("connection.disconnect");
     button.classList.add("disconnect-state");
@@ -1035,14 +1101,6 @@ async function disconnect() {
   } finally { disconnecting = false; renderFavorites(); refreshDiagnostics(); }
 }
 
-async function disconnectFromFavorite(address) {
-  if (!connected || !connectedPeers.includes(address)) return;
-  if (connectedPeers.length <= 1) { await disconnect(); return; }
-  sessionPeers.delete(address);
-  persistSessionPeers();
-  await syncLiveSessionPeers();
-}
-
 async function connect() {
   if (connected) {
     const button = $("connect"); button.disabled = true;
@@ -1050,7 +1108,9 @@ async function connect() {
     return;
   }
   const selected = $("peer").value;
-  const targets = sessionPeers.size ? [...sessionPeers] : (selected ? [selected] : []);
+  const targets = sessionPeers.size > 1
+    ? [...sessionPeers]
+    : (selected ? [selected] : [...sessionPeers]);
   if (!targets.length) { setDetails("Sélectionnez un ordinateur ou ajoutez une IP."); return; }
   await connectToAddresses(targets);
 }
@@ -1162,6 +1222,12 @@ $("refresh").addEventListener("click", () => loadPeers(true));
 $("favoriteBtn").addEventListener("click", toggleFavorite);
 $("peer").addEventListener("change", () => { updateFavoriteButton(); renderSessionMembers(); });
 $("addPeerToSession").addEventListener("click", addSelectedPeerToSession);
+$("sessionSummary").addEventListener("click", (event) => { event.stopPropagation(); toggleCompactPopover("sessionPopover"); });
+$("favoritesSummary").addEventListener("click", (event) => { event.stopPropagation(); toggleCompactPopover("favoritesPopover"); });
+$("closeSessionPopover").addEventListener("click", (event) => { event.stopPropagation(); closeCompactPopovers(); });
+$("closeFavoritesPopover").addEventListener("click", (event) => { event.stopPropagation(); closeCompactPopovers(); });
+$("sessionPopover").addEventListener("click", event => event.stopPropagation());
+$("favoritesPopover").addEventListener("click", event => event.stopPropagation());
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
 $("saveClientName").addEventListener("click", saveClientName);
@@ -1183,6 +1249,9 @@ $("boostVolume").addEventListener("change", () => {
   localStorage.setItem(VOLUME_KEY, $("volume").value);
   applyVolume();
 });
+
+$("testAudio").addEventListener("click", runAudioTest);
+$("openDiagnostics").addEventListener("click", openDiagnosticsPanel);
 
 $("mute").addEventListener("click", async () => {
   try {
@@ -1215,7 +1284,35 @@ document.querySelectorAll("[data-noise-preset]").forEach(button => {
 document.addEventListener("click", event => {
   const popover = $("noisePopover");
   if (!popover.classList.contains("hidden") && !event.target.closest(".noise-control")) popover.classList.add("hidden");
+  if (!event.target.closest(".compact-list-anchor")) closeCompactPopovers();
 });
+
+async function runAudioTest() {
+  const button = $("testAudio");
+  if (!button || button.disabled) return;
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = `${UI_ICONS.refresh}<span>${t("audio.testing")}</span>`;
+  try {
+    await invoke("test_audio_output", { output: $("output").value || null });
+    setDetails(t("audio.testDone"));
+  } catch (error) {
+    reportError("Audio test", error);
+    setDetails(`${t("audio.testFailed")} : ${String(error)}`);
+  } finally {
+    button.innerHTML = original;
+    button.disabled = false;
+  }
+}
+
+function openDiagnosticsPanel() {
+  closeCompactPopovers();
+  showSettings();
+  requestAnimationFrame(() => {
+    $("diagnosticsCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    refreshDiagnostics();
+  });
+}
 
 async function applyAudioDeviceChange(kind) {
   const inputEl = $("input");
@@ -1286,6 +1383,10 @@ $("versionPicker").addEventListener("click", event => {
 });
 document.addEventListener("keydown", event => {
   if (event.key !== "Escape") return;
+  if (!$("sessionPopover")?.classList.contains("hidden") || !$("favoritesPopover")?.classList.contains("hidden")) {
+    closeCompactPopovers();
+    return;
+  }
   if ($("versionPicker").classList.contains("open") && !rollbackBusy) {
     setVersionPicker(false);
     return;
@@ -1450,10 +1551,8 @@ async function refreshFromTray() {
     if (connected) {
       if (appliedInputDevice === null) appliedInputDevice = $("input").value || localStorage.getItem("duovoice.input") || null;
       if (appliedOutputDevice === null) appliedOutputDevice = $("output").value || localStorage.getItem("duovoice.output") || null;
-      if (connectedPeers.length > 1) {
-        sessionPeers = new Set(connectedPeers);
-        persistSessionPeers();
-      }
+      sessionPeers = new Set(connectedPeers);
+      persistSessionPeers();
     } else { appliedInputDevice = null; appliedOutputDevice = null; }
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted)); updateMuteUi(muted);
@@ -1468,6 +1567,14 @@ async function refreshFromTray() {
 }
 
 listen("audio-state-changed", refreshFromTray).catch(() => {});
+listen("session-changed", (event) => {
+  const remotes = Array.isArray(event.payload?.remotes) ? event.payload.remotes : [];
+  sessionPeers = new Set(remotes.slice(0, 8));
+  localStorage.setItem(SESSION_KEY, JSON.stringify([...sessionPeers]));
+  renderSessionMembers();
+  renderPeers();
+}).catch(() => {});
+listen("favorites-changed", () => { renderFavorites(); updateFavoriteButton(); }).catch(() => {});
 
 loadSessionPeers();
 applyLanguageUi(getLanguage(), { broadcast: true });

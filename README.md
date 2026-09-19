@@ -7,18 +7,22 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 ## Highlights
 
 - Direct bidirectional audio over the local network
-- One-to-one calls or LAN groups with up to **8 remote PCs**
-- Dynamic group membership while a session is running
+- Automatic Duo / Group sessions with up to **8 remote PCs**
+- Add or remove one participant without dropping the rest of the active session
 - Automatic recovery when a peer temporarily disappears and returns on the same IP
 - Independent jitter buffers per remote peer and local mixing of received voices
+- Compact Session and Favorites controls with floating management panels
+- Session and Favorites management directly from the custom Windows tray panel
 - Microphone mute synchronized between the main window and tray controls
 - Hot switching of microphone and output devices while connected
 - RNNoise-based local microphone noise reduction
 - Remote playback volume up to 200%
+- Built-in output test and one-click access to diagnostics
 - Automatic LAN discovery plus manual IPv4 addresses
 - Favorites and recent connection history
 - Built-in diagnostics for network, audio devices, session state and logs
 - Custom Windows system-tray quick panel and context menu
+- Theme-aware tray icon that follows the selected DuoVoice theme/accent
 - Optional start with Windows, start minimized and close-to-tray behavior
 - UI and tray scaling controls
 - Multiple complete themes and accent colors
@@ -28,18 +32,29 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 
 ## What's new in 1.4.0
 
-Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The Windows tray is group-aware and can reconnect the configured session directly. The home screen was refined again after real-world testing: the audio-profile experiment was removed, device selectors keep their full size, the machine-name row no longer overflows into the Audio card, and remote-volume controls now live in a single contained panel.
+Version 1.4.0 turns the original two-PC intercom into a cleaner multi-PC Windows application without making the normal Duo workflow more complicated.
 
-## Session groups
+A **Session** is now the single source of truth. Connecting to one remote PC creates a Duo session; adding more remote PCs automatically turns it into a Group. Removing one member only removes that member, and the remaining audio streams stay active. If a peer briefly disappears from the LAN, DuoVoice keeps the session alive so that peer can recover when it returns on the same address.
 
-DuoVoice remains simple for two computers: select a PC and press **Connect**.
+The home screen keeps the established DuoVoice layout but avoids permanently expanding long lists. **Session** and **Favorites** are compact full-width controls; clicking either opens an anchored floating panel above the interface, so a large group or favorites collection does not stretch the main window. The Windows tray uses the same compact interaction model for quick management without opening the full application.
 
-For a group, add several discovered computers to the **Session** list before connecting. DuoVoice sends the local microphone stream to every member and mixes incoming streams locally. Up to eight remote computers can be part of one session.
+The Audio side also gains an **Audio actions** area for mute, output testing and direct access to Diagnostics. Device selectors, controls and spacing stay consistent with the existing DuoVoice design system, and all new surfaces use theme variables rather than a hard-coded color scheme. The native tray icon now follows the selected theme or DuoVoice accent color as well.
 
-Group membership can be changed while audio is active. If a remote PC briefly goes offline, the local audio engine stays alive and communication resumes automatically when that PC returns on the same address.
+## Sessions and groups
 
-The custom Windows tray panel also shows the current Duo/group session. When a group is configured, the tray **Connect** action uses the saved group instead of silently falling back to a single peer.
+For the normal two-computer workflow, select a remote PC and press **Connect**. DuoVoice starts a Duo session automatically.
 
+To add another machine, choose it in **Remote computer** and use the add-participant button. The active Session becomes a Group automatically. Click the compact **Session** row to view participants, connection/recovery state and individual remove actions.
+
+Removing a participant never intentionally disconnects the other members. The whole audio session ends only when the last remote participant is removed or when **Leave session / Disconnect** is used.
+
+The tray quick panel exposes the same Session and Favorites summaries. It can add/remove participants, connect to a favorite, mute audio, open DuoVoice or Settings, and leave the active session without changing the mental model used by the main window.
+
+## Themes
+
+The default **DuoVoice** theme remains the neutral dark theme with a selectable accent color (violet by default on a fresh profile). Additional complete themes such as Windows XP, Axolotl, Cherry Blossom, Sage and Ocean keep their own palettes.
+
+All main-window, tray-panel and tray-menu components use the selected theme variables. The native notification-area icon also changes to a matching variant, so a theme change stays coherent without redefining the base DuoVoice palette.
 
 ## Network
 
@@ -66,7 +81,7 @@ The Settings page includes a diagnostics section showing useful runtime informat
 - active microphone and output device
 - DuoVoice log-file path
 
-Runtime logs are stored under `%LOCALAPPDATA%\DuoVoice\duovoice.log`. The log is size-limited and rotated automatically.
+The home Audio card includes a shortcut to this section and a short output-device test. Runtime logs are stored under `%LOCALAPPDATA%\DuoVoice\duovoice.log`; the log is size-limited and rotated automatically.
 
 ## Installation
 
@@ -106,7 +121,7 @@ npm run tauri -- build
 
 ## Privacy
 
-DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites and recent connections are stored locally.
+DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites, recent connections and the saved Session are stored locally.
 
 ## Project status
 

@@ -2169,3 +2169,328 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   min-height: 104px;
 }
 
+
+/* v1.4.0 compact session/favorites — popovers never reserve layout space. */
+.app {
+  height: 760px;
+}
+
+#mainView {
+  overflow: visible;
+}
+
+.main-grid {
+  height: auto;
+  grid-template-rows: auto auto;
+  align-content: start;
+  align-items: start;
+}
+
+.connection-card,
+.audio-card {
+  min-width: 0;
+  overflow: visible;
+}
+
+.compact-lists {
+  width: 100%;
+  margin: 8px 0 10px;
+  display: grid;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.compact-list-anchor {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.compact-list-trigger {
+  width: 100%;
+  height: 46px;
+  padding: 0 11px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--text);
+  text-align: left;
+}
+
+.compact-list-trigger:hover,
+.compact-list-trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--panel-soft) 82%, var(--accent));
+}
+
+.compact-list-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.compact-list-icon .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.compact-list-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.compact-list-copy strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.compact-list-copy small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-list-chevron {
+  width: 16px;
+  height: 16px;
+  justify-self: end;
+  color: var(--muted);
+  transition: transform .15s ease, color .15s ease;
+}
+
+.compact-list-trigger[aria-expanded="true"] .compact-list-chevron {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.compact-list-popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: 0 18px 44px var(--overlay), 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.compact-list-popover.hidden {
+  display: none;
+}
+
+.compact-popover-head {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.compact-popover-head > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.compact-popover-head strong {
+  font-size: 12px;
+}
+
+.compact-popover-head small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.popover-close {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.compact-popover-list {
+  max-height: 212px;
+  overflow-y: auto;
+  display: grid;
+  gap: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.compact-popover-hint {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.compact-list-popover .session-member,
+.compact-list-popover .favorite-item {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.compact-list-popover .favorite-item {
+  padding: 6px 7px;
+}
+
+.compact-list-popover .session-empty,
+.compact-list-popover .favorites-empty {
+  padding: 10px 6px;
+}
+
+/* The compact rows replace the old permanently expanded panels. */
+.session-panel,
+.favorites-panel {
+  display: none !important;
+}
+
+.connection-card .manual-row {
+  margin-top: 0;
+}
+
+/* Audio actions intentionally use the remaining card height instead of leaving dead space. */
+.audio-actions-card {
+  width: 100%;
+  min-height: 112px;
+  padding: 11px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel-soft);
+}
+
+.audio-actions-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audio-actions-heading > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.audio-actions-heading strong {
+  font-size: 12px;
+}
+
+.audio-actions-heading span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.audio-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.audio-action-button {
+  min-width: 0;
+  height: 62px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.audio-action-button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.audio-action-button .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.audio-action-button.active {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.volume-control {
+  margin-bottom: 10px;
+}
+
+/* Natural card heights at the compact 1080×760 home size. */
+.state-card {
+  min-height: 98px;
+}
+
+.connection-card > :not(.compact-lists),
+.audio-card > * {
+  flex-shrink: 0;
+}
+
+.audio-card > .audio-actions-card {
+  flex: 1 1 auto;
+}
+
+/* Final 1.4.0 rhythm: compact summary rows match DuoVoice's 38px field/button system. */
+.compact-list-trigger {
+  height: 38px;
+  padding: 0 10px;
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
+  gap: 8px;
+  border-radius: 9px;
+}
+.compact-list-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+.compact-list-icon .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+.compact-list-copy {
+  gap: 7px;
+}
+.compact-list-copy strong {
+  font-size: 11px;
+}
+.compact-list-copy small {
+  font-size: 10px;
+}
+.compact-lists {
+  margin: 6px 0 9px;
+  gap: 7px;
+}

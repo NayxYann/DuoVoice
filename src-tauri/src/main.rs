@@ -148,6 +148,35 @@ fn set_client_name(state: State<'_, Arc<DiscoveryState>>, name: String) -> Resul
 }
 
 
+fn themed_tray_icon(theme: &str, color: &str) -> tauri::image::Image<'static> {
+    match theme {
+        "windowsxp" => tauri::include_image!("icons/tray-windowsxp.png"),
+        "axolotl" => tauri::include_image!("icons/tray-axolotl.png"),
+        "cherry" => tauri::include_image!("icons/tray-cherry.png"),
+        "sage" => tauri::include_image!("icons/tray-sage.png"),
+        "ocean" => tauri::include_image!("icons/tray-ocean.png"),
+        _ => match color {
+            "rose" => tauri::include_image!("icons/tray-duovoice-rose.png"),
+            "bleu" => tauri::include_image!("icons/tray-duovoice-bleu.png"),
+            "vert" => tauri::include_image!("icons/tray-duovoice-vert.png"),
+            "jaune" => tauri::include_image!("icons/tray-duovoice-jaune.png"),
+            "orange" => tauri::include_image!("icons/tray-duovoice-orange.png"),
+            "cyan" => tauri::include_image!("icons/tray-duovoice-cyan.png"),
+            "ardoise" => tauri::include_image!("icons/tray-duovoice-ardoise.png"),
+            _ => tauri::include_image!("icons/tray-duovoice-violet.png"),
+        },
+    }
+}
+
+#[tauri::command]
+fn set_tray_theme_icon(app: tauri::AppHandle, theme: String, color: String) -> Result<(), String> {
+    let tray = app
+        .tray_by_id("duovoice-main-tray")
+        .ok_or_else(|| "Icône du systray introuvable".to_string())?;
+    tray.set_icon(Some(themed_tray_icon(theme.trim(), color.trim())))
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn set_tray_icon_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let tray = app
@@ -170,8 +199,8 @@ fn set_tray_icon_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), Str
 
 #[tauri::command]
 fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
-    const QUICK_WIDTH: f64 = 280.0;
-    const QUICK_HEIGHT: f64 = 420.0;
+    const QUICK_WIDTH: f64 = 300.0;
+    const QUICK_HEIGHT: f64 = 430.0;
     const MENU_WIDTH: f64 = 190.0;
     const MENU_HEIGHT: f64 = 198.0;
     let scale = scale.clamp(0.9, 1.2);
@@ -463,6 +492,78 @@ fn denoise_frame(
             .round()
             .clamp(-32768.0, 32767.0) as i16;
     }
+}
+
+#[tauri::command]
+fn test_audio_output(output: Option<String>) -> Result<(), String> {
+    let host = cpal::default_host();
+    let output_device = choose_device(&host, output.as_deref(), false)?;
+    let out_cfg = choose_stream_config(&output_device, false)?;
+    let output_config: StreamConfig = out_cfg.clone().into();
+    let channels = output_config.channels.max(1) as usize;
+    let sample_rate = output_config.sample_rate.0 as f32;
+    let duration = Duration::from_millis(420);
+    let amplitude = 0.12f32;
+    let frequency = 523.25f32;
+
+    let stream = match out_cfg.sample_format() {
+        SampleFormat::F32 => {
+            let mut phase = 0.0f32;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [f32], _| {
+                    for frame in data.chunks_mut(channels) {
+                        let value = phase.sin() * amplitude;
+                        phase += std::f32::consts::TAU * frequency / sample_rate;
+                        if phase >= std::f32::consts::TAU { phase -= std::f32::consts::TAU; }
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Audio test output error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::I16 => {
+            let mut phase = 0.0f32;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [i16], _| {
+                    for frame in data.chunks_mut(channels) {
+                        let value = (phase.sin() * amplitude * i16::MAX as f32) as i16;
+                        phase += std::f32::consts::TAU * frequency / sample_rate;
+                        if phase >= std::f32::consts::TAU { phase -= std::f32::consts::TAU; }
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Audio test output error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::U16 => {
+            let mut phase = 0.0f32;
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [u16], _| {
+                    for frame in data.chunks_mut(channels) {
+                        let centered = phase.sin() * amplitude * 32767.0;
+                        let value = (centered + 32768.0).clamp(0.0, 65535.0) as u16;
+                        phase += std::f32::consts::TAU * frequency / sample_rate;
+                        if phase >= std::f32::consts::TAU { phase -= std::f32::consts::TAU; }
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Audio test output error: {e}")),
+                None,
+            )
+        }
+        _ => return Err("Format de sortie non pris en charge pour le test audio".into()),
+    }
+    .map_err(|e| format!("Impossible d'ouvrir la sortie audio pour le test : {e}"))?;
+
+    stream.play().map_err(|e| format!("Impossible de démarrer le test audio : {e}"))?;
+    thread::sleep(duration);
+    drop(stream);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1224,7 +1325,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_scale, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
+            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, test_audio_output, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1288,7 +1389,7 @@ fn main() {
                                         return;
                                     }
 
-                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 420));
+                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(300, 430));
                                     let width = size.width as i32;
                                     let height = size.height as i32;
                                     let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
