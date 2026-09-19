@@ -412,3 +412,10 @@ button:active { transform: translateY(1px); }
 .tray-peer-select:hover { border-color: var(--border-strong); }
 .action-tile.primary { color: var(--text); }
 .action-tile.active:hover { background: color-mix(in srgb, var(--danger-soft) 78%, var(--danger)); color: var(--danger-text); }
+
+/* 1.4.5 — disconnect hover matches the danger action in the main app. */
+.action-tile.disconnect:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 82%, var(--danger));
+  color: var(--danger-text);
+}

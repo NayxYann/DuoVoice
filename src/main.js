@@ -7,6 +7,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 import { COLOR_KEY, THEME_KEY, PALETTE, THEMES, applyThemeVariables, normalizeThemeName } from "./theme.js";
+import { LANGUAGE_KEY, getLanguage, setLanguage, initializeI18n, localeForLanguage } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
@@ -27,7 +28,7 @@ const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.3.4";
+const FALLBACK_VERSION = "1.4.5";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -41,6 +42,9 @@ let appliedInputDevice = null;
 let appliedOutputDevice = null;
 let switchingAudioDevice = false;
 
+initializeI18n();
+const languageSelect = $("languageSelect");
+if (languageSelect) languageSelect.value = getLanguage();
 
 
 // Canonical SVG set used by dynamic controls. Keeping the markup here prevents
@@ -381,7 +385,7 @@ function formatLastUpdate() {
   if (!value) return "Date de mise à jour : non disponible";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Date de mise à jour : non disponible";
-  return `Dernière mise à jour : ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+  return `Dernière mise à jour : ${date.toLocaleDateString(localeForLanguage())} · ${date.toLocaleTimeString(localeForLanguage(), { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 const RELEASES_API = "https://api.github.com/repos/NayxYann/DuoVoice/releases?per_page=30";
@@ -892,7 +896,7 @@ async function checkForUpdates() {
       setDetails(`Mise à jour v${update.version} disponible.`);
     } else {
       await setUpdateBanner("current");
-      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
+      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString(localeForLanguage(), { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
     }
   } catch (e) {
     reportError("Updater check", e);
@@ -1133,6 +1137,17 @@ $("applyUiScale").addEventListener("click", async () => {
   }
 });
 $("resetUiScale").addEventListener("click", resetUiScale);
+if (languageSelect) {
+  languageSelect.addEventListener("change", async () => {
+    const language = setLanguage(languageSelect.value);
+    languageSelect.value = language;
+    if ($("lastUpdate")) $("lastUpdate").textContent = formatLastUpdate();
+    await Promise.allSettled([
+      emitTo("tray", "language-changed", { language }),
+      emitTo("tray-menu", "language-changed", { language }),
+    ]);
+  });
+}
 updateHeaderMode();
 
 $("autostart").addEventListener("change", async e => {
@@ -1262,6 +1277,11 @@ document.addEventListener("click", event => {
 
 listen("open-settings", showSettings).catch(() => {});
 listen("open-main", showMain).catch(() => {});
+listen("language-changed", (event) => {
+  const language = setLanguage(event.payload?.language || "en");
+  if (languageSelect) languageSelect.value = language;
+  if ($("lastUpdate")) $("lastUpdate").textContent = formatLastUpdate();
+}).catch(() => {});
 
 async function refreshFromTray() {
   try {

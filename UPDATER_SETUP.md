@@ -2,7 +2,7 @@
 
 ## 1. Clés de signature
 
-La version 1.3.4 utilise la clé publique déjà présente dans `src-tauri/tauri.conf.json`.
+La version 1.4.5 utilise la clé publique déjà présente dans `src-tauri/tauri.conf.json`.
 
 La clé privée correspondante reste uniquement dans GitHub Actions, dans :
 
@@ -33,17 +33,17 @@ git commit -m "chore: stop tracking node_modules"
 
 Le workflow vérifie ce point avant de construire.
 
-## 4. Publier la 1.3.4
+## 4. Publier la 1.4.5
 
 Après avoir copié les fichiers corrigés :
 
 ```bash
 git add .
-git commit -m "release: DuoVoice 1.3.4"
+git commit -m "release: DuoVoice 1.4.5"
 git push origin main
 ```
 
-Aucun build ni aucune release ne démarre automatiquement au push. Ouvrez ensuite **GitHub → Actions → Release Windows → Run workflow** et saisissez `v1.3.4`. Le workflow utilise cette valeur comme tag de release ; il n’est pas nécessaire de pousser manuellement un tag avant de le lancer.
+Aucun build ni aucune release ne démarre automatiquement au push. Ouvrez ensuite **GitHub → Actions → Release Windows → Run workflow** et saisissez `v1.4.5`. Le workflow utilise cette valeur comme tag de release ; il n’est pas nécessaire de pousser manuellement un tag avant de le lancer.
 
 Le workflow `.github/workflows/release.yml` publie uniquement la version Windows.
 
@@ -56,15 +56,15 @@ La release doit contenir au minimum :
 - signatures `.sig` ;
 - `latest.json`.
 
-Une version installée avec une autre clé publique ne peut pas accepter une release signée par la nouvelle clé : dans ce cas, une réinstallation manuelle de la build 1.3.4 signée avec la nouvelle paire de clés est nécessaire une fois.
+Une version installée avec une autre clé publique ne peut pas accepter une release signée par la nouvelle clé : dans ce cas, une réinstallation manuelle de la build 1.4.5 signée avec la nouvelle paire de clés est nécessaire une fois.
 
-## Choisir une autre version (1.3.4+)
+## Choisir une autre version (1.4.5+)
 
 Depuis **Paramètres → Version**, DuoVoice peut proposer les releases stables antérieures disponibles sur GitHub et réinstaller celle choisie.
 
 Le mécanisme utilise le fichier `latest.json` attaché à la release ciblée, par exemple :
 
-`https://github.com/NayxYann/DuoVoice/releases/download/v1.3.4/latest.json`
+`https://github.com/NayxYann/DuoVoice/releases/download/v1.4.5/latest.json`
 
 La vérification de signature Tauri reste active pendant un retour en arrière. Une ancienne release n'est donc installable automatiquement que si :
 

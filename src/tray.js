@@ -3,11 +3,14 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import "./tray.css";
 import { COLOR_KEY, THEME_KEY, applyThemeVariables, normalizeThemeName } from "./theme.js";
+import { LANGUAGE_KEY, getLanguage, setLanguage, initializeI18n } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
+
+initializeI18n();
 
 let peers = [];
 let connected = false;
@@ -194,6 +197,7 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY || event.key === THEME_KEY) applyTheme();
   if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
+  if (event.key === LANGUAGE_KEY) setLanguage(event.newValue || "en");
 });
 
 let peerTimer = null;
@@ -221,6 +225,7 @@ window.addEventListener("blur", () => {
 });
 listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payload?.color)).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
+listen("language-changed", (event) => setLanguage(event.payload?.language || "en")).catch(() => {});
 listen("audio-state-changed", refreshState).catch(() => {});
 
 

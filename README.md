@@ -1,143 +1,127 @@
-# DuoVoice 1.3.4
+# DuoVoice 1.4.5
 
-## Nouveautés 1.3.4
+DuoVoice is a lightweight Windows LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
 
-- **Sélecteur de versions bidirectionnel** : il est désormais possible d’installer une release signée plus ancienne **ou plus récente** que la version courante, tant qu’elle fournit un `latest.json` compatible.
-- **Carte Audio rééquilibrée** : son contenu est légèrement redescendu pour utiliser plus proprement l’espace disponible sous le bouton Muet sans modifier la structure générale de l’interface.
-- **Icône du systray liée au thème** : l’icône `D` change automatiquement selon le thème ou la couleur d’accent active.
-- **Build Windows uniquement** : GitHub Actions ne conserve plus que **Build Windows** et **Release Windows** ; les cibles de paquets Linux sont retirées de cette branche.
+It is built for people who want a simple alternative to running a full voice-chat platform just to talk between nearby PCs. DuoVoice keeps the workflow direct: choose another DuoVoice computer, connect, and talk in both directions at the same time.
 
+## What DuoVoice does
 
-DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
+- Full-duplex two-way voice communication over the local network.
+- Automatic discovery of other DuoVoice computers on the LAN.
+- Manual IPv4 entry when automatic discovery is unavailable or blocked.
+- Persistent favorites for frequently used computers.
+- Custom network-visible computer name.
+- Selectable microphone and audio output devices.
+- Persistent remote-volume control, with an optional range above 100%.
+- Mute control available from both the main window and the system tray.
+- RNNoise-based microphone noise reduction with adjustable intensity.
+- Live round-trip latency display while connected.
+- Compact system-tray controls for connecting, disconnecting, muting and reopening DuoVoice.
+- Configurable close behavior: minimize to tray or fully quit the application.
+- Optional Windows startup and start-minimized behavior.
+- Multiple visual themes and accent colors, including a tray icon that follows the selected theme.
+- Signed update support through GitHub Releases.
+- Version selector that can install another available signed DuoVoice release, whether older or newer than the currently installed version.
+- Interface languages: English, French, Spanish and German. English is the default language.
 
-## Nouveautés 1.3.2
+## How it works
 
-- **Palette unifiée** : les couleurs de l’application sont désormais pilotées par un jeu commun de variables (fond, surfaces, bordures, texte, accent, succès, danger et mise à jour) afin d’éviter les écarts visuels entre l’interface principale, le panneau systray et le menu clic droit.
-- **Couleur d’accent mieux cadrée** : la couleur choisie dans Apparence sert aux actions, sliders, focus et sélections. Le vert est réservé aux succès/états positifs, le rouge aux actions dangereuses et le rose-violet à une mise à jour disponible. L’état « à jour » redevient neutre pour ne pas surcharger l’écran.
-- **Thèmes++** : nouvelle section sous les couleurs d’accent avec six palettes complètes : **DuoVoice**, **Windows XP**, **Axolotl**, **Cherry Blossom**, **Sage** et **Ocean**. Les thèmes modifient ensemble le fond, les panneaux, les bordures, les textes et les couleurs fonctionnelles.
-- **Lisibilité préservée** : Windows XP et Cherry Blossom utilisent automatiquement une palette claire avec texte sombre ; les autres thèmes conservent des contrastes élevés sur fond sombre.
-- **Systray synchronisé avec les thèmes** : le clic gauche et le clic droit utilisent la même palette que l’application et se mettent à jour immédiatement lorsqu’un thème ou une couleur est sélectionné.
-- **Bouton de déconnexion clarifié** : lorsqu’une session est active, l’action « Se déconnecter » utilise désormais la couleur danger plutôt que la couleur d’accent du thème.
-- Les corrections audio de la **1.3.1** restent conservées : changement de périphérique à chaud et synchronisation complète du Muet entre l’application et le systray.
+DuoVoice uses the local network directly. No external voice server or account is required for normal LAN communication.
 
-## Fonctionnalités principales
+1. Install and launch DuoVoice on both Windows computers.
+2. Make sure both computers are connected to the same local network.
+3. Choose the microphone and audio output you want to use.
+4. Select the other computer from the detected-computer list.
+5. Click **Connect**.
+6. Both computers can now speak and listen at the same time.
 
-- audio bidirectionnel simultané sur le LAN ;
-- transport PCM mono 48 kHz / 16 bits, trames de 10 ms ;
-- sélection et mémorisation du microphone et de la sortie audio ;
-- volume distant 0–100 %, avec option jusqu’à 200 % ;
-- muet disponible même hors connexion ;
-- réduction de bruit RNNoise réglable et persistante ;
-- détection automatique des autres PC DuoVoice ;
-- nom de client personnalisable et diffusé sur le réseau ;
-- ajout d’adresses IPv4 manuelles et favoris persistants ;
-- reconnexion et resynchronisation du flux audio après coupure/reconnexion d’un seul côté ;
-- mesure RTT réelle pendant la connexion ;
-- mini-interface de contrôle depuis le systray ;
-- fermeture vers le tray ou fermeture complète au choix ;
-- démarrage automatique Windows ;
-- option indépendante « Démarrer minimisé dans le tray » ;
-- couleur et échelle d’interface persistantes ;
-- échelle indépendante et sécurisée du mini-panneau systray ;
-- mise à jour automatique signée via GitHub Releases ;
-- journal borné à 2 Mo avec une seule archive `duovoice.log.1`.
+If the other computer does not appear automatically, enter its local IPv4 address manually and add it to the list.
 
-## Réseau
+Favorites are useful for computers you connect to regularly. They remain available between launches and show whether the saved computer is currently reachable.
 
-DuoVoice utilise :
+## Network ports
 
-- UDP `39471` pour la découverte ;
-- UDP `39472` pour l’audio et les sondes de latence ;
-- TCP `39473` sur `127.0.0.1` uniquement pour empêcher plusieurs instances locales.
+DuoVoice uses the following ports:
 
-Si un pare-feu bloque DuoVoice, autorisez les ports UDP 39471 et 39472 sur le réseau privé/local.
+- UDP `39471` — LAN discovery.
+- UDP `39472` — voice traffic and latency probes.
+- TCP `39473` on `127.0.0.1` only — prevents multiple local DuoVoice instances from running at the same time.
 
-## Installation des dépendances
+If Windows Firewall or another firewall blocks local communication, allow DuoVoice on private networks or allow UDP ports `39471` and `39472`.
 
-Depuis la racine du projet :
+## Audio
 
-```bash
-npm install
-```
+DuoVoice currently uses mono PCM audio at 48 kHz / 16-bit with short packets intended for low-latency LAN communication.
 
-`node_modules` ne doit jamais être commit dans Git. Le `.gitignore` du projet l’exclut volontairement.
+The selected microphone, output device, volume, mute state and noise-reduction settings are saved and restored automatically.
 
-Si une ancienne version du dépôt suivait déjà `node_modules`, nettoyez une seule fois l’index Git :
+Changing the active microphone or output while connected is supported without requiring a manual disconnect/reconnect cycle.
 
-```bash
-git rm -r --cached node_modules
-```
+## Noise reduction
 
-puis réinstallez localement avec `npm install`.
+DuoVoice includes local RNNoise processing for the microphone. Noise reduction happens before microphone audio is sent over the network.
 
-## Développement
+The intensity setting controls how strongly the processed signal is blended into the outgoing microphone signal. The setting and on/off state are persistent.
 
-Frontend :
+## System tray
 
-```bash
-npm run dev
-```
+When the tray icon is enabled, DuoVoice provides a compact control panel with quick access to:
 
-Application Tauri :
+- the detected remote computer;
+- connect / disconnect;
+- mute / unmute;
+- the main DuoVoice window;
+- settings;
+- quitting DuoVoice completely.
 
-```bash
-npm run tauri -- dev
-```
+The tray interface follows the selected DuoVoice theme, and the native tray icon changes to match the active theme or accent color.
 
-Build local :
+## Languages
 
-```bash
-npm run tauri -- build
-```
+The application supports:
 
-## GitHub Actions
+- English — default
+- French
+- Spanish
+- German
 
-Les workflows sont volontairement **manuels uniquement**.
+The language can be changed from **Settings → Language**. The main window, tray controls and tray menu update together.
 
-Un commit ou un **Push origin** ne lance aucun build automatiquement.
+## Updates and version selection
 
-Pour lancer un build :
+DuoVoice can check signed releases published on GitHub.
 
-1. pousser les fichiers sur GitHub ;
-2. ouvrir l’onglet **Actions** ;
-3. choisir **Build Windows** ;
-4. cliquer sur **Run workflow**.
+The normal update banner reports when a newer release is available. The version selector in Settings can also show other signed releases and install a selected version even when it is older or newer than the currently installed build.
 
-Pour publier une release :
+Only releases that include the updater metadata and valid signatures can be installed through this mechanism.
 
-1. pousser les fichiers sur GitHub ;
-2. ouvrir l’onglet **Actions** ;
-3. choisir **Release Windows** ;
-4. cliquer sur **Run workflow** ;
-5. saisir le tag voulu, par exemple `v1.3.4`.
+## Windows builds
 
-Le build produit notamment :
+This branch is Windows-only. The included GitHub Actions workflows are:
 
-- Windows : NSIS `.exe` + MSI `.msi` ;
+- **Build Windows** — creates Windows installers.
+- **Release Windows** — publishes a signed Windows release and updater metadata.
 
-Le workflow refuse explicitement un dépôt dans lequel `node_modules` serait suivi par Git. Cela garde le dépôt propre et reproductible pour les builds Windows.
+The Windows bundle produces NSIS `.exe` and MSI `.msi` installers.
 
-## Mise à jour automatique
+## Diagnostic log
 
-Le fichier public de vérification est :
+DuoVoice keeps a small rotating diagnostic log at:
 
-`https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json`
+`%LOCALAPPDATA%\DuoVoice\duovoice.log`
 
-La clé publique est intégrée à `src-tauri/tauri.conf.json`. La clé privée ne doit jamais être présente dans le dépôt.
+The log is limited in size and is intended for startup, shutdown, audio, network and updater troubleshooting. Raw audio packets are not logged.
 
-Les secrets GitHub Actions nécessaires à la signature sont :
+## Privacy
 
-- `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+DuoVoice is intended for direct local-network communication. Voice traffic is exchanged between the selected LAN computers rather than being routed through a DuoVoice cloud service.
 
-Le workflow de release crée les artefacts de mise à jour et leurs signatures. Sur Windows, le manifeste préfère l’installateur NSIS pour la mise à jour.
+## Requirements
 
-Consultez `UPDATER_SETUP.md` pour la procédure de publication.
+- Windows 10 or Windows 11
+- A working microphone and audio output device
+- Two computers reachable over the same local network for direct LAN use
 
-## Journal de diagnostic
+## Project
 
-Le journal technique est écrit dans :
-
-- Windows : `%LOCALAPPDATA%\\DuoVoice\\duovoice.log`
-
-Il contient uniquement des événements utiles : démarrage, arrêt, erreurs réseau/audio/updater, connexion et déconnexion. Les paquets audio ne sont pas journalisés.
+DuoVoice is built with Tauri, Rust and a lightweight web frontend.

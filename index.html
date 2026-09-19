@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,7 +13,7 @@
         <div>
           <div class="brand-title-row">
             <h1>DuoVoice</h1>
-            <span class="brand-version">1.3.4</span>
+            <span class="brand-version">1.4.5</span>
           </div>
           <p>Intercom local</p>
         </div>
@@ -174,7 +174,7 @@
               <small>Cliquer sur la version pour choisir une autre release.</small>
             </div>
             <button id="versionSelector" class="version-selector" type="button" title="Choisir une autre version" aria-haspopup="dialog">
-              <strong id="appVersion">v1.3.4</strong>
+              <strong id="appVersion">v1.4.5</strong>
               <svg class="ui-icon version-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
           </div>
@@ -182,6 +182,20 @@
             <span>Historique</span>
             <strong id="lastUpdate">Dernière mise à jour : non disponible</strong>
           </div>
+        </section>
+
+        <section class="card language-card">
+          <div class="card-heading">
+            <h3>Langue</h3>
+            <p>Choisissez la langue de l'application.</p>
+          </div>
+          <label for="languageSelect">Langue de l'interface</label>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="es">Español</option>
+            <option value="de">Deutsch</option>
+          </select>
         </section>
 
         <section class="card">
