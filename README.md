@@ -30,9 +30,9 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 - Signed in-app updater with release history / rollback support
 - Update checks at startup and every five minutes while DuoVoice is running
 
-## What's new in 1.4.2
+## What's new in 1.4.3
 
-Version 1.4.2 is a UI and workflow polish release. Duo and LAN Group are kept intentionally separate: Duo is a direct connection to one detected/manual/favorite PC, while LAN Group uses named rooms advertised on the local network.
+Version 1.4.3 is a UI and workflow polish release. Duo and LAN Group are kept intentionally separate: Duo is a direct connection to one detected/manual/favorite PC, while LAN Group uses named rooms advertised on the local network.
 
 The main window now keeps Connection and Audio aligned to the same visual height, removes dead space, and adds an in-card Duo connection summary with the active peer, address and latency. The microphone monitor meter is hidden when the test is inactive and uses a more readable response curve while monitoring.
 

@@ -33,10 +33,10 @@ const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.4.2";
+const FALLBACK_VERSION = "1.4.3";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 820;
+const BASE_WINDOW_HEIGHT = 720;
 const GROUP_WINDOW_HEIGHT = 850;
 const GROUP_WINDOW_MAX_HEIGHT = 940;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
@@ -1073,7 +1073,6 @@ async function setCommunicationMode(mode, { initial = false } = {}) {
   if (!initial && target === communicationMode) return;
 
   if (!initial && target === "duo" && activeRoom) await leaveActiveRoom({ keepMode: true });
-  if (!initial && target === "group" && connected && !activeRoom) await disconnect();
 
   communicationMode = target;
   localStorage.setItem(COMMUNICATION_MODE_KEY, target);
@@ -1582,12 +1581,23 @@ $("testAudio").addEventListener("click", runAudioTest);
 $("openDiagnostics").addEventListener("click", openDiagnosticsPanel);
 
 $("mute").addEventListener("click", async () => {
+  const previous = localStorage.getItem(MUTE_KEY) === "true";
+  const optimistic = !previous;
+  // Match the tray: show the red muted state immediately on click instead of
+  // waiting for the native round-trip or for the hover state to end.
+  localStorage.setItem(MUTE_KEY, String(optimistic));
+  updateMuteUi(optimistic);
   try {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
     await emitTo("tray", "audio-state-changed", { muted });
-  } catch (e) { reportError("Mute", e); setDetails(`Muet : ${e}`); }
+  } catch (e) {
+    localStorage.setItem(MUTE_KEY, String(previous));
+    updateMuteUi(previous);
+    reportError("Mute", e);
+    setDetails(`Muet : ${e}`);
+  }
 });
 
 $("noiseEnabled").addEventListener("change", applyNoiseSettings);
@@ -1821,7 +1831,7 @@ $("trayIconEnabled").checked = storedTrayIconPreference === null
   ? DEFAULT_TRAY_ICON_ENABLED
   : storedTrayIconPreference !== "false";
 
-// v1.4.2 safety/default migration: with a tray icon enabled, the X button
+// v1.4.3 safety/default migration: with a tray icon enabled, the X button
 // minimizes to tray by default. This also repairs installs that inherited the
 // old quit-on-close value from a previous build. The user can still choose
 // "Quit DuoVoice" afterwards in Settings.

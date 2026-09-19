@@ -245,17 +245,9 @@ function renderFavorites() {
     connectButton.title = active ? t("status.connected") : t("connection.connect");
     connectButton.disabled = communicationMode === "group" || !available || active;
     connectButton.addEventListener("click", event => { event.stopPropagation(); connectOrAddFavorite(favorite.address); });
-    const starButton = document.createElement("button");
-    starButton.type = "button";
-    starButton.className = "tray-row-action";
-    starButton.innerHTML = ICONS.star;
-    starButton.title = t("connection.favoriteRemoved");
-    starButton.addEventListener("click", event => {
-      event.stopPropagation();
-      saveFavorites(favoriteItems().filter(item => item.address !== favorite.address));
-      renderFavorites();
-    });
-    actions.append(connectButton, starButton);
+    // The tray is for quick actions only. Favorites are managed from the main
+    // window so an accidental click here can never remove one.
+    actions.append(connectButton);
     row.appendChild(actions);
     box.appendChild(row);
   }

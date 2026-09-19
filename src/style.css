@@ -3036,7 +3036,7 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   #mainView { overflow: auto; }
 }
 
-/* v1.4.2 — final alignment pass: equal main cards, useful Duo state, no clipped helper text. */
+/* v1.4.3 — inherited alignment pass: equal main cards, useful Duo state, no clipped helper text. */
 :root { --design-height: 820px; }
 .main-grid {
   align-items: stretch;
@@ -3148,4 +3148,162 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 #settingsScroll > .settings-head {
   margin: 0 0 13px;
   padding: 0 2px 2px;
+}
+
+
+/* v1.4.3 — compact geometry + strict visual consistency. */
+:root { --design-height: 720px; }
+.app {
+  height: 720px;
+  padding: 14px 18px 14px;
+}
+.app-header { margin-bottom: 7px; }
+.top-status-strip { min-height: 28px; margin-bottom: 7px; }
+.update-banner { min-height: 30px; margin-bottom: 8px; }
+#mainView { min-height: 0; overflow: hidden; }
+.main-grid {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch !important;
+  gap: 10px;
+}
+.main-grid > .connection-card,
+.main-grid > .audio-card {
+  box-sizing: border-box;
+  height: 100% !important;
+  min-height: 0;
+  align-self: stretch !important;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.connection-card, .audio-card { padding: 12px; }
+.connection-card .section-title, .audio-card .section-title { margin-bottom: 9px; }
+
+/* Duo rows use one shared 40 px rhythm: detected PC, manual IP and Favorites. */
+#duoPanel { min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; }
+.duo-peer-row, .manual-row {
+  grid-template-columns: minmax(0, 1fr) 40px !important;
+  gap: 8px;
+}
+.duo-peer-row > select,
+.manual-row > input,
+.duo-peer-row > .icon-btn,
+.manual-row > .add-btn,
+.compact-list-trigger {
+  box-sizing: border-box;
+  height: 40px !important;
+  min-height: 40px !important;
+  border-radius: 9px !important;
+}
+.duo-peer-row > .icon-btn, .manual-row > .add-btn { width: 40px; padding: 0; }
+.manual-label { margin-top: 8px; }
+.compact-hint { margin: 3px 0 8px; min-height: 13px; line-height: 1.25; }
+.duo-favorites-only { margin: 0 0 8px; }
+.duo-connection-state {
+  min-height: 54px;
+  margin: auto 0 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+}
+.duo-connect { min-height: 40px; height: 40px; border-radius: 9px; }
+
+/* Audio keeps the same density and fills exactly the same card height. */
+.audio-card { gap: 0; }
+.audio-card > select { height: 40px; min-height: 40px; margin-bottom: 8px; border-radius: 9px; }
+.audio-card .noise-control, .audio-card .volume-control, .audio-actions-card { border-radius: 9px; }
+.audio-card .noise-control { margin: 0 0 8px; padding: 9px 10px; }
+.audio-card .volume-control { margin: 0 0 8px; padding: 9px 10px; }
+.audio-actions-card {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+}
+.audio-actions-grid {
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(52px, 1fr));
+  gap: 8px;
+}
+.audio-action-button {
+  height: auto !important;
+  min-height: 52px !important;
+  border-radius: 8px;
+}
+#mute.active, #mute.active:hover:not(:disabled), #mute.active:focus-visible {
+  border-color: var(--danger-border) !important;
+  background: var(--danger-soft) !important;
+  color: var(--danger-text) !important;
+  filter: none !important;
+}
+#mute.active .mute-slash { opacity: 1; }
+
+/* Group: left-aligned, rectangular/square-ish cards that follow the app rhythm. */
+#groupPanel { min-height: 0; flex: 1 1 auto; gap: 8px; }
+.room-create-block,
+.active-room-card.active-room-detailed,
+.rooms-empty,
+.room-row-main,
+.room-row-delete,
+.active-room-member,
+.room-create-button,
+.room-leave-button,
+.room-delete-button { border-radius: 8px !important; }
+.room-create-block { padding: 9px; }
+.room-create-row input, .room-create-button { height: 40px; min-height: 40px; }
+.available-rooms-block { flex: 1 1 auto; min-height: 0; }
+.rooms-list { max-height: none; min-height: 0; overflow-y: auto; align-content: start; }
+.room-row { min-height: 46px; grid-template-columns: minmax(0,1fr) 40px; gap: 7px; }
+.room-row-main { min-height: 46px; padding: 6px 8px; }
+.room-row-delete { width: 40px; min-height: 46px; }
+.room-row-icon, .active-room-icon { width: 32px; height: 32px; border-radius: 7px; }
+.active-room-card.active-room-detailed {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0,1fr) auto;
+  align-items: start;
+  gap: 8px;
+  text-align: left;
+}
+.active-room-head {
+  width: 100%;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  justify-items: stretch;
+}
+.active-room-copy { align-items: flex-start; text-align: left; }
+.active-room-members-head { width: 100%; justify-content: flex-start; gap: 8px; }
+.active-room-members {
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  align-content: start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.active-room-member {
+  min-width: 0;
+  min-height: 48px;
+  padding: 7px 8px;
+  grid-template-columns: 7px minmax(0,1fr) auto;
+}
+.active-room-actions {
+  width: 100%;
+  margin-top: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.active-room-actions.single-action { grid-template-columns: 1fr; }
+.room-leave-button, .room-delete-button { height: 40px; min-height: 40px; }
+
+/* The compact 720 px window is the normal layout; fallback scroll only on smaller displays. */
+@media (max-height: 700px) {
+  .app { height: 100vh; min-height: 100vh; padding-top: 10px; padding-bottom: 10px; }
+  #mainView { overflow-y: auto; }
+  .main-grid { height: auto; min-height: 100%; }
 }
