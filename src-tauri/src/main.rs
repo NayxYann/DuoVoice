@@ -29,7 +29,7 @@ const JITTER_START_FRAMES: usize = 4;
 const JITTER_TARGET_FRAMES: usize = 6;
 const JITTER_MAX_FRAMES: usize = 12;
 const INSTANCE_PORT: u16 = 39473;
-const MAX_GROUP_PEERS: usize = 8;
+const MAX_GROUP_PEERS: usize = 11; // 12 participants total including this PC
 
 #[derive(Serialize)]
 struct DeviceLists {
@@ -44,6 +44,33 @@ struct Peer {
     name: String,
     address: String,
     port: u16,
+}
+
+#[derive(Clone)]
+struct LocalRoom {
+    id: String,
+    name: String,
+    is_host: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct RoomMember {
+    name: String,
+    address: String,
+    host: bool,
+    is_self: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct RoomInfo {
+    id: String,
+    name: String,
+    host_name: String,
+    host_address: String,
+    participants: usize,
+    max_participants: usize,
+    is_local: bool,
+    members: Vec<RoomMember>,
 }
 
 struct AudioState {
@@ -62,11 +89,31 @@ struct AudioState {
 struct DiscoveredPeer {
     peer: Peer,
     last_seen: Instant,
+    room_id: Option<String>,
+    room_name: Option<String>,
+    room_host: bool,
 }
 
 struct DiscoveryState {
     peers: Mutex<HashMap<String, DiscoveredPeer>>,
     local_name: Mutex<String>,
+    local_room: Mutex<Option<LocalRoom>>,
+}
+
+struct MicMonitorState {
+    engine: Mutex<Option<MicMonitorEngine>>,
+    level: Arc<Mutex<f32>>,
+}
+
+struct MicMonitorEngine {
+    _input: Stream,
+    _output: Stream,
+}
+
+#[derive(Serialize)]
+struct MicMonitorStatus {
+    active: bool,
+    level: f32,
 }
 
 struct AudioEngine {
@@ -120,8 +167,170 @@ fn list_devices() -> DeviceLists {
 fn list_peers(state: State<'_, Arc<DiscoveryState>>) -> Vec<Peer> {
     let now = Instant::now();
     let mut peers = state.peers.lock().unwrap();
-    peers.retain(|_, p| now.duration_since(p.last_seen) < Duration::from_secs(15));
+    peers.retain(|_, p| now.saturating_duration_since(p.last_seen) < Duration::from_secs(15));
     peers.values().map(|p| p.peer.clone()).collect()
+}
+
+
+fn room_snapshot(state: &DiscoveryState) -> Vec<RoomInfo> {
+    let now = Instant::now();
+    let local_name = state.local_name.lock().unwrap().clone();
+    let local_room = state.local_room.lock().unwrap().clone();
+    let local_address = primary_ipv4().unwrap_or_else(|| "127.0.0.1".into());
+
+    let discovered: Vec<(Peer, Option<String>, Option<String>, bool)> = {
+        let mut peers = state.peers.lock().unwrap();
+        peers.retain(|_, p| now.saturating_duration_since(p.last_seen) < Duration::from_secs(15));
+        peers.values().map(|p| (
+            p.peer.clone(),
+            p.room_id.clone(),
+            p.room_name.clone(),
+            p.room_host,
+        )).collect()
+    };
+
+    let mut grouped: HashMap<String, (String, Vec<RoomMember>)> = HashMap::new();
+    for (peer, room_id, room_name, room_host) in discovered {
+        let (Some(room_id), Some(room_name)) = (room_id, room_name) else { continue; };
+        if room_id.is_empty() || room_name.is_empty() { continue; }
+        let entry = grouped.entry(room_id).or_insert_with(|| (room_name.clone(), Vec::new()));
+        if entry.0.is_empty() { entry.0 = room_name; }
+        if !entry.1.iter().any(|member| member.address == peer.address) {
+            entry.1.push(RoomMember {
+                name: peer.name,
+                address: peer.address,
+                host: room_host,
+                is_self: false,
+            });
+        }
+    }
+
+    if let Some(room) = local_room.clone() {
+        let entry = grouped.entry(room.id.clone()).or_insert_with(|| (room.name.clone(), Vec::new()));
+        entry.0 = room.name.clone();
+        entry.1.retain(|member| member.address != local_address);
+        entry.1.push(RoomMember {
+            name: local_name,
+            address: local_address,
+            host: room.is_host,
+            is_self: true,
+        });
+    }
+
+    let mut rooms = Vec::new();
+    for (id, (name, mut members)) in grouped {
+        members.sort_by(|a, b| b.host.cmp(&a.host).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+        let Some(host) = members.iter().find(|member| member.host).cloned() else { continue; };
+        if members.len() > MAX_GROUP_PEERS + 1 {
+            let host_address = host.address.clone();
+            members.sort_by(|a, b| {
+                let a_rank = if a.address == host_address { 0 } else if a.is_self { 1 } else { 2 };
+                let b_rank = if b.address == host_address { 0 } else if b.is_self { 1 } else { 2 };
+                a_rank.cmp(&b_rank).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            });
+            members.truncate(MAX_GROUP_PEERS + 1);
+        }
+        let is_local = local_room.as_ref().map(|room| room.id == id).unwrap_or(false);
+        rooms.push(RoomInfo {
+            id,
+            name,
+            host_name: host.name,
+            host_address: host.address,
+            participants: members.len(),
+            max_participants: MAX_GROUP_PEERS + 1,
+            is_local,
+            members,
+        });
+    }
+    rooms.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.host_name.to_lowercase().cmp(&b.host_name.to_lowercase())));
+    rooms
+}
+
+#[tauri::command]
+fn list_rooms(state: State<'_, Arc<DiscoveryState>>) -> Vec<RoomInfo> {
+    room_snapshot(state.inner().as_ref())
+}
+
+#[tauri::command]
+fn create_room(state: State<'_, Arc<DiscoveryState>>, name: String) -> Result<RoomInfo, String> {
+    let cleaned = name.trim();
+    if cleaned.is_empty() {
+        return Err("Le nom du salon ne peut pas être vide".into());
+    }
+    if cleaned.chars().count() > 32 {
+        return Err("Le nom du salon est limité à 32 caractères".into());
+    }
+    if cleaned.contains('|') || cleaned.chars().any(|c| c.is_control()) {
+        return Err("Le nom du salon contient un caractère non autorisé".into());
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let name_hash = state.local_name.lock().unwrap().bytes().fold(0u32, |acc, value| acc.wrapping_mul(33).wrapping_add(value as u32));
+    let id = format!("{:x}-{:08x}", stamp, name_hash);
+    *state.local_room.lock().unwrap() = Some(LocalRoom {
+        id: id.clone(),
+        name: cleaned.to_string(),
+        is_host: true,
+    });
+    room_snapshot(state.inner().as_ref())
+        .into_iter()
+        .find(|room| room.id == id)
+        .ok_or_else(|| "Impossible de créer le salon".into())
+}
+
+#[tauri::command]
+fn join_room(state: State<'_, Arc<DiscoveryState>>, room_id: String) -> Result<RoomInfo, String> {
+    let room_id = room_id.trim();
+    if room_id.is_empty() { return Err("Salon invalide".into()); }
+    let room = room_snapshot(state.inner().as_ref())
+        .into_iter()
+        .find(|room| room.id == room_id)
+        .ok_or_else(|| "Ce salon n'est plus visible sur le réseau".to_string())?;
+    if room.participants >= room.max_participants && !room.is_local {
+        return Err(format!("Ce salon est complet ({}/{})", room.participants, room.max_participants));
+    }
+    *state.local_room.lock().unwrap() = Some(LocalRoom {
+        id: room.id.clone(),
+        name: room.name.clone(),
+        is_host: false,
+    });
+    Ok(room_snapshot(state.inner().as_ref())
+        .into_iter()
+        .find(|candidate| candidate.id == room.id)
+        .unwrap_or(room))
+}
+
+#[tauri::command]
+fn leave_room(state: State<'_, Arc<DiscoveryState>>) {
+    *state.local_room.lock().unwrap() = None;
+}
+
+#[tauri::command]
+fn get_local_room(state: State<'_, Arc<DiscoveryState>>) -> Option<RoomInfo> {
+    let local = state.local_room.lock().unwrap().clone()?;
+    if let Some(room) = room_snapshot(state.inner().as_ref()).into_iter().find(|room| room.id == local.id) {
+        return Some(room);
+    }
+    // A room is owned by its creator. If its host no longer advertises it,
+    // members leave automatically instead of remaining stuck in a ghost room.
+    if !local.is_host {
+        *state.local_room.lock().unwrap() = None;
+        return None;
+    }
+    let local_name = state.local_name.lock().unwrap().clone();
+    let local_address = primary_ipv4().unwrap_or_else(|| "127.0.0.1".into());
+    Some(RoomInfo {
+        id: local.id,
+        name: local.name,
+        host_name: if local.is_host { local_name.clone() } else { String::new() },
+        host_address: if local.is_host { local_address.clone() } else { String::new() },
+        participants: 1,
+        max_participants: MAX_GROUP_PEERS + 1,
+        is_local: true,
+        members: vec![RoomMember { name: local_name, address: local_address, host: local.is_host, is_self: true }],
+    })
 }
 
 #[tauri::command]
@@ -244,7 +453,11 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
         loop {
             if last_broadcast.elapsed() >= Duration::from_secs(2) {
                 let local_name = app_state.local_name.lock().unwrap().clone();
-                let msg = format!("DUOVOICE|{}|{}", local_name, AUDIO_PORT);
+                let local_room = app_state.local_room.lock().unwrap().clone();
+                let (room_id, room_name, room_role) = local_room
+                    .map(|room| (room.id, room.name, if room.is_host { "H" } else { "M" }.to_string()))
+                    .unwrap_or_else(|| (String::new(), String::new(), String::new()));
+                let msg = format!("DUOVOICE2|{}|{}|{}|{}|{}", local_name, AUDIO_PORT, room_id, room_name, room_role);
                 let _ = socket.send_to(msg.as_bytes(), SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
                 last_broadcast = Instant::now();
             }
@@ -253,15 +466,31 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
                 Ok((n, addr)) => {
                     if let Ok(text) = std::str::from_utf8(&buf[..n]) {
                         let parts: Vec<&str> = text.split('|').collect();
-                        let local_name = app_state.local_name.lock().unwrap().clone();
-                        if parts.len() == 3 && parts[0] == "DUOVOICE" && parts[1] != local_name {
-                            if let Ok(port) = parts[2].parse::<u16>() {
-                                let ip = addr.ip().to_string();
-                                app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
-                                    peer: Peer { name: parts[1].to_string(), address: ip, port },
-                                    last_seen: Instant::now(),
-                                });
-                            }
+                        let ip = addr.ip().to_string();
+                        if primary_ipv4().as_deref() == Some(ip.as_str()) {
+                            continue;
+                        }
+
+                        let parsed = if parts.len() == 6 && parts[0] == "DUOVOICE2" {
+                            parts[2].parse::<u16>().ok().map(|port| {
+                                let room_id = (!parts[3].is_empty()).then(|| parts[3].to_string());
+                                let room_name = (!parts[4].is_empty()).then(|| parts[4].to_string());
+                                (parts[1].to_string(), port, room_id, room_name, parts[5] == "H")
+                            })
+                        } else if parts.len() == 3 && parts[0] == "DUOVOICE" {
+                            parts[2].parse::<u16>().ok().map(|port| (parts[1].to_string(), port, None, None, false))
+                        } else {
+                            None
+                        };
+
+                        if let Some((name, port, room_id, room_name, room_host)) = parsed {
+                            app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
+                                peer: Peer { name, address: ip, port },
+                                last_seen: Instant::now(),
+                                room_id,
+                                room_name,
+                                room_host,
+                            });
                         }
                     }
                 }
@@ -283,7 +512,7 @@ fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Re
         return Err("Cette adresse IPv4 ne peut pas être utilisée".into());
     }
     let peer = Peer { name: format!("PC — {}", ip), address: ip.to_string(), port: AUDIO_PORT };
-    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600) });
+    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600), room_id: None, room_name: None, room_host: false });
     Ok(peer)
 }
 
@@ -564,6 +793,177 @@ fn test_audio_output(output: Option<String>) -> Result<(), String> {
     thread::sleep(duration);
     drop(stream);
     Ok(())
+}
+
+
+#[tauri::command]
+fn start_mic_monitor(
+    state: State<'_, MicMonitorState>,
+    input: Option<String>,
+    output: Option<String>,
+) -> Result<(), String> {
+    *state.engine.lock().unwrap() = None;
+    *state.level.lock().unwrap() = 0.0;
+
+    let host = cpal::default_host();
+    let input_device = choose_device(&host, input.as_deref(), true)?;
+    let output_device = choose_device(&host, output.as_deref(), false)?;
+    let in_cfg = choose_stream_config(&input_device, true)?;
+    let out_cfg = choose_stream_config(&output_device, false)?;
+    let input_config: StreamConfig = in_cfg.clone().into();
+    let output_config: StreamConfig = out_cfg.clone().into();
+    let input_channels = input_config.channels.max(1) as usize;
+    let output_channels = output_config.channels.max(1) as usize;
+    let queue = Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(FRAME_SAMPLES * 8)));
+    let level = state.level.clone();
+
+    let input_stream = match in_cfg.sample_format() {
+        SampleFormat::F32 => {
+            let queue = queue.clone();
+            let level = level.clone();
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[f32], _| {
+                    let mut rms = 0.0f32;
+                    let mut frames = 0usize;
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks(input_channels) {
+                        if frame.is_empty() { continue; }
+                        let mono = frame.iter().copied().sum::<f32>() / frame.len() as f32;
+                        q.push_back(mono.clamp(-1.0, 1.0));
+                        rms += mono * mono;
+                        frames += 1;
+                    }
+                    while q.len() > FRAME_SAMPLES * 8 { q.pop_front(); }
+                    drop(q);
+                    if frames > 0 { *level.lock().unwrap() = (rms / frames as f32).sqrt().clamp(0.0, 1.0); }
+                },
+                |e| app_log(&format!("Microphone monitor input error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::I16 => {
+            let queue = queue.clone();
+            let level = level.clone();
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[i16], _| {
+                    let mut rms = 0.0f32;
+                    let mut frames = 0usize;
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks(input_channels) {
+                        if frame.is_empty() { continue; }
+                        let mono = frame.iter().map(|sample| *sample as f32 / i16::MAX as f32).sum::<f32>() / frame.len() as f32;
+                        q.push_back(mono.clamp(-1.0, 1.0));
+                        rms += mono * mono;
+                        frames += 1;
+                    }
+                    while q.len() > FRAME_SAMPLES * 8 { q.pop_front(); }
+                    drop(q);
+                    if frames > 0 { *level.lock().unwrap() = (rms / frames as f32).sqrt().clamp(0.0, 1.0); }
+                },
+                |e| app_log(&format!("Microphone monitor input error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::U16 => {
+            let queue = queue.clone();
+            let level = level.clone();
+            input_device.build_input_stream(
+                input_config,
+                move |data: &[u16], _| {
+                    let mut rms = 0.0f32;
+                    let mut frames = 0usize;
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks(input_channels) {
+                        if frame.is_empty() { continue; }
+                        let mono = frame.iter().map(|sample| (*sample as f32 - 32768.0) / 32768.0).sum::<f32>() / frame.len() as f32;
+                        q.push_back(mono.clamp(-1.0, 1.0));
+                        rms += mono * mono;
+                        frames += 1;
+                    }
+                    while q.len() > FRAME_SAMPLES * 8 { q.pop_front(); }
+                    drop(q);
+                    if frames > 0 { *level.lock().unwrap() = (rms / frames as f32).sqrt().clamp(0.0, 1.0); }
+                },
+                |e| app_log(&format!("Microphone monitor input error: {e}")),
+                None,
+            )
+        }
+        _ => return Err("Format d'entrée non pris en charge pour le test micro".into()),
+    }.map_err(|e| format!("Impossible d'ouvrir le microphone pour le test : {e}"))?;
+
+    let output_stream = match out_cfg.sample_format() {
+        SampleFormat::F32 => {
+            let queue = queue.clone();
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [f32], _| {
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks_mut(output_channels) {
+                        let value = q.pop_front().unwrap_or(0.0);
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Microphone monitor output error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::I16 => {
+            let queue = queue.clone();
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [i16], _| {
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks_mut(output_channels) {
+                        let value = (q.pop_front().unwrap_or(0.0).clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Microphone monitor output error: {e}")),
+                None,
+            )
+        }
+        SampleFormat::U16 => {
+            let queue = queue.clone();
+            output_device.build_output_stream(
+                output_config,
+                move |data: &mut [u16], _| {
+                    let mut q = queue.lock().unwrap();
+                    for frame in data.chunks_mut(output_channels) {
+                        let mono = q.pop_front().unwrap_or(0.0).clamp(-1.0, 1.0);
+                        let value = (mono * 32767.0 + 32768.0).clamp(0.0, 65535.0) as u16;
+                        for sample in frame { *sample = value; }
+                    }
+                },
+                |e| app_log(&format!("Microphone monitor output error: {e}")),
+                None,
+            )
+        }
+        _ => return Err("Format de sortie non pris en charge pour le test micro".into()),
+    }.map_err(|e| format!("Impossible d'ouvrir la sortie audio pour le test micro : {e}"))?;
+
+    input_stream.play().map_err(|e| format!("Impossible de démarrer le microphone : {e}"))?;
+    thread::sleep(Duration::from_millis(30));
+    output_stream.play().map_err(|e| format!("Impossible de démarrer le retour casque : {e}"))?;
+    *state.engine.lock().unwrap() = Some(MicMonitorEngine { _input: input_stream, _output: output_stream });
+    app_log("Microphone monitor started");
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_mic_monitor(state: State<'_, MicMonitorState>) {
+    *state.engine.lock().unwrap() = None;
+    *state.level.lock().unwrap() = 0.0;
+    app_log("Microphone monitor stopped");
+}
+
+#[tauri::command]
+fn mic_monitor_status(state: State<'_, MicMonitorState>) -> MicMonitorStatus {
+    MicMonitorStatus {
+        active: state.engine.lock().unwrap().is_some(),
+        level: *state.level.lock().unwrap(),
+    }
 }
 
 #[tauri::command]
@@ -1267,7 +1667,9 @@ async fn install_version(app: tauri::AppHandle, version: String) -> Result<Strin
 }
 
 #[tauri::command]
-fn hide_window_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+fn hide_window_to_tray(app: tauri::AppHandle, monitor: State<'_, MicMonitorState>) -> Result<(), String> {
+    *monitor.engine.lock().unwrap() = None;
+    *monitor.level.lock().unwrap() = 0.0;
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Fenêtre principale introuvable".to_string())?;
@@ -1310,6 +1712,10 @@ fn main() {
             current_input: Mutex::new(None),
             current_output: Mutex::new(None),
         })
+        .manage(MicMonitorState {
+            engine: Mutex::new(None),
+            level: Arc::new(Mutex::new(0.0)),
+        })
         .manage(Arc::new(DiscoveryState {
             peers: Mutex::new(HashMap::new()),
             local_name: Mutex::new(
@@ -1318,6 +1724,7 @@ fn main() {
                     .filter(|name| !name.trim().is_empty())
                     .unwrap_or_else(|| "DuoVoice".into())
             ),
+            local_room: Mutex::new(None),
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -1325,7 +1732,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, test_audio_output, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
+            list_devices, list_peers, list_rooms, create_room, join_room, leave_room, get_local_room, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, test_audio_output, start_mic_monitor, stop_mic_monitor, mic_monitor_status, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1337,6 +1744,9 @@ fn main() {
                 let to_tray = window.state::<AudioState>().close_to_tray.load(std::sync::atomic::Ordering::Relaxed);
                 if to_tray {
                     api.prevent_close();
+                    let monitor = window.state::<MicMonitorState>();
+                    *monitor.engine.lock().unwrap() = None;
+                    *monitor.level.lock().unwrap() = 0.0;
                     let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
                 } else {

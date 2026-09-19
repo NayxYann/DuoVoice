@@ -46,52 +46,91 @@
             <button id="saveClientName" class="icon-btn compact client-name-save" type="button" title="Enregistrer le nom" aria-label="Valider ce nouveau nom"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg></button>
           </div>
 
-          <label for="peer" data-i18n="connection.remote">Remote computer</label>
-          <div class="peer-row">
-            <select id="peer"><option value="" data-i18n="connection.searching">Searching for a PC…</option></select>
-            <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></button>
-            <button id="addPeerToSession" class="icon-btn compact group-add-btn" type="button" data-i18n-title="group.add" data-i18n-aria="group.add" title="Add to session" aria-label="Add to session" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></button>
+          <div class="communication-mode" role="group" aria-label="Communication mode">
+            <button id="modeDuo" class="mode-choice active" type="button" data-mode="duo"><span data-i18n="group.duo">Duo</span><small data-i18n="group.duoHint">Direct connection</small></button>
+            <button id="modeGroup" class="mode-choice" type="button" data-mode="group"><span data-i18n="group.groupMode">LAN group</span><small data-i18n="group.groupHint">Named rooms on the LAN</small></button>
           </div>
 
-          <div class="compact-lists">
-            <div class="compact-list-anchor">
-              <button id="sessionSummary" class="compact-list-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
-                <span class="compact-list-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-                <span class="compact-list-copy"><strong data-i18n="group.title">Session</strong><small id="sessionSummaryText">No active session</small></span>
-                <svg class="ui-icon compact-list-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
-              <div id="sessionPopover" class="compact-list-popover hidden" role="dialog" aria-label="Session">
-                <div class="compact-popover-head">
-                  <span><strong data-i18n="group.participantsTitle">Session participants</strong><small id="sessionCount">0</small></span>
-                  <button id="closeSessionPopover" class="icon-btn compact popover-close" type="button" title="Close" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          <div id="duoPanel" class="connection-mode-panel">
+            <label for="peer" data-i18n="connection.remote">Remote computer</label>
+            <div class="peer-row">
+              <select id="peer"><option value="" data-i18n="connection.searching">Searching for a PC…</option></select>
+              <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></button>
+              <button id="addPeerToSession" class="icon-btn compact group-add-btn" type="button" data-i18n-title="group.add" data-i18n-aria="group.add" title="Add to session" aria-label="Add to session" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></button>
+            </div>
+
+            <div class="compact-lists">
+              <div class="compact-list-anchor">
+                <button id="sessionSummary" class="compact-list-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
+                  <span class="compact-list-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                  <span class="compact-list-copy"><strong data-i18n="group.title">Session</strong><small id="sessionSummaryText">No active session</small></span>
+                  <svg class="ui-icon compact-list-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+                <div id="sessionPopover" class="compact-list-popover hidden" role="dialog" aria-label="Session">
+                  <div class="compact-popover-head">
+                    <span><strong data-i18n="group.participantsTitle">Session participants</strong><small id="sessionCount">0</small></span>
+                    <button id="closeSessionPopover" class="icon-btn compact popover-close" type="button" title="Close" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                  </div>
+                  <div id="sessionMembers" class="compact-popover-list"></div>
+                  <p class="compact-popover-hint" data-i18n="group.popupHint">Use the + button next to the selected computer to add it to this session.</p>
                 </div>
-                <div id="sessionMembers" class="compact-popover-list"></div>
-                <p class="compact-popover-hint" data-i18n="group.popupHint">Use the + button next to the selected computer to add it to this session.</p>
+              </div>
+
+              <div class="compact-list-anchor">
+                <button id="favoritesSummary" class="compact-list-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
+                  <span class="compact-list-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></span>
+                  <span class="compact-list-copy"><strong data-i18n="connection.favorites">Favorites</strong><small id="favoritesSummaryText">0 favorites</small></span>
+                  <svg class="ui-icon compact-list-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+                <div id="favoritesPopover" class="compact-list-popover hidden" role="dialog" aria-label="Favorites">
+                  <div class="compact-popover-head">
+                    <span><strong data-i18n="connection.favorites">Favorites</strong><small id="favoritesCount">0</small></span>
+                    <button id="closeFavoritesPopover" class="icon-btn compact popover-close" type="button" title="Close" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                  </div>
+                  <div id="favoritesList" class="compact-popover-list"></div>
+                </div>
               </div>
             </div>
 
-            <div class="compact-list-anchor">
-              <button id="favoritesSummary" class="compact-list-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
-                <span class="compact-list-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></span>
-                <span class="compact-list-copy"><strong data-i18n="connection.favorites">Favorites</strong><small id="favoritesSummaryText">0 favorites</small></span>
-                <svg class="ui-icon compact-list-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
-              <div id="favoritesPopover" class="compact-list-popover hidden" role="dialog" aria-label="Favorites">
-                <div class="compact-popover-head">
-                  <span><strong data-i18n="connection.favorites">Favorites</strong><small id="favoritesCount">0</small></span>
-                  <button id="closeFavoritesPopover" class="icon-btn compact popover-close" type="button" title="Close" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-                </div>
-                <div id="favoritesList" class="compact-popover-list"></div>
-              </div>
+            <div class="manual-row">
+              <input id="manualIp" type="text" inputmode="decimal" data-i18n-placeholder="connection.ipPlaceholder" placeholder="IP address, e.g. 192.168.1.25">
+              <button id="addIp" class="add-btn" type="button" title="Ajouter cette IP" aria-label="Ajouter cette IP"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
             </div>
+            <p class="hint" data-i18n="connection.ipHint">You can also add an IP address directly.</p>
+            <button id="connect" class="primary" type="button" data-i18n="connection.connect">Connect</button>
           </div>
 
-          <div class="manual-row">
-            <input id="manualIp" type="text" inputmode="decimal" data-i18n-placeholder="connection.ipPlaceholder" placeholder="IP address, e.g. 192.168.1.25">
-            <button id="addIp" class="add-btn" type="button" title="Ajouter cette IP" aria-label="Ajouter cette IP"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+          <div id="groupPanel" class="connection-mode-panel hidden">
+            <div class="room-create-block">
+              <div class="room-section-heading">
+                <div><strong data-i18n="group.rooms">Group rooms</strong><span data-i18n="group.visibleHint">Rooms are automatically visible to DuoVoice PCs on your LAN.</span></div>
+                <span class="room-capacity">12 max</span>
+              </div>
+              <div class="room-create-row">
+                <input id="roomName" type="text" maxlength="32" autocomplete="off" spellcheck="false" data-i18n-placeholder="group.roomPlaceholder" placeholder="Room name, e.g. Gaming">
+                <button id="createRoom" class="room-create-button" type="button"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="group.createRoom">Create</span></button>
+              </div>
+            </div>
+
+            <div id="activeRoomCard" class="active-room-card hidden">
+              <span class="active-room-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+              <span class="active-room-copy"><strong id="activeRoomName">—</strong><small id="activeRoomMeta">—</small></span>
+              <button id="leaveRoom" class="room-leave-button" type="button" data-i18n="group.leave">Leave</button>
+            </div>
+
+            <div class="room-list-head">
+              <label data-i18n="group.availableRooms">Available rooms</label>
+              <span id="roomNetworkCount">0</span>
+            </div>
+            <div id="roomsList" class="rooms-list"></div>
           </div>
-          <p class="hint" data-i18n="connection.ipHint">You can also add an IP address directly.</p>
-          <button id="connect" class="primary" type="button" data-i18n="connection.connect">Connect</button>
+
+          <div class="connection-insight-grid">
+            <div class="connection-insight"><span data-i18n="state.network">Network</span><strong id="networkState">LAN · —</strong></div>
+            <div class="connection-insight"><span data-i18n="state.session">Session</span><strong id="connectionSessionState">Duo · idle</strong></div>
+            <div class="connection-insight"><span data-i18n="state.discovery">Discovery</span><strong id="discoveryState">Active</strong></div>
+            <div class="connection-insight"><span data-i18n="state.ports">Ports</span><strong>UDP 39471 / 39472</strong></div>
+          </div>
         </section>
 
         <section class="card audio-card">
@@ -167,11 +206,14 @@
               </div>
             </div>
             <div class="audio-actions-grid">
-              <button id="mute" class="audio-action-button" type="button">
-                <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText" data-i18n="audio.mute">Mute</span>
+              <button id="micMonitor" class="audio-action-button mic-monitor-button" type="button">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg><span id="micMonitorText" data-i18n="audio.monitor">Test microphone</span><span class="mic-meter" aria-hidden="true"><i id="micMeterFill"></i></span>
               </button>
               <button id="testAudio" class="audio-action-button" type="button">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 3 14 9-14 9V3Z"/></svg><span data-i18n="audio.test">Test audio</span>
+              </button>
+              <button id="mute" class="audio-action-button" type="button">
+                <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0 3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText" data-i18n="audio.mute">Mute</span>
               </button>
               <button id="openDiagnostics" class="audio-action-button" type="button">
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20V7"/></svg><span data-i18n="diagnostics.title">Diagnostics</span>
@@ -199,6 +241,10 @@
             <div class="state-item">
               <span data-i18n="group.members">Session members</span>
               <strong id="sessionState">0</strong>
+            </div>
+            <div class="state-item">
+              <span data-i18n="state.network">Network</span>
+              <strong id="stateNetwork">LAN · —</strong>
             </div>
           </div>
         </section>

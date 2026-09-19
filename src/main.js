@@ -22,6 +22,9 @@ const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
 const RECENTS_KEY = "duovoice.recentConnections";
 const SESSION_KEY = "duovoice.sessionPeers";
+const COMMUNICATION_MODE_KEY = "duovoice.communicationMode";
+const MAX_SESSION_PARTICIPANTS = 12;
+const MAX_SESSION_REMOTES = MAX_SESSION_PARTICIPANTS - 1;
 const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
@@ -34,6 +37,8 @@ const FALLBACK_VERSION = "1.4.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
+const GROUP_WINDOW_HEIGHT = 800;
+const GROUP_WINDOW_MAX_HEIGHT = 900;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
@@ -46,6 +51,13 @@ let appliedTrayScale = 1;
 let appliedInputDevice = null;
 let appliedOutputDevice = null;
 let switchingAudioDevice = false;
+let communicationMode = localStorage.getItem(COMMUNICATION_MODE_KEY) === "group" ? "group" : "duo";
+let activeRoom = null;
+let roomsCache = [];
+let roomSyncBusy = false;
+let micMonitorActive = false;
+let micMonitorTimer = null;
+let currentDesignHeight = BASE_WINDOW_HEIGHT;
 
 
 
@@ -234,12 +246,14 @@ function showSettings() {
   $("mainView").classList.add("hidden");
   $("settingsView").classList.remove("hidden");
   updateHeaderMode();
+  resizeDesignWindow(BASE_WINDOW_HEIGHT).catch(() => {});
 }
 
 function showMain() {
   $("settingsView").classList.add("hidden");
   $("mainView").classList.remove("hidden");
   updateHeaderMode();
+  resizeDesignWindow(preferredMainWindowHeight()).catch(() => {});
 }
 
 function setUiScaleControl(value) {
@@ -283,20 +297,43 @@ async function applyTrayScale(value) {
   }
 }
 
+function preferredMainWindowHeight() {
+  if (communicationMode !== "group") return BASE_WINDOW_HEIGHT;
+  const visibleRooms = Math.min(3, roomsCache.filter(room => room?.id).length);
+  return Math.min(
+    GROUP_WINDOW_MAX_HEIGHT,
+    GROUP_WINDOW_HEIGHT + visibleRooms * 28 + (activeRoom ? 44 : 0),
+  );
+}
+
+async function resizeDesignWindow(height = currentDesignHeight, scale = appliedUiScale) {
+  currentDesignHeight = Math.max(BASE_WINDOW_HEIGHT, Math.round(Number(height) || BASE_WINDOW_HEIGHT));
+
+  // Grow with the current workflow, but never push controls below the usable
+  // desktop. On a shorter display the central view becomes scrollable instead.
+  const desiredNativeHeight = Math.round(currentDesignHeight * scale);
+  const availableHeight = Number(globalThis.screen?.availHeight) || desiredNativeHeight;
+  const nativeHeight = Math.min(desiredNativeHeight, Math.max(560, Math.floor(availableHeight - 20)));
+  const effectiveDesignHeight = Math.max(560, Math.floor(nativeHeight / scale));
+  document.documentElement.style.setProperty("--design-height", `${effectiveDesignHeight}px`);
+
+  const appWindow = getCurrentWindow();
+  await appWindow.setSize(new LogicalSize(
+    Math.round(BASE_WINDOW_WIDTH * scale),
+    nativeHeight,
+  ));
+}
+
 async function applyUiScale(value) {
   const scale = normalizedScale(value);
 
-  // DuoVoice is laid out on a fixed design canvas. The same scale factor is
-  // applied to the canvas and to the native window so positions stay stable.
+  // DuoVoice keeps a stable 1080 px design width while its height can grow
+  // when the group-room view needs more vertical space.
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
 
   try {
-    const window = getCurrentWindow();
-    await window.setSize(new LogicalSize(
-      Math.round(BASE_WINDOW_WIDTH * scale),
-      Math.round(BASE_WINDOW_HEIGHT * scale)
-    ));
+    await resizeDesignWindow(currentDesignHeight, scale);
     localStorage.setItem(SCALE_KEY, String(scale));
     appliedUiScale = scale;
     return true;
@@ -613,7 +650,7 @@ function renderFavorites() {
       if (connected) {
         const merged = new Set(connectedPeers);
         merged.add(favorite.address);
-        sessionPeers = new Set([...merged].slice(0, 8));
+        sessionPeers = new Set([...merged].slice(0, MAX_SESSION_REMOTES));
         persistSessionPeers();
         await syncLiveSessionPeers();
       } else {
@@ -658,7 +695,7 @@ function renderPeers(preferred = "") {
   if (current && [...select.options].some(o => o.value === current)) select.value = current;
   updateFavoriteButton();
   const add = $("addPeerToSession");
-  if (add) add.disabled = !select.value || sessionPeers.has(select.value) || sessionPeers.size >= 8;
+  if (add) add.disabled = !select.value || sessionPeers.has(select.value) || sessionPeers.size >= MAX_SESSION_REMOTES;
   renderFavorites();
   renderSessionMembers();
 }
@@ -672,7 +709,7 @@ function persistSessionPeers() {
 function loadSessionPeers() {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "[]");
-    sessionPeers = new Set(Array.isArray(stored) ? stored.filter(Boolean).slice(0, 8) : []);
+    sessionPeers = new Set(Array.isArray(stored) ? stored.filter(Boolean).slice(0, MAX_SESSION_REMOTES) : []);
   } catch { sessionPeers = new Set(); }
 }
 
@@ -718,7 +755,7 @@ function renderSessionMembers() {
     }
   }
   const add = $("addPeerToSession");
-  if (add) add.disabled = !$("peer").value || sessionPeers.has($("peer").value) || sessionPeers.size >= 8;
+  if (add) add.disabled = !$("peer").value || sessionPeers.has($("peer").value) || sessionPeers.size >= MAX_SESSION_REMOTES;
 }
 
 async function addSelectedPeerToSession() {
@@ -731,7 +768,7 @@ async function addSelectedPeerToSession() {
     toggleCompactPopover("sessionPopover");
     return;
   }
-  if (sessionPeers.size >= 8) { setDetails(t("group.limit")); return; }
+  if (sessionPeers.size >= MAX_SESSION_REMOTES) { setDetails(t("group.limit")); return; }
   sessionPeers.add(address);
   persistSessionPeers();
   renderSessionMembers();
@@ -774,6 +811,231 @@ async function syncLiveSessionPeers() {
   } catch (e) {
     reportError("Group update", e);
     setDetails(`Session : ${e}`);
+  }
+}
+
+
+function sameAddressSet(left, right) {
+  const a = [...new Set((left || []).filter(Boolean))].sort();
+  const b = [...new Set((right || []).filter(Boolean))].sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function roomMeta(room) {
+  if (!room) return t("group.none");
+  const host = room.host_name || t("group.hostUnavailable");
+  return `${room.participants}/${room.max_participants} · ${t("group.host")}: ${host}`;
+}
+
+function updateHeaderStatus() {
+  const status = $("status");
+  if (!status) return;
+  if (connected) {
+    status.innerHTML = `<span class="status-dot"></span>${t("status.connected")}`;
+    status.className = "status online";
+  } else if (communicationMode === "group" && activeRoom) {
+    status.innerHTML = `<span class="status-dot"></span>${t("group.waiting")}`;
+    status.className = "status waiting";
+  } else {
+    status.innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
+    status.className = "status offline";
+  }
+}
+
+function updateConnectionInsights() {
+  const peers = [...peerCache.values()].filter(peer => !peer.manual).length;
+  const rooms = roomsCache.length;
+  const network = `${peers} PC${peers === 1 ? "" : "s"} · ${rooms} ${t("group.roomsShort")}`;
+  if ($("networkState")) $("networkState").textContent = network;
+  if ($("stateNetwork")) $("stateNetwork").textContent = network;
+
+  if ($("connectionSessionState")) {
+    if (communicationMode === "group") {
+      $("connectionSessionState").textContent = activeRoom
+        ? `${activeRoom.name} · ${activeRoom.participants}/${activeRoom.max_participants}`
+        : `${t("group.groupMode")} · ${t("group.none")}`;
+    } else if (connectedPeers.length) {
+      $("connectionSessionState").textContent = connectedPeers.length > 1
+        ? `${t("group.groupMode")} · ${connectedPeers.length + 1}`
+        : `${t("group.duo")} · ${connectedPeers.length + 1}`;
+    } else {
+      $("connectionSessionState").textContent = `${t("group.duo")} · ${t("status.offline")}`;
+    }
+  }
+
+  if (communicationMode === "group") {
+    $("mode").textContent = activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("group.groupMode");
+    $("sessionState").textContent = activeRoom ? `${activeRoom.participants}/${activeRoom.max_participants}` : "0";
+  }
+}
+
+function renderRooms() {
+  const list = $("roomsList");
+  if (!list) return;
+  const visibleRooms = roomsCache.filter(room => room && room.id);
+  $("roomNetworkCount").textContent = `${visibleRooms.length}`;
+  list.innerHTML = "";
+
+  if (!visibleRooms.length) {
+    list.innerHTML = `<div class="rooms-empty">${escapeHtml(t("group.noRooms"))}</div>`;
+  } else {
+    for (const room of visibleRooms) {
+      const active = activeRoom?.id === room.id;
+      const full = room.participants >= room.max_participants && !active;
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `room-row${active ? " active" : ""}${full ? " full" : ""}`;
+      row.disabled = full;
+      row.innerHTML = `
+        <span class="room-row-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <span class="room-row-copy"><strong>${escapeHtml(room.name)}</strong><small>${escapeHtml(room.host_name || t("group.hostUnavailable"))}</small></span>
+        <span class="room-row-count">${room.participants}/${room.max_participants}</span>
+        <span class="room-row-action">${active ? escapeHtml(t("status.connected")) : full ? escapeHtml(t("group.full")) : escapeHtml(t("group.join"))}</span>`;
+      if (!active && !full) row.addEventListener("click", () => joinNamedRoom(room.id));
+      list.appendChild(row);
+    }
+  }
+
+  const activeCard = $("activeRoomCard");
+  if (activeRoom) {
+    activeCard.classList.remove("hidden");
+    $("activeRoomName").textContent = activeRoom.name;
+    $("activeRoomMeta").textContent = roomMeta(activeRoom);
+  } else {
+    activeCard.classList.add("hidden");
+  }
+  updateHeaderStatus();
+  updateConnectionInsights();
+}
+
+async function syncActiveRoomAudio(room = activeRoom) {
+  if (!room || communicationMode !== "group" || roomSyncBusy) return;
+  roomSyncBusy = true;
+  try {
+    const targets = (room.members || [])
+      .filter(member => !member.is_self && member.address && member.address !== "127.0.0.1")
+      .map(member => member.address)
+      .slice(0, MAX_SESSION_REMOTES);
+
+    if (!targets.length) {
+      if (connected) await disconnect();
+      updateConnectionInsights();
+      return;
+    }
+
+    if (!connected) {
+      await connectToAddresses(targets);
+    } else if (!sameAddressSet(connectedPeers, targets)) {
+      connectedPeers = await invoke("set_audio_peers", { remotes: targets });
+      connectedPeer = connectedPeers[0] || "";
+      await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
+      renderFavorites();
+    }
+    $("mode").textContent = `${t("group.roomLabel")} · ${room.name}`;
+    $("sessionState").textContent = `${room.participants}/${room.max_participants}`;
+  } catch (error) {
+    reportError("Room audio sync", error);
+    setDetails(`${t("group.roomLabel")} : ${String(error)}`);
+  } finally {
+    roomSyncBusy = false;
+  }
+}
+
+async function refreshRooms(syncAudio = true) {
+  try {
+    const previousRoomId = activeRoom?.id || null;
+    const [rooms, localRoom] = await Promise.all([
+      invoke("list_rooms"),
+      invoke("get_local_room"),
+    ]);
+    roomsCache = Array.isArray(rooms) ? rooms : [];
+    activeRoom = localRoom || null;
+    if (previousRoomId && !activeRoom && communicationMode === "group") {
+      if (connected) await disconnect();
+      setDetails(t("group.closed"));
+      await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
+    }
+    renderRooms();
+    if (communicationMode === "group" && !$("mainView").classList.contains("hidden")) {
+      const preferredHeight = preferredMainWindowHeight();
+      if (preferredHeight !== currentDesignHeight) await resizeDesignWindow(preferredHeight).catch(() => {});
+    }
+    if (syncAudio && activeRoom && communicationMode === "group") await syncActiveRoomAudio(activeRoom);
+  } catch (error) {
+    reportError("Room discovery", error);
+  }
+}
+
+async function createNamedRoom() {
+  const input = $("roomName");
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  const button = $("createRoom");
+  button.disabled = true;
+  try {
+    if (connected) await disconnect();
+    if (activeRoom) await invoke("leave_room");
+    activeRoom = await invoke("create_room", { name });
+    input.value = "";
+    setDetails(t("group.created", { name: activeRoom.name }));
+    await refreshRooms(true);
+    await emitTo("tray", "room-state-changed", { room: activeRoom });
+  } catch (error) {
+    reportError("Create room", error);
+    setDetails(`${t("group.createFailed")} : ${String(error)}`);
+  } finally { button.disabled = false; }
+}
+
+async function joinNamedRoom(roomId) {
+  if (!roomId || activeRoom?.id === roomId) return;
+  try {
+    if (connected) await disconnect();
+    if (activeRoom) await invoke("leave_room");
+    activeRoom = await invoke("join_room", { roomId });
+    setDetails(t("group.joined", { name: activeRoom.name }));
+    await refreshRooms(true);
+    await emitTo("tray", "room-state-changed", { room: activeRoom });
+  } catch (error) {
+    reportError("Join room", error);
+    setDetails(`${t("group.joinFailed")} : ${String(error)}`);
+    await refreshRooms(false);
+  }
+}
+
+async function leaveActiveRoom({ keepMode = false } = {}) {
+  try { await invoke("leave_room"); } catch (error) { reportError("Leave room", error); }
+  activeRoom = null;
+  roomsCache = roomsCache.map(room => ({ ...room, is_local: false }));
+  if (connected) await disconnect();
+  renderRooms();
+  setDetails(t("group.left"));
+  await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
+  if (!keepMode) await refreshRooms(false);
+}
+
+async function setCommunicationMode(mode, { initial = false } = {}) {
+  const target = mode === "group" ? "group" : "duo";
+  if (!initial && target === communicationMode) return;
+
+  if (!initial && target === "duo" && activeRoom) await leaveActiveRoom({ keepMode: true });
+  if (!initial && target === "group" && connected && !activeRoom) await disconnect();
+
+  communicationMode = target;
+  localStorage.setItem(COMMUNICATION_MODE_KEY, target);
+  $("modeDuo").classList.toggle("active", target === "duo");
+  $("modeGroup").classList.toggle("active", target === "group");
+  $("duoPanel").classList.toggle("hidden", target !== "duo");
+  $("groupPanel").classList.toggle("hidden", target !== "group");
+  closeCompactPopovers();
+
+  if (target === "group") await refreshRooms(true);
+  else {
+    $("mode").textContent = connectedPeers.length > 1 ? `${t("group.groupMode")} · ${connectedPeers.length + 1}` : t("state.lan");
+    renderSessionMembers();
+  }
+  updateConnectionInsights();
+  if (!$("mainView").classList.contains("hidden")) {
+    await resizeDesignWindow(preferredMainWindowHeight()).catch(() => {});
   }
 }
 
@@ -918,7 +1180,7 @@ function recordRecentConnections(addresses) {
     const favorite = favorites.find(item => item.address === address);
     if (favorite) { favorite.lastConnected = now; saveFavorites(favorites); }
   }
-  localStorage.setItem(RECENTS_KEY, JSON.stringify(recent.slice(0, 8)));
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(recent.slice(0, MAX_SESSION_REMOTES)));
   renderRecentConnections();
 }
 
@@ -987,6 +1249,7 @@ async function loadPeers(manual = false) {
     renderPeers();
     renderFavorites();
     renderSessionMembers();
+    updateConnectionInsights();
     if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
   } catch (e) { reportError("Peer discovery", e); setDetails(`Détection réseau : ${e}`); }
   finally {
@@ -1033,7 +1296,7 @@ async function updateLatency() {
 }
 
 async function connectToAddresses(addresses) {
-  const targets = [...new Set(addresses.filter(Boolean))].slice(0, 8);
+  const targets = [...new Set(addresses.filter(Boolean))].slice(0, MAX_SESSION_REMOTES);
   if (!targets.length || disconnecting) return;
   const button = $("connect");
   button.disabled = true;
@@ -1047,30 +1310,35 @@ async function connectToAddresses(addresses) {
     connected = true;
     connectedPeers = targets;
     connectedPeer = targets[0];
-    sessionPeers = new Set(targets);
-    persistSessionPeers();
+    if (!(communicationMode === "group" && activeRoom)) {
+      sessionPeers = new Set(targets);
+      persistSessionPeers();
+    }
     $("peer").value = connectedPeer;
     button.textContent = t("connection.disconnect");
     button.classList.add("disconnect-state");
-    $("status").innerHTML = `<span class="status-dot"></span>${t("status.connected")}`;
-    $("status").className = "status online";
-    $("mode").textContent = targets.length > 1 ? `${t("group.groupMode")} · ${targets.length + 1}` : t("state.lan");
-    setDetails(targets.length > 1 ? `${targets.length} machines · ${t("state.active")}` : t("state.active"));
+    updateHeaderStatus();
+    $("mode").textContent = communicationMode === "group" && activeRoom
+      ? `${t("group.roomLabel")} · ${activeRoom.name}`
+      : (targets.length > 1 ? `${t("group.groupMode")} · ${targets.length + 1}` : t("state.lan"));
+    setDetails(communicationMode === "group" && activeRoom
+      ? `${activeRoom.name} · ${targets.length + 1}/${MAX_SESSION_PARTICIPANTS} · ${t("state.active")}`
+      : (targets.length > 1 ? `${targets.length} machines · ${t("state.active")}` : t("state.active")));
     recordRecentConnections(targets);
     renderSessionMembers();
     renderFavorites();
+    updateConnectionInsights();
     await emitTo("tray", "audio-state-changed", { connected: true, remotes: targets });
     await updateLatency();
   } catch (e) {
     connected = false; connectedPeers = []; connectedPeer = "";
     button.textContent = t("connection.connect");
     button.classList.remove("disconnect-state");
-    $("status").innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
-    $("status").className = "status offline";
-    $("mode").textContent = t("state.lan");
+    updateHeaderStatus();
+    $("mode").textContent = communicationMode === "group" && activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("state.lan");
     reportError("Audio connect", e);
     setDetails(`Connexion impossible : ${e}`);
-    renderSessionMembers(); renderFavorites();
+    renderSessionMembers(); renderFavorites(); updateConnectionInsights();
   } finally { button.disabled = false; }
 }
 
@@ -1086,11 +1354,10 @@ async function disconnect() {
   connected = false; connectedPeers = []; connectedPeer = "";
   $("connect").textContent = t("connection.connect");
   $("connect").classList.remove("disconnect-state");
-  $("status").innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
-  $("status").className = "status offline";
+  updateHeaderStatus();
   $("latency").textContent = "— ms";
-  $("mode").textContent = t("state.lan");
-  renderSessionMembers(); renderFavorites();
+  $("mode").textContent = communicationMode === "group" && activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("state.lan");
+  renderSessionMembers(); renderFavorites(); updateConnectionInsights();
   try {
     await invoke("stop_audio");
     await emitTo("tray", "audio-state-changed", { connected: false });
@@ -1098,7 +1365,7 @@ async function disconnect() {
   } catch (e) {
     reportError("Audio disconnect", e);
     setDetails(`Déconnexion : ${e}`);
-  } finally { disconnecting = false; renderFavorites(); refreshDiagnostics(); }
+  } finally { disconnecting = false; renderFavorites(); updateConnectionInsights(); refreshDiagnostics(); }
 }
 
 async function connect() {
@@ -1218,7 +1485,12 @@ async function installUpdate() {
 }
 
 $("connect").addEventListener("click", connect);
-$("refresh").addEventListener("click", () => loadPeers(true));
+$("refresh").addEventListener("click", async () => { await loadPeers(true); if (communicationMode === "group") await refreshRooms(false); });
+$("modeDuo").addEventListener("click", () => setCommunicationMode("duo"));
+$("modeGroup").addEventListener("click", () => setCommunicationMode("group"));
+$("createRoom").addEventListener("click", createNamedRoom);
+$("roomName").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); createNamedRoom(); } });
+$("leaveRoom").addEventListener("click", () => leaveActiveRoom());
 $("favoriteBtn").addEventListener("click", toggleFavorite);
 $("peer").addEventListener("change", () => { updateFavoriteButton(); renderSessionMembers(); });
 $("addPeerToSession").addEventListener("click", addSelectedPeerToSession);
@@ -1250,6 +1522,7 @@ $("boostVolume").addEventListener("change", () => {
   applyVolume();
 });
 
+$("micMonitor").addEventListener("click", toggleMicMonitor);
 $("testAudio").addEventListener("click", runAudioTest);
 $("openDiagnostics").addEventListener("click", openDiagnosticsPanel);
 
@@ -1305,6 +1578,63 @@ async function runAudioTest() {
   }
 }
 
+
+function updateMicMonitorUi(active, level = 0) {
+  micMonitorActive = Boolean(active);
+  const button = $("micMonitor");
+  if (!button) return;
+  button.classList.toggle("monitoring", micMonitorActive);
+  $("micMonitorText").textContent = micMonitorActive ? t("audio.monitoring") : t("audio.monitor");
+  const normalized = Math.max(0, Math.min(1, Number(level) || 0));
+  $("micMeterFill").style.width = `${Math.round(Math.min(1, normalized * 3.2) * 100)}%`;
+}
+
+async function pollMicMonitor() {
+  if (!micMonitorActive) return;
+  try {
+    const status = await invoke("mic_monitor_status");
+    updateMicMonitorUi(Boolean(status.active), Number(status.level) || 0);
+    if (!status.active && micMonitorTimer) {
+      clearInterval(micMonitorTimer);
+      micMonitorTimer = null;
+    }
+  } catch (error) {
+    reportError("Microphone monitor status", error);
+  }
+}
+
+async function startMicMonitor() {
+  try {
+    await invoke("start_mic_monitor", { input: $("input").value || null, output: $("output").value || null });
+    updateMicMonitorUi(true, 0);
+    if (micMonitorTimer) clearInterval(micMonitorTimer);
+    micMonitorTimer = setInterval(pollMicMonitor, 120);
+    setDetails(t("audio.monitorHint"));
+  } catch (error) {
+    updateMicMonitorUi(false, 0);
+    reportError("Microphone monitor", error);
+    setDetails(`${t("audio.monitorFailed")} : ${String(error)}`);
+  }
+}
+
+async function stopMicMonitor({ announce = true } = {}) {
+  try { await invoke("stop_mic_monitor"); }
+  catch (error) { reportError("Stop microphone monitor", error); }
+  if (micMonitorTimer) { clearInterval(micMonitorTimer); micMonitorTimer = null; }
+  updateMicMonitorUi(false, 0);
+  if (announce) setDetails(t("audio.monitorStopped"));
+}
+
+async function toggleMicMonitor() {
+  const button = $("micMonitor");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  try {
+    if (micMonitorActive) await stopMicMonitor();
+    else await startMicMonitor();
+  } finally { button.disabled = false; }
+}
+
 function openDiagnosticsPanel() {
   closeCompactPopovers();
   showSettings();
@@ -1350,8 +1680,8 @@ async function applyAudioDeviceChange(kind) {
   } finally { inputEl.disabled = false; outputEl.disabled = false; switchingAudioDevice = false; }
 }
 
-$("input").addEventListener("change", () => applyAudioDeviceChange("input"));
-$("output").addEventListener("change", () => applyAudioDeviceChange("output"));
+$("input").addEventListener("change", async () => { if (micMonitorActive) await stopMicMonitor({ announce: false }); await applyAudioDeviceChange("input"); });
+$("output").addEventListener("change", async () => { if (micMonitorActive) await stopMicMonitor({ announce: false }); await applyAudioDeviceChange("output"); });
 $("refreshDiagnostics").addEventListener("click", refreshDiagnostics);
 
 $("languageSelect").value = getLanguage();
@@ -1551,29 +1881,37 @@ async function refreshFromTray() {
     if (connected) {
       if (appliedInputDevice === null) appliedInputDevice = $("input").value || localStorage.getItem("duovoice.input") || null;
       if (appliedOutputDevice === null) appliedOutputDevice = $("output").value || localStorage.getItem("duovoice.output") || null;
-      sessionPeers = new Set(connectedPeers);
-      persistSessionPeers();
+      if (!(communicationMode === "group" && activeRoom)) {
+        sessionPeers = new Set(connectedPeers);
+        persistSessionPeers();
+      }
     } else { appliedInputDevice = null; appliedOutputDevice = null; }
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted)); updateMuteUi(muted);
     $("connect").textContent = connected ? t("connection.disconnect") : t("connection.connect");
     $("connect").classList.toggle("disconnect-state", connected);
-    $("status").innerHTML = `<span class="status-dot"></span>${connected ? t("status.connected") : t("status.offline")}`;
-    $("status").className = `status ${connected ? "online" : "offline"}`;
-    $("mode").textContent = connectedPeers.length > 1 ? `${t("group.groupMode")} · ${connectedPeers.length + 1}` : t("state.lan");
+    updateHeaderStatus();
+    $("mode").textContent = communicationMode === "group" && activeRoom
+      ? `${t("group.roomLabel")} · ${activeRoom.name}`
+      : (connectedPeers.length > 1 ? `${t("group.groupMode")} · ${connectedPeers.length + 1}` : t("state.lan"));
     if (connectedPeer) $("peer").value = connectedPeer;
-    await loadPeers(false); await updateLatency(); renderSessionMembers(); renderFavorites(); refreshDiagnostics();
+    await loadPeers(false);
+    if (communicationMode === "group") await refreshRooms(false);
+    await updateLatency(); renderSessionMembers(); renderFavorites(); updateConnectionInsights(); refreshDiagnostics();
   } catch {}
 }
 
 listen("audio-state-changed", refreshFromTray).catch(() => {});
 listen("session-changed", (event) => {
+  if (communicationMode === "group" && activeRoom) return;
   const remotes = Array.isArray(event.payload?.remotes) ? event.payload.remotes : [];
-  sessionPeers = new Set(remotes.slice(0, 8));
+  sessionPeers = new Set(remotes.slice(0, MAX_SESSION_REMOTES));
   localStorage.setItem(SESSION_KEY, JSON.stringify([...sessionPeers]));
   renderSessionMembers();
   renderPeers();
+  updateConnectionInsights();
 }).catch(() => {});
+listen("room-state-changed", () => refreshRooms(communicationMode === "group")).catch(() => {});
 listen("favorites-changed", () => { renderFavorites(); updateFavoriteButton(); }).catch(() => {});
 
 loadSessionPeers();
@@ -1587,14 +1925,20 @@ loadAutostart();
 loadAudioPreferences();
 loadNoisePreferences();
 initColors();
+setCommunicationMode(communicationMode, { initial: true }).catch(error => reportError("Communication mode", error));
 loadPeers();
+refreshRooms(communicationMode === "group");
 setInterval(() => { if (!document.hidden) loadPeers(false); }, 3000);
+setInterval(() => { if (!document.hidden || communicationMode === "group") refreshRooms(communicationMode === "group"); }, 2000);
 setInterval(() => { if (!document.hidden) updateLatency(); }, 1000);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    loadPeers(false);
-    updateLatency();
+  if (document.hidden) {
+    if (micMonitorActive) stopMicMonitor({ announce: false });
+    return;
   }
+  loadPeers(false);
+  refreshRooms(communicationMode === "group");
+  updateLatency();
 });
 updateLatency();
 refreshDiagnostics();
