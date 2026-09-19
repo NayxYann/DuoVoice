@@ -50,7 +50,6 @@ struct Peer {
 struct LocalRoom {
     id: String,
     name: String,
-    is_host: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -70,6 +69,7 @@ struct RoomInfo {
     participants: usize,
     max_participants: usize,
     is_local: bool,
+    is_hosted_local: bool,
     members: Vec<RoomMember>,
 }
 
@@ -259,6 +259,7 @@ fn room_snapshot(state: &DiscoveryState) -> Vec<RoomInfo> {
             members.truncate(MAX_GROUP_PEERS + 1);
         }
         let is_local = local_room.as_ref().map(|room| room.id == id).unwrap_or(false);
+        let is_hosted_local = hosted_room.as_ref().map(|room| room.id == id).unwrap_or(false);
         rooms.push(RoomInfo {
             id,
             name,
@@ -267,6 +268,7 @@ fn room_snapshot(state: &DiscoveryState) -> Vec<RoomInfo> {
             participants: members.len(),
             max_participants: MAX_GROUP_PEERS + 1,
             is_local,
+            is_hosted_local,
             members,
         });
     }
@@ -302,12 +304,33 @@ fn create_room(state: State<'_, Arc<DiscoveryState>>, name: String) -> Result<Ro
     *state.hosted_room.lock().unwrap() = Some(LocalRoom {
         id: id.clone(),
         name: cleaned.to_string(),
-        is_host: true,
     });
     room_snapshot(state.inner().as_ref())
         .into_iter()
         .find(|room| room.id == id)
         .ok_or_else(|| "Impossible de créer le salon".into())
+}
+
+
+#[tauri::command]
+fn delete_room(state: State<'_, Arc<DiscoveryState>>, room_id: String) -> Result<(), String> {
+    let room_id = room_id.trim();
+    if room_id.is_empty() { return Err("Salon invalide".into()); }
+
+    let hosted = state.hosted_room.lock().unwrap().clone();
+    let Some(hosted_room) = hosted else {
+        return Err("Aucun salon hébergé localement".into());
+    };
+    if hosted_room.id != room_id {
+        return Err("Seul l’hôte peut supprimer ce salon".into());
+    }
+
+    *state.hosted_room.lock().unwrap() = None;
+    let joined_same_room = state.local_room.lock().unwrap().as_ref().map(|room| room.id == room_id).unwrap_or(false);
+    if joined_same_room {
+        *state.local_room.lock().unwrap() = None;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -321,11 +344,9 @@ fn join_room(state: State<'_, Arc<DiscoveryState>>, room_id: String) -> Result<R
     if room.participants >= room.max_participants && !room.is_local {
         return Err(format!("Ce salon est complet ({}/{})", room.participants, room.max_participants));
     }
-    let is_host = state.hosted_room.lock().unwrap().as_ref().map(|hosted| hosted.id == room.id).unwrap_or(false);
     *state.local_room.lock().unwrap() = Some(LocalRoom {
         id: room.id.clone(),
         name: room.name.clone(),
-        is_host,
     });
     Ok(room_snapshot(state.inner().as_ref())
         .into_iter()
@@ -1767,7 +1788,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, list_rooms, create_room, join_room, leave_room, get_local_room, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, test_audio_output, start_mic_monitor, stop_mic_monitor, mic_monitor_status, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
+            list_devices, list_peers, list_rooms, create_room, delete_room, join_room, leave_room, get_local_room, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, test_audio_output, start_mic_monitor, stop_mic_monitor, mic_monitor_status, start_audio, set_audio_peers, stop_audio, audio_status, get_diagnostics, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

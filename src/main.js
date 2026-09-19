@@ -33,10 +33,10 @@ const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.4.0";
+const FALLBACK_VERSION = "1.4.1";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 820;
+const BASE_WINDOW_HEIGHT = 760;
 const GROUP_WINDOW_HEIGHT = 850;
 const GROUP_WINDOW_MAX_HEIGHT = 940;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
@@ -297,14 +297,7 @@ async function applyTrayScale(value) {
   }
 }
 
-function preferredMainWindowHeight() {
-  if (communicationMode !== "group") return BASE_WINDOW_HEIGHT;
-  const visibleRooms = Math.min(3, roomsCache.filter(room => room?.id).length);
-  return Math.min(
-    GROUP_WINDOW_MAX_HEIGHT,
-    GROUP_WINDOW_HEIGHT + visibleRooms * 28 + (activeRoom ? 44 : 0),
-  );
-}
+function preferredMainWindowHeight() { return BASE_WINDOW_HEIGHT; }
 
 async function resizeDesignWindow(height = currentDesignHeight, scale = appliedUiScale) {
   currentDesignHeight = Math.max(BASE_WINDOW_HEIGHT, Math.round(Number(height) || BASE_WINDOW_HEIGHT));
@@ -599,13 +592,12 @@ function updateFavoriteButton() {
 }
 
 function closeCompactPopovers(except = "") {
-  for (const id of ["sessionPopover", "favoritesPopover"]) {
+  for (const id of ["favoritesPopover"]) {
     if (id === except) continue;
     const popover = $(id);
     if (!popover) continue;
     popover.classList.add("hidden");
   }
-  $("sessionSummary")?.setAttribute("aria-expanded", String(except === "sessionPopover"));
   $("favoritesSummary")?.setAttribute("aria-expanded", String(except === "favoritesPopover"));
 }
 
@@ -616,7 +608,6 @@ function toggleCompactPopover(id) {
   closeCompactPopovers(willOpen ? id : "");
   if (willOpen) popover.classList.remove("hidden");
   else popover.classList.add("hidden");
-  $("sessionSummary")?.setAttribute("aria-expanded", String(!$("sessionPopover")?.classList.contains("hidden")));
   $("favoritesSummary")?.setAttribute("aria-expanded", String(!$("favoritesPopover")?.classList.contains("hidden")));
 }
 
@@ -635,52 +626,24 @@ function renderFavorites() {
   for (const favorite of favorites) {
     const peer = peerCache.get(favorite.address);
     const available = !!peer;
+    const selected = $("peer")?.value === favorite.address;
     const isActive = connected && connectedPeers.includes(favorite.address);
-    const item = document.createElement("div");
-    item.className = `favorite-item${available ? " available" : " unavailable"}${isActive ? " active" : ""}`;
-
-    const connectBtn = document.createElement("button");
-    connectBtn.type = "button";
-    connectBtn.className = "favorite-action favorite-connect";
-    connectBtn.innerHTML = UI_ICONS.link;
-    connectBtn.title = isActive ? t("status.connected") : t("connection.connect");
-    connectBtn.disabled = !available || isActive;
-    connectBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      if (connected) {
-        const merged = new Set(connectedPeers);
-        merged.add(favorite.address);
-        sessionPeers = new Set([...merged].slice(0, MAX_SESSION_REMOTES));
-        persistSessionPeers();
-        await syncLiveSessionPeers();
-      } else {
-        sessionPeers = new Set([favorite.address]);
-        persistSessionPeers();
-        await connectToAddresses([favorite.address]);
-      }
-    });
-
-    const disconnectBtn = document.createElement("button");
-    disconnectBtn.type = "button";
-    disconnectBtn.className = "favorite-action favorite-disconnect";
-    disconnectBtn.innerHTML = UI_ICONS.x;
-    disconnectBtn.title = t("group.remove");
-    disconnectBtn.disabled = !isActive;
-    disconnectBtn.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await removePeerFromSession(favorite.address);
-    });
-
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `favorite-item favorite-select-row${available ? " available" : " unavailable"}${selected ? " selected" : ""}${isActive ? " active" : ""}`;
     item.innerHTML = `
       <span class="favorite-dot"></span>
       <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
       <span class="favorite-status">${isActive ? t("status.connected") : (available ? t("connection.available") : t("connection.unavailable"))}</span>
-    `;
-    const actions = document.createElement("span");
-    actions.className = "favorite-actions";
-    actions.append(connectBtn, disconnectBtn);
-    item.appendChild(actions);
+      <span class="favorite-select-chevron">›</span>`;
+    item.addEventListener("click", () => {
+      if (!peer) { setDetails(t("connection.unavailable")); return; }
+      $("peer").value = favorite.address;
+      updateFavoriteButton();
+      renderFavorites();
+      closeCompactPopovers();
+      setDetails(`${favorite.name} · ${favorite.address}`);
+    });
     box.appendChild(item);
   }
 }
@@ -694,10 +657,7 @@ function renderPeers(preferred = "") {
   for (const p of list) select.add(new Option(`${p.name} — ${p.address}`, p.address));
   if (current && [...select.options].some(o => o.value === current)) select.value = current;
   updateFavoriteButton();
-  const add = $("addPeerToSession");
-  if (add) add.disabled = !select.value || sessionPeers.has(select.value) || sessionPeers.size >= MAX_SESSION_REMOTES;
   renderFavorites();
-  renderSessionMembers();
 }
 
 function persistSessionPeers() {
@@ -824,7 +784,7 @@ function sameAddressSet(left, right) {
 function roomMeta(room) {
   if (!room) return t("group.none");
   const host = room.host_name || t("group.hostUnavailable");
-  return `${room.participants}/${room.max_participants} · ${t("group.host")}: ${host}`;
+  return `${t("group.hostedBy")} ${host} · ${room.participants}/${room.max_participants}`;
 }
 
 function updateHeaderStatus() {
@@ -873,26 +833,47 @@ function renderRooms() {
   const list = $("roomsList");
   if (!list) return;
   const visibleRooms = roomsCache.filter(room => room && room.id);
-  $("roomNetworkCount").textContent = `${visibleRooms.length}`;
+  if ($("roomNetworkCount")) $("roomNetworkCount").textContent = `${visibleRooms.length}`;
   list.innerHTML = "";
 
-  if (!visibleRooms.length) {
-    list.innerHTML = `<div class="rooms-empty">${escapeHtml(t("group.noRooms"))}</div>`;
-  } else {
-    for (const room of visibleRooms) {
-      const active = activeRoom?.id === room.id;
-      const full = room.participants >= room.max_participants && !active;
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = `room-row${active ? " active" : ""}${full ? " full" : ""}`;
-      row.disabled = full;
-      row.innerHTML = `
-        <span class="room-row-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        <span class="room-row-copy"><strong>${escapeHtml(room.name)}</strong><small>${escapeHtml(room.host_name || t("group.hostUnavailable"))}</small></span>
-        <span class="room-row-count">${room.participants}/${room.max_participants}</span>
-        <span class="room-row-action">${active ? escapeHtml(t("status.connected")) : full ? escapeHtml(t("group.full")) : escapeHtml(t("group.join"))}</span>`;
-      if (!active && !full) row.addEventListener("click", () => joinNamedRoom(room.id));
-      list.appendChild(row);
+  const groupPanel = $("groupPanel");
+  groupPanel?.classList.toggle("room-active", Boolean(activeRoom));
+
+  if (!activeRoom) {
+    if (!visibleRooms.length) {
+      list.innerHTML = `<div class="rooms-empty">${escapeHtml(t("group.noRooms"))}</div>`;
+    } else {
+      for (const room of visibleRooms) {
+        const full = room.participants >= room.max_participants;
+        const row = document.createElement("div");
+        row.className = `room-row${full ? " full" : ""}${room.is_hosted_local ? " hosted-local" : ""}`;
+
+        const join = document.createElement("button");
+        join.type = "button";
+        join.className = "room-row-main";
+        join.disabled = full;
+        const hostLabel = room.is_hosted_local ? t("group.hostedByYou") : `${t("group.hostedBy")} ${room.host_name || t("group.hostUnavailable")}`;
+        join.innerHTML = `
+          <span class="room-row-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <span class="room-row-copy"><strong>${escapeHtml(room.name)}</strong><small>${escapeHtml(hostLabel)}</small></span>
+          ${room.is_hosted_local ? `<span class="room-hosted-badge">${escapeHtml(t("group.hostedBadge"))}</span>` : ""}
+          <span class="room-row-count">${room.participants}/${room.max_participants}</span>
+          <span class="room-row-action">${escapeHtml(full ? t("group.full") : t("group.join"))}</span>`;
+        if (!full) join.addEventListener("click", () => joinNamedRoom(room.id));
+        row.appendChild(join);
+
+        if (room.is_hosted_local) {
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "room-row-delete";
+          del.title = t("group.deleteRoom");
+          del.setAttribute("aria-label", del.title);
+          del.innerHTML = UI_ICONS.x;
+          del.addEventListener("click", event => { event.stopPropagation(); openRoomDeleteConfirm(room); });
+          row.appendChild(del);
+        }
+        list.appendChild(row);
+      }
     }
   }
 
@@ -900,12 +881,59 @@ function renderRooms() {
   if (activeRoom) {
     activeCard.classList.remove("hidden");
     $("activeRoomName").textContent = activeRoom.name;
-    $("activeRoomMeta").textContent = roomMeta(activeRoom);
+    $("activeRoomMeta").textContent = activeRoom.is_hosted_local ? t("group.hostedByYou") : `${t("group.hostedBy")} ${activeRoom.host_name || t("group.hostUnavailable")}`;
+    $("activeRoomParticipantCount").textContent = `${activeRoom.participants}/${activeRoom.max_participants}`;
+    const members = $("activeRoomMembers");
+    members.innerHTML = "";
+    for (const member of (activeRoom.members || []).slice(0, activeRoom.max_participants)) {
+      const row = document.createElement("div");
+      row.className = `active-room-member${member.is_self ? " self" : ""}`;
+      const role = member.host ? t("group.host") : (member.is_self ? t("group.you") : t("status.connected"));
+      row.innerHTML = `<span class="active-room-member-dot"></span><span class="active-room-member-copy"><strong>${escapeHtml(member.name || member.address)}</strong><small>${escapeHtml(member.address || "")}</small></span><span class="active-room-member-role">${escapeHtml(role)}</span>`;
+      members.appendChild(row);
+    }
+    $("deleteRoom")?.classList.toggle("hidden", !activeRoom.is_hosted_local);
   } else {
     activeCard.classList.add("hidden");
   }
   updateHeaderStatus();
   updateConnectionInsights();
+}
+
+let pendingRoomDelete = null;
+function openRoomDeleteConfirm(room) {
+  if (!room?.id || !room.is_hosted_local) return;
+  pendingRoomDelete = room;
+  $("roomDeleteTitle").textContent = `${t("group.deleteConfirmTitle")} « ${room.name} » ?`;
+  $("roomDeleteBody").textContent = t("group.deleteConfirmBody");
+  $("roomDeleteConfirm").classList.add("open");
+  $("roomDeleteConfirm").setAttribute("aria-hidden", "false");
+}
+function closeRoomDeleteConfirm() {
+  pendingRoomDelete = null;
+  $("roomDeleteConfirm").classList.remove("open");
+  $("roomDeleteConfirm").setAttribute("aria-hidden", "true");
+}
+async function confirmRoomDelete() {
+  const room = pendingRoomDelete;
+  if (!room) return;
+  $("confirmRoomDelete").disabled = true;
+  try {
+    await invoke("delete_room", { roomId: room.id });
+    if (activeRoom?.id === room.id) {
+      activeRoom = null;
+      if (connected) await disconnect();
+      await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
+    }
+    setDetails(t("group.deleted", { name: room.name }));
+    closeRoomDeleteConfirm();
+    await refreshRooms(false);
+  } catch (error) {
+    reportError("Delete room", error);
+    setDetails(`${t("group.deleteFailed")} : ${String(error)}`);
+  } finally {
+    $("confirmRoomDelete").disabled = false;
+  }
 }
 
 async function syncActiveRoomAudio(room = activeRoom) {
@@ -1375,11 +1403,10 @@ async function connect() {
     return;
   }
   const selected = $("peer").value;
-  const targets = sessionPeers.size > 1
-    ? [...sessionPeers]
-    : (selected ? [selected] : [...sessionPeers]);
-  if (!targets.length) { setDetails("Sélectionnez un ordinateur ou ajoutez une IP."); return; }
-  await connectToAddresses(targets);
+  if (!selected) { setDetails("Sélectionnez un ordinateur détecté, un favori ou ajoutez une IP manuellement."); return; }
+  sessionPeers = new Set([selected]);
+  persistSessionPeers();
+  await connectToAddresses([selected]);
 }
 
 
@@ -1491,14 +1518,14 @@ $("modeGroup").addEventListener("click", () => setCommunicationMode("group"));
 $("createRoom").addEventListener("click", createNamedRoom);
 $("roomName").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); createNamedRoom(); } });
 $("leaveRoom").addEventListener("click", () => leaveActiveRoom());
+$("deleteRoom").addEventListener("click", () => { if (activeRoom) openRoomDeleteConfirm(activeRoom); });
+$("cancelRoomDelete").addEventListener("click", closeRoomDeleteConfirm);
+$("confirmRoomDelete").addEventListener("click", confirmRoomDelete);
+$("roomDeleteConfirm").addEventListener("click", event => { if (event.target === $("roomDeleteConfirm")) closeRoomDeleteConfirm(); });
 $("favoriteBtn").addEventListener("click", toggleFavorite);
-$("peer").addEventListener("change", () => { updateFavoriteButton(); renderSessionMembers(); });
-$("addPeerToSession").addEventListener("click", addSelectedPeerToSession);
-$("sessionSummary").addEventListener("click", (event) => { event.stopPropagation(); toggleCompactPopover("sessionPopover"); });
+$("peer").addEventListener("change", () => { updateFavoriteButton(); renderFavorites(); });
 $("favoritesSummary").addEventListener("click", (event) => { event.stopPropagation(); toggleCompactPopover("favoritesPopover"); });
-$("closeSessionPopover").addEventListener("click", (event) => { event.stopPropagation(); closeCompactPopovers(); });
 $("closeFavoritesPopover").addEventListener("click", (event) => { event.stopPropagation(); closeCompactPopovers(); });
-$("sessionPopover").addEventListener("click", event => event.stopPropagation());
 $("favoritesPopover").addEventListener("click", event => event.stopPropagation());
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
@@ -1763,11 +1790,11 @@ $("trayIconEnabled").checked = storedTrayIconPreference === null
   ? DEFAULT_TRAY_ICON_ENABLED
   : storedTrayIconPreference !== "false";
 
-// v1.4.0 safety/default migration: with a tray icon enabled, the X button
+// v1.4.1 safety/default migration: with a tray icon enabled, the X button
 // minimizes to tray by default. This also repairs installs that inherited the
 // old quit-on-close value from a previous build. The user can still choose
 // "Quit DuoVoice" afterwards in Settings.
-const closeDefaultMigrationKey = "duovoice.closeAction.v140TrayDefault";
+const closeDefaultMigrationKey = "duovoice.closeAction.v141TrayDefault";
 if (localStorage.getItem(closeDefaultMigrationKey) !== "1" && $("trayIconEnabled").checked) {
   localStorage.setItem("duovoice.closeAction", DEFAULT_CLOSE_ACTION);
   localStorage.setItem(closeDefaultMigrationKey, "1");

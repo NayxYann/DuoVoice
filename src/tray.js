@@ -141,32 +141,14 @@ function togglePopover(id) {
   fitTrayHeight();
 }
 
-function renderPeerSelect() {
-  const select = $("trayPeer");
-  if (!select) return;
-  const addRow = $("trayAddRow");
-  if (addRow) addRow.classList.toggle("hidden", Boolean(activeRoom) || communicationMode === "group");
-  if (activeRoom || communicationMode === "group") return;
-  const current = select.value;
-  const activeSet = new Set(configuredSessionPeers().length ? configuredSessionPeers() : remotes);
-  select.innerHTML = "";
-  const placeholder = new Option(peers.length ? t("tray.choosePc") : t("tray.noDetected"), "");
-  select.add(placeholder);
-  const favorites = new Set(favoriteItems().map(item => item.address));
-  const candidates = peers
-    .filter(item => !activeSet.has(item.address))
-    .sort((a, b) => Number(favorites.has(b.address)) - Number(favorites.has(a.address)) || a.name.localeCompare(b.name));
-  for (const item of candidates) select.add(new Option(`${favorites.has(item.address) ? "★ " : ""}${item.name}`, item.address));
-  if ([...select.options].some(option => option.value === current)) select.value = current;
-  $("trayAddPeer").disabled = !select.value || activeSet.size >= MAX_SESSION_REMOTES;
-}
+function renderPeerSelect() { return; }
 
 function renderSession() {
   const box = $("traySessionMembers");
   box.innerHTML = "";
 
   if (activeRoom) {
-    $("traySessionSummary").textContent = `${activeRoom.name} · ${activeRoom.participants}/${activeRoom.max_participants}`;
+    $("traySessionSummary").textContent = `${activeRoom.name} · ${activeRoom.participants}/${activeRoom.max_participants} · ${activeRoom.is_hosted_local ? t("group.hostedByYou") : `${t("group.hostedBy")} ${activeRoom.host_name || t("group.hostUnavailable")}`}`;
     $("traySessionCount").textContent = t("group.participantCount", { count: activeRoom.participants });
     const members = Array.isArray(activeRoom.members) ? activeRoom.members : [];
     if (!members.length) {
@@ -209,8 +191,7 @@ function renderSession() {
     return;
   }
 
-  const configured = configuredSessionPeers();
-  const members = configured.length ? configured : (connected ? remotes : []);
+  const members = connected ? remotes.slice(0, 1) : [];
   const participantCount = members.length ? members.length + 1 : 1;
   const summary = !members.length
     ? t("group.none")
@@ -231,16 +212,6 @@ function renderSession() {
       const row = document.createElement("div");
       row.className = `tray-member-row${active ? " active" : ""}${reconnecting ? " reconnecting" : ""}`;
       row.innerHTML = `<span class="tray-member-dot"></span><span class="tray-member-copy"><strong>${peerLabel(address)}</strong><small>${address}</small></span><span class="tray-member-state">${state}</span>`;
-      const actions = document.createElement("span");
-      actions.className = "tray-row-actions";
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "tray-row-action danger";
-      remove.innerHTML = ICONS.x;
-      remove.title = t("group.remove");
-      remove.addEventListener("click", event => { event.stopPropagation(); removeSessionPeer(address); });
-      actions.appendChild(remove);
-      row.appendChild(actions);
       box.appendChild(row);
     }
   }
@@ -586,8 +557,6 @@ $("closeTraySession").addEventListener("click", event => { event.stopPropagation
 $("closeTrayFavorites").addEventListener("click", event => { event.stopPropagation(); closePopovers(); });
 $("traySessionPopover").addEventListener("click", event => event.stopPropagation());
 $("trayFavoritesPopover").addEventListener("click", event => event.stopPropagation());
-$("trayPeer").addEventListener("change", renderPeerSelect);
-$("trayAddPeer").addEventListener("click", addSelectedPeer);
 $("quickConnect").addEventListener("click", connectSelected);
 $("quickMute").addEventListener("click", toggleMute);
 $("openApp").addEventListener("click", () => openMain(false));

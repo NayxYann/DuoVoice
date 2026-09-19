@@ -2832,3 +2832,82 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   .app-header { margin-bottom: 9px; }
   .main-grid { gap: 8px; }
 }
+
+
+/* v1.4.1 — unified compact layout, no dead zones, no mode-driven window jumps. */
+.app { height: 760px; padding: 18px 20px; }
+.app-header { margin-bottom: 8px; }
+.top-status-strip {
+  min-height: 30px; margin: 0 0 8px; padding: 0 11px;
+  display: flex; align-items: center; gap: 12px; flex: 0 0 auto;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: color-mix(in srgb, var(--panel-soft) 90%, var(--accent) 10%);
+  color: var(--muted); font-size: 10px;
+}
+.top-status-main { min-width: 0; flex: 1; display: flex; align-items: center; gap: 7px; }
+.top-status-main > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--success); }
+.top-status-metric { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.top-status-metric span { color: var(--muted); }
+.top-status-metric strong { color: var(--text); font-size: 10px; font-weight: 700; }
+.update-banner { min-height: 32px; margin-bottom: 9px; justify-content: center; }
+#mainView { overflow: hidden; }
+.main-grid { height: 100%; grid-template-rows: minmax(0,1fr); align-items: stretch; gap: 10px; }
+.connection-card, .audio-card { height: 100%; overflow: hidden; }
+.connection-mode-panel { min-height: 0; }
+.duo-peer-row { grid-template-columns: minmax(0,1fr) 40px; }
+.manual-label { margin-top: 9px; }
+.compact-hint { margin: -3px 0 8px; }
+.duo-favorites-only { margin: 0 0 9px; }
+.duo-connect { margin-top: auto; min-height: 40px; }
+.favorite-select-row { width: 100%; display: grid; align-items: center; gap: 8px; text-align: left; grid-template-columns: 8px minmax(0,1fr) auto 14px; cursor: pointer; }
+.favorite-select-row.selected { border-color: var(--accent-border); background: var(--accent-soft); }
+.favorite-select-chevron { color: var(--muted); font-size: 18px; line-height: 1; }
+.connection-insight-grid, .state-card { display: none !important; }
+
+#groupPanel { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 9px; }
+#groupPanel.hidden { display: none; }
+#groupPanel.room-active .room-create-block,
+#groupPanel.room-active .available-rooms-block { display: none; }
+.room-create-block { flex: 0 0 auto; }
+.available-rooms-block { min-height: 0; display: flex; flex: 1 1 auto; flex-direction: column; }
+.rooms-list { min-height: 0; max-height: none; overflow-y: auto; }
+.room-row { width: 100%; min-height: 52px; display: grid; grid-template-columns: minmax(0,1fr) 34px; gap: 6px; align-items: stretch; }
+.room-row-main { min-width: 0; padding: 7px 8px; display: grid; grid-template-columns: 30px minmax(0,1fr) auto auto auto; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); text-align: left; }
+.room-row-main:hover:not(:disabled) { border-color: var(--accent-border); background: var(--accent-soft); }
+.room-row-delete { width: 34px; display: grid; place-items: center; border: 1px solid var(--danger-border); border-radius: 9px; background: var(--danger-soft); color: var(--danger-text); }
+.room-row-delete .ui-icon { width: 15px; height: 15px; }
+.room-hosted-badge { padding: 3px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 8.5px; font-weight: 700; white-space: nowrap; }
+.active-room-card.active-room-detailed { min-height: 0; flex: 1 1 auto; padding: 11px; display: flex; flex-direction: column; gap: 9px; border: 1px solid var(--border-strong); border-radius: 11px; background: var(--panel-soft); }
+.active-room-card.active-room-detailed.hidden { display: none; }
+.active-room-head { display: grid; grid-template-columns: 32px minmax(0,1fr) auto; align-items: center; gap: 9px; }
+.active-room-members-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
+.active-room-members-head strong { color: var(--text); font-size: 11px; }
+.active-room-members { min-height: 0; max-height: 244px; overflow-y: auto; display: grid; gap: 5px; }
+.active-room-member { min-height: 38px; padding: 5px 8px; display: grid; grid-template-columns: 7px minmax(0,1fr) auto; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.active-room-member.self { border-color: var(--accent-border); }
+.active-room-member-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+.active-room-member-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.active-room-member-copy strong { overflow: hidden; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.active-room-member-copy small { overflow: hidden; color: var(--muted); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.active-room-member-role { color: var(--muted); font-size: 9px; white-space: nowrap; }
+.active-room-actions { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.room-leave-button, .room-delete-button { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 9px; font-size: 10.5px; font-weight: 700; }
+.room-leave-button { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+.room-delete-button { border: 1px solid var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
+.room-delete-button.hidden { display: none; }
+.room-delete-button .ui-icon { width: 15px; height: 15px; }
+.room-delete-confirm-card { max-width: 380px; }
+
+.audio-actions-card { min-height: 0; flex: 1 1 auto; }
+.audio-actions-grid { grid-template-columns: repeat(2, minmax(0,1fr)); grid-template-rows: repeat(2, 62px); }
+.audio-action-button { height: 62px; }
+
+@media (max-height: 740px) {
+  .app { height: 100vh; padding-top: 14px; padding-bottom: 14px; }
+  .app-header { min-height: 38px; }
+  .top-status-strip { min-height: 28px; }
+  .update-banner { min-height: 30px; }
+  .card { padding: 12px; }
+  .active-room-members { max-height: 190px; }
+}

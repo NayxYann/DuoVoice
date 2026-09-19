@@ -30,9 +30,9 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 - Signed in-app updater with release history / rollback support
 - Update checks at startup and every five minutes while DuoVoice is running
 
-## What's new in 1.4.0
+## What's new in 1.4.1
 
-Version 1.4.0 turns the original two-PC intercom into a cleaner multi-PC Windows application without making the normal Duo workflow more complicated.
+Version 1.4.1 separates the simple Duo workflow from named LAN rooms, tightens the home layout and improves tray behavior without changing the low-latency audio core.
 
 A **Session** is now the single source of truth. Connecting to one remote PC creates a Duo session; adding more remote PCs automatically turns it into a Group. Removing one member only removes that member, and the remaining audio streams stay active. If a peer briefly disappears from the LAN, DuoVoice keeps the session alive so that peer can recover when it returns on the same address.
 

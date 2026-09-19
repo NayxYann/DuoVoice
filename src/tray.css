@@ -367,3 +367,12 @@ button:active:not(:disabled) { transform: translateY(1px); }
   font-size: 8.5px;
   font-weight: 700;
 }
+
+
+/* v1.4.1 compact tray: content-driven visual rhythm, no empty reservation. */
+.tray-panel { height: auto; min-height: 0; gap: 8px; }
+.tray-summary-stack { gap: 7px; }
+.tray-summary-row { height: 46px; }
+.action-tile { height: 56px; }
+.session-action { height: 36px; }
+.quit-button { margin-top: 0; height: 26px; }
