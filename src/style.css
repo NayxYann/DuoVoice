@@ -1773,3 +1773,171 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .update-banner.available { color: var(--text); }
 .mute-btn:hover:not(:disabled), .version-selector:hover { color: var(--text); }
 .color-choice.active { border-color: var(--text); }
+
+/* v1.4.0 — Windows session groups, audio profiles and diagnostics */
+.group-add-btn {
+  flex: 0 0 auto;
+}
+.session-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+}
+.session-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.session-panel-head > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.session-panel-head small,
+.session-member-copy small,
+.recent-item small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.session-count {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.session-members {
+  display: grid;
+  gap: 6px;
+}
+.session-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 3px 1px;
+}
+.session-member {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 7px 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.session-member.active {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+.session-member.missing {
+  opacity: .78;
+}
+.session-member-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.session-member.active .session-member-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 16%, transparent);
+}
+.session-member-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.session-member-copy strong,
+.session-member-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-member-state {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.session-member.active .session-member-state {
+  color: var(--success);
+}
+.session-remove {
+  width: 28px;
+  height: 28px;
+}
+.profile-quick-row,
+.profile-manager-grid,
+.profile-manager-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.profile-quick-row select,
+.profile-manager-grid select,
+.profile-manager-grid input {
+  min-width: 0;
+  flex: 1 1 0;
+}
+.compact-action {
+  flex: 0 0 auto;
+  min-width: 76px;
+  height: 40px;
+}
+.profile-manager-grid {
+  margin-bottom: 10px;
+}
+.profile-manager-actions button {
+  flex: 1 1 0;
+}
+.recent-connections {
+  display: grid;
+  gap: 7px;
+}
+.recent-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-elevated);
+}
+.recent-item > span:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.recent-date {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.diagnostics-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.diagnostics-grid {
+  display: grid;
+  gap: 7px;
+}
+.diagnostics-grid .settings-info strong {
+  max-width: 66%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+.state-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .state-grid { grid-template-columns: 1fr; }
+}

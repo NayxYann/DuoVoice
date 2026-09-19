@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import { emit, listen } from "@tauri-apps/api/event";
 import "./tray.css";
 import { COLOR_KEY, THEME_KEY, applyThemeVariables, normalizeThemeName } from "./theme.js";
@@ -10,9 +11,18 @@ const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 
+async function loadTrayVersion() {
+  try {
+    const version = await getVersion();
+    const label = document.querySelector(".tray-version");
+    if (label) label.textContent = version;
+  } catch {}
+}
+
 let peers = [];
 let connected = false;
 let remote = "";
+let remotes = [];
 let busy = false;
 
 function normalizedTrayScale(value) {
@@ -79,7 +89,7 @@ function updateStatus() {
   status.innerHTML = `<i></i>${connected ? t("status.connected") : t("status.offline")}`;
 
   const peer = peers.find((item) => item.address === remote);
-  $("trayPeerName").textContent = connected ? (peer?.name || remote || t("status.connected")) : t("tray.noHost");
+  $("trayPeerName").textContent = connected ? (remotes.length > 1 ? `${remotes.length} PCs` : (peer?.name || remote || t("status.connected"))) : t("tray.noHost");
 
   const connectButton = $("quickConnect");
   $("quickConnectText").textContent = connected ? t("connection.disconnect") : t("tray.connection");
@@ -95,7 +105,8 @@ async function refreshState() {
   try {
     const state = await invoke("audio_status");
     connected = Boolean(state.connected);
-    remote = state.remote || "";
+    remotes = Array.isArray(state.remotes) ? state.remotes : (state.remote ? [state.remote] : []);
+    remote = remotes[0] || "";
     const muted = Boolean(state.muted);
     localStorage.setItem(MUTE_KEY, String(muted));
     $("quickMuteText").textContent = muted ? t("audio.unmute") : t("audio.mute");
@@ -122,6 +133,7 @@ async function connectSelected() {
     if (connected) {
       await invoke("stop_audio");
       connected = false;
+      remotes = [];
       remote = "";
     } else {
       const address = $("trayPeer").value || favoriteAddresses()[0] || peers[0]?.address;
@@ -133,10 +145,11 @@ async function connectSelected() {
 
       const input = localStorage.getItem("duovoice.input") || null;
       const output = localStorage.getItem("duovoice.output") || null;
-      await invoke("start_audio", { remote: address, input, output });
+      await invoke("start_audio", { remote: address, remotes: [address], input, output });
       const volume = Math.max(0, Math.min(2, Number(localStorage.getItem("duovoice.volume") ?? 100) / 100));
       await invoke("set_volume", { volume });
       connected = true;
+      remotes = [address];
       remote = address;
     }
 
@@ -251,3 +264,5 @@ applyStaticTranslations(document, getLanguage());
 applyTheme(localStorage.getItem(THEME_KEY) || "duovoice", localStorage.getItem(COLOR_KEY) || "violet");
 refreshPeers();
 refreshState();
+
+loadTrayVersion();

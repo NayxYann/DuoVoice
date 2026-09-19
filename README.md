@@ -1,138 +1,126 @@
-# DuoVoice 1.3.3
+# DuoVoice
 
-> **Vibe-coded project.** DuoVoice was built entirely through AI-assisted / vibe coding for personal use. I am not a software developer, and this repository started as a practical tool for my own local audio setup. It is shared publicly in case it is useful to someone else.
+> **DuoVoice is fully vibe-coded / AI-assisted.** I am not a software developer; this project started as a personal tool for communicating between Windows PCs on my local network. It is shared publicly because it may also be useful to others.
 
-DuoVoice is a lightweight bidirectional audio intercom for Windows and Linux. It is designed for direct communication between computers on the same local network, with a compact interface, system-tray controls, device switching, and signed application updates.
+DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri, Rust and a small HTML/CSS/JavaScript interface. It sends microphone audio directly between computers on the same local network without an account or cloud relay.
 
 ## Highlights
 
-- Full-duplex LAN audio between two DuoVoice clients.
-- Automatic discovery of nearby DuoVoice machines.
-- Custom client name broadcast on the local network.
-- Manual IPv4 entries and persistent favorites.
-- Hot switching of microphone and output devices while connected.
-- Synchronized mute state between the main window and the tray panel.
-- Adjustable remote volume and optional boost above 100%.
-- Local RNNoise-based noise reduction with persistent settings.
-- Compact left-click tray control panel and custom right-click tray menu.
-- Optional tray icon, startup-to-tray behavior, and configurable close action.
-- Persistent UI scale and tray scale.
-- Accent colors and complete **Themes++** palettes.
-- Signed updates through GitHub Releases, with optional rollback to older signed releases.
-- Automatic update checks at startup and every 5 minutes while the app is open.
-- Interface languages: **English, French, Spanish, and German**. English is the default.
+- Direct bidirectional audio over the local network
+- One-to-one calls or LAN groups with up to **8 remote PCs**
+- Dynamic group membership while a session is running
+- Automatic recovery when a peer temporarily disappears and returns on the same IP
+- Independent jitter buffers per remote peer and local mixing of received voices
+- Microphone mute synchronized between the main window and tray controls
+- Hot switching of microphone and output devices while connected
+- Reusable audio profiles for microphone/output combinations
+- RNNoise-based local microphone noise reduction
+- Remote playback volume up to 200%
+- Automatic LAN discovery plus manual IPv4 addresses
+- Favorites and recent connection history
+- Built-in diagnostics for network, audio devices, session state and logs
+- Custom Windows system-tray quick panel and context menu
+- Optional start with Windows, start minimized and close-to-tray behavior
+- UI and tray scaling controls
+- Multiple complete themes and accent colors
+- English, French, Spanish and German interface languages
+- Signed in-app updater with release history / rollback support
+- Update checks at startup and every five minutes while DuoVoice is running
 
-## Themes++
+## What's new in 1.4.0
 
-DuoVoice includes complete interface palettes that apply to the main window, tray panel, tray menu, and dialogs:
+Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The Windows tray experience, themes, updater, device hot-switching and existing one-to-one workflow remain intact.
 
-- DuoVoice
-- Windows XP
-- Axolotl
-- Cherry Blossom
-- Sage
-- Ocean
+## Session groups
 
-The theme system separates accent, success, danger, update, text, surface, and border colors so status colors remain readable and consistent.
+DuoVoice remains simple for two computers: select a PC and press **Connect**.
 
-## System tray
+For a group, add several discovered computers to the **Session** list before connecting. DuoVoice sends the local microphone stream to every member and mixes incoming streams locally. Up to eight remote computers can be part of one session.
 
-The tray icon is enabled by default on a fresh installation.
+Group membership can be changed while audio is active. If a remote PC briefly goes offline, the local audio engine stays alive and communication resumes automatically when that PC returns on the same address.
 
-Left click opens the compact DuoVoice control panel with quick access to connection, mute, the main window, settings, and quit controls.
+## Audio profiles
 
-Right click opens a custom DuoVoice-styled menu with shortcuts to the main window, settings, the GitHub project page, and quit.
+Audio profiles store a microphone and output-device pair locally. They are useful for setups such as:
 
-The tray UI follows the selected theme, language, and tray scale.
+- GoXLR
+- Headset
+- Speakers
+- Streaming
 
-## Updates and version rollback
+A saved profile can be applied while DuoVoice is already connected; the audio engine restarts with the new devices while preserving the current session members.
 
-DuoVoice uses Tauri's signed updater and GitHub Releases.
+## Network
 
-The app checks for updates:
+DuoVoice uses the following UDP ports:
 
-- once at startup;
-- every 5 minutes while DuoVoice is running;
-- whenever the user manually requests a check.
+| Port | Purpose |
+| --- | --- |
+| `39471/UDP` | LAN discovery |
+| `39472/UDP` | Audio and latency probes |
 
-Checks are asynchronous and do not interrupt audio streaming or device discovery. Updates are never installed automatically.
+Windows Firewall may ask for permission the first time DuoVoice starts. LAN discovery requires the computers to be able to exchange UDP broadcast traffic on the local network.
 
-The installed version shown in Settings is clickable. DuoVoice can list older signed GitHub Releases and reinstall one of them. The visible release label comes from the GitHub Release **name**, while the Git tag is kept as the technical version identifier.
-
-## Network ports
-
-DuoVoice uses:
-
-- UDP `39471` for peer discovery;
-- UDP `39472` for audio transport and latency probes;
-- TCP `39473` on `127.0.0.1` only to prevent multiple local DuoVoice instances.
-
-If a firewall blocks DuoVoice, allow UDP ports `39471` and `39472` on the private/local network.
-
-## Audio format
-
-The current audio transport uses mono PCM at 48 kHz / 16-bit with short frames intended for low-latency LAN communication.
-
-## Development
-
-Requirements include Node.js/npm, Rust, and the platform dependencies required by Tauri.
-
-Install frontend dependencies:
-
-```bash
-npm install
-```
-
-Run the frontend development server:
-
-```bash
-npm run dev
-```
-
-Run DuoVoice through Tauri in development mode:
-
-```bash
-npm run tauri -- dev
-```
-
-Build the application locally:
-
-```bash
-npm run tauri -- build
-```
-
-`node_modules` is intentionally excluded from Git.
-
-## Platform packages
-
-The release workflow can produce, depending on the target platform:
-
-- Windows NSIS installer (`.exe`)
-- Windows MSI package (`.msi`)
-- Linux AppImage
-- Linux Debian package (`.deb`)
-
-Linux tray behavior can vary slightly depending on the desktop environment, tray/AppIndicator support, and whether the session uses X11 or Wayland.
+No account or Internet connection is required for audio communication. Internet access is only used for GitHub release/update checks and the GitHub link.
 
 ## Diagnostics
 
-DuoVoice writes a bounded diagnostic log containing startup/shutdown events and useful network, audio, and updater errors. Audio packets themselves are not logged.
+The Settings page includes a diagnostics section showing useful runtime information such as:
 
-Typical locations:
+- local machine / DuoVoice name
+- local IPv4 address
+- DuoVoice UDP ports
+- current audio-engine state
+- active session peers
+- active microphone and output device
+- DuoVoice log-file path
 
-- Windows: `%LOCALAPPDATA%\\DuoVoice\\duovoice.log`
-- Linux: `$XDG_DATA_HOME/DuoVoice/duovoice.log` or `~/.local/share/DuoVoice/duovoice.log`
+Runtime logs are stored under `%LOCALAPPDATA%\DuoVoice\duovoice.log`. The log is size-limited and rotated automatically.
 
-## Current 1.3.3 changes
+## Installation
 
-- GitHub links are available from the main header, the left-click tray header, and the right-click tray menu.
-- GitHub URLs open without a visible Windows CMD flash.
-- Added persistent application language selection: English, French, Spanish, and German.
-- English is used as the default language on a fresh profile.
-- Main interface and tray interfaces react to language changes together.
-- Added lightweight automatic update checks every 5 minutes, in addition to startup and manual checks.
-- Reworked the public README for people discovering the project rather than for the original local release workflow.
+Official release artifacts are Windows installers:
 
-## Disclaimer
+- NSIS `.exe`
+- MSI `.msi`
 
-DuoVoice is a personal project and is provided as-is. Test releases and network/audio behavior in your own environment before relying on it for anything important.
+Install a published release from the repository's **Releases** page. Signed updater artifacts are also published so installed copies can update through DuoVoice itself.
+
+## Development
+
+Requirements:
+
+- Windows 10 or Windows 11
+- Node.js
+- Rust toolchain
+- Tauri prerequisites for Windows
+
+Install frontend dependencies:
+
+```powershell
+npm install
+```
+
+Run the development build:
+
+```powershell
+npm run tauri -- dev
+```
+
+Create a Windows build:
+
+```powershell
+npm run tauri -- build
+```
+
+## Privacy
+
+DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites, recent connections and audio profiles are stored locally.
+
+## Project status
+
+DuoVoice is primarily a personal project and should be considered best-effort software. The current target is **Windows only**.
+
+## License
+
+No separate license has been declared yet. Unless a license file is added, normal copyright rules apply.

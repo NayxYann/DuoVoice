@@ -13,7 +13,7 @@
         <div>
           <div class="brand-title-row">
             <h1>DuoVoice</h1>
-            <span class="brand-version">1.3.3</span>
+            <span class="brand-version">1.4.0</span>
           </div>
           <p data-i18n="brand.subtitle">Local intercom</p>
         </div>
@@ -50,6 +50,17 @@
           <div class="peer-row">
             <select id="peer"><option value="" data-i18n="connection.searching">Searching for a PC…</option></select>
             <button id="favoriteBtn" class="icon-btn compact favorite-btn" type="button" title="Ajouter aux favoris" aria-label="Ajouter aux favoris" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/></svg></button>
+            <button id="addPeerToSession" class="icon-btn compact group-add-btn" type="button" title="Ajouter au groupe" aria-label="Ajouter au groupe" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></button>
+          </div>
+
+          <div id="sessionPanel" class="session-panel">
+            <div class="session-panel-head">
+              <span><strong data-i18n="group.title">Session</strong><small data-i18n="group.subtitle">One-to-one or LAN group</small></span>
+              <span id="sessionCount" class="session-count">0 / 8</span>
+            </div>
+            <div id="sessionMembers" class="session-members">
+              <div class="session-empty" data-i18n="group.empty">No group selected. Connecting will use the selected PC.</div>
+            </div>
           </div>
 
           <div class="favorites-panel">
@@ -71,6 +82,12 @@
               <h2 data-i18n="audio.title">Audio</h2>
               <p data-i18n="audio.subtitle">Microphone and PC output.</p>
             </div>
+          </div>
+
+          <label for="quickAudioProfile" data-i18n="profiles.quick">Audio profile</label>
+          <div class="profile-quick-row">
+            <select id="quickAudioProfile"><option value="" data-i18n="profiles.none">No saved profile</option></select>
+            <button id="applyQuickAudioProfile" class="secondary compact-action" type="button" data-i18n="profiles.apply">Apply</button>
           </div>
 
           <label for="input" data-i18n="audio.microphone">Microphone</label>
@@ -149,6 +166,10 @@
               <span data-i18n="state.mode">Mode</span>
               <strong id="mode" data-i18n="state.lan">Direct LAN</strong>
             </div>
+            <div class="state-item">
+              <span data-i18n="group.members">Session members</span>
+              <strong id="sessionState">0</strong>
+            </div>
           </div>
         </section>
       </div>
@@ -174,7 +195,7 @@
               <small data-i18n="settings.versionHint">Click the version to choose another release.</small>
             </div>
             <button id="versionSelector" class="version-selector" type="button" title="Choisir une autre version" aria-haspopup="dialog">
-              <strong id="appVersion">v1.3.3</strong>
+              <strong id="appVersion">v1.4.0</strong>
               <svg class="ui-icon version-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
           </div>
@@ -192,7 +213,7 @@
           <label class="switch-row">
             <input id="autostart" type="checkbox">
             <span class="switch"></span>
-            <span data-i18n="settings.autostart">Start DuoVoice with Windows/Linux</span>
+            <span data-i18n="settings.autostart">Start DuoVoice with Windows</span>
           </label>
           <label class="switch-row">
             <input id="trayIconEnabled" type="checkbox" checked>
@@ -282,6 +303,22 @@
 
         <section class="card">
           <div class="card-heading">
+            <h3 data-i18n="profiles.title">Audio profiles</h3>
+            <p data-i18n="profiles.desc">Save microphone and output combinations for one-click switching.</p>
+          </div>
+          <div class="profile-manager-grid">
+            <select id="profileManagerSelect"><option value="" data-i18n="profiles.none">No saved profile</option></select>
+            <input id="profileName" type="text" maxlength="32" data-i18n-placeholder="profiles.namePlaceholder" placeholder="Profile name">
+          </div>
+          <div class="profile-manager-actions">
+            <button id="saveAudioProfile" class="primary" type="button" data-i18n="profiles.saveCurrent">Save current devices</button>
+            <button id="deleteAudioProfile" class="secondary" type="button" data-i18n="profiles.delete">Delete</button>
+          </div>
+          <p id="profileManagerHint" class="hint" data-i18n="profiles.hint">Profiles are stored locally on this PC.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-heading">
             <h3>Audio</h3>
             <p data-i18n="settings.audioDesc">Devices, volume and noise reduction are kept between launches.</p>
           </div>
@@ -292,6 +329,32 @@
           <div class="settings-info">
             <span data-i18n="settings.noiseReduction">Noise reduction</span>
             <strong id="savedNoise" data-i18n="audio.disabled">Disabled</strong>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-heading">
+            <h3 data-i18n="recent.title">Recent connections</h3>
+            <p data-i18n="recent.desc">The most recently used LAN peers.</p>
+          </div>
+          <div id="recentConnections" class="recent-connections"></div>
+        </section>
+
+        <section class="card diagnostics-card">
+          <div class="card-heading diagnostics-heading">
+            <div>
+              <h3 data-i18n="diagnostics.title">Diagnostics</h3>
+              <p data-i18n="diagnostics.desc">Useful information for audio and LAN troubleshooting.</p>
+            </div>
+            <button id="refreshDiagnostics" class="icon-btn compact" type="button" title="Refresh diagnostics" aria-label="Refresh diagnostics"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M16 8h5V3"/></svg></button>
+          </div>
+          <div class="diagnostics-grid">
+            <div class="settings-info"><span data-i18n="diagnostics.computer">Computer</span><strong id="diagComputer">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.ip">Local IPv4</span><strong id="diagIp">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.ports">LAN ports</span><strong id="diagPorts">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.engine">Audio engine</span><strong id="diagEngine">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.peers">Session peers</span><strong id="diagPeers">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.devices">Active devices</span><strong id="diagDevices">—</strong></div>
+            <div class="settings-info"><span data-i18n="diagnostics.log">Log file</span><strong id="diagLog">—</strong></div>
           </div>
         </section>
       </div>
