@@ -89,15 +89,20 @@ struct AudioState {
 struct DiscoveredPeer {
     peer: Peer,
     last_seen: Instant,
+    // Joined room (membership). Kept separate from the room this peer hosts so
+    // a room can remain advertised even while its creator is not inside it.
     room_id: Option<String>,
     room_name: Option<String>,
     room_host: bool,
+    hosted_room_id: Option<String>,
+    hosted_room_name: Option<String>,
 }
 
 struct DiscoveryState {
     peers: Mutex<HashMap<String, DiscoveredPeer>>,
     local_name: Mutex<String>,
     local_room: Mutex<Option<LocalRoom>>,
+    hosted_room: Mutex<Option<LocalRoom>>,
 }
 
 struct MicMonitorState {
@@ -176,9 +181,10 @@ fn room_snapshot(state: &DiscoveryState) -> Vec<RoomInfo> {
     let now = Instant::now();
     let local_name = state.local_name.lock().unwrap().clone();
     let local_room = state.local_room.lock().unwrap().clone();
+    let hosted_room = state.hosted_room.lock().unwrap().clone();
     let local_address = primary_ipv4().unwrap_or_else(|| "127.0.0.1".into());
 
-    let discovered: Vec<(Peer, Option<String>, Option<String>, bool)> = {
+    let discovered: Vec<(Peer, Option<String>, Option<String>, bool, Option<String>, Option<String>)> = {
         let mut peers = state.peers.lock().unwrap();
         peers.retain(|_, p| now.saturating_duration_since(p.last_seen) < Duration::from_secs(15));
         peers.values().map(|p| (
@@ -186,56 +192,78 @@ fn room_snapshot(state: &DiscoveryState) -> Vec<RoomInfo> {
             p.room_id.clone(),
             p.room_name.clone(),
             p.room_host,
+            p.hosted_room_id.clone(),
+            p.hosted_room_name.clone(),
         )).collect()
     };
 
-    let mut grouped: HashMap<String, (String, Vec<RoomMember>)> = HashMap::new();
-    for (peer, room_id, room_name, room_host) in discovered {
-        let (Some(room_id), Some(room_name)) = (room_id, room_name) else { continue; };
-        if room_id.is_empty() || room_name.is_empty() { continue; }
-        let entry = grouped.entry(room_id).or_insert_with(|| (room_name.clone(), Vec::new()));
-        if entry.0.is_empty() { entry.0 = room_name; }
-        if !entry.1.iter().any(|member| member.address == peer.address) {
-            entry.1.push(RoomMember {
-                name: peer.name,
-                address: peer.address,
-                host: room_host,
-                is_self: false,
-            });
+    // room id -> (name, host(name,address), members)
+    let mut grouped: HashMap<String, (String, Option<(String, String)>, Vec<RoomMember>)> = HashMap::new();
+
+    for (peer, joined_id, joined_name, joined_host, hosted_id, hosted_name) in discovered {
+        if let (Some(room_id), Some(room_name)) = (hosted_id, hosted_name) {
+            if !room_id.is_empty() && !room_name.is_empty() {
+                let entry = grouped.entry(room_id).or_insert_with(|| (room_name.clone(), None, Vec::new()));
+                entry.0 = room_name;
+                entry.1 = Some((peer.name.clone(), peer.address.clone()));
+            }
+        }
+
+        if let (Some(room_id), Some(room_name)) = (joined_id, joined_name) {
+            if !room_id.is_empty() && !room_name.is_empty() {
+                let entry = grouped.entry(room_id).or_insert_with(|| (room_name.clone(), None, Vec::new()));
+                if entry.0.is_empty() { entry.0 = room_name; }
+                if joined_host && entry.1.is_none() {
+                    entry.1 = Some((peer.name.clone(), peer.address.clone()));
+                }
+                if !entry.2.iter().any(|member| member.address == peer.address) {
+                    entry.2.push(RoomMember {
+                        name: peer.name,
+                        address: peer.address,
+                        host: joined_host,
+                        is_self: false,
+                    });
+                }
+            }
         }
     }
 
-    if let Some(room) = local_room.clone() {
-        let entry = grouped.entry(room.id.clone()).or_insert_with(|| (room.name.clone(), Vec::new()));
+    // A locally created room is advertised independently from local membership.
+    if let Some(room) = hosted_room.clone() {
+        let entry = grouped.entry(room.id.clone()).or_insert_with(|| (room.name.clone(), None, Vec::new()));
         entry.0 = room.name.clone();
-        entry.1.retain(|member| member.address != local_address);
-        entry.1.push(RoomMember {
-            name: local_name,
-            address: local_address,
-            host: room.is_host,
+        entry.1 = Some((local_name.clone(), local_address.clone()));
+    }
+
+    if let Some(room) = local_room.clone() {
+        let entry = grouped.entry(room.id.clone()).or_insert_with(|| (room.name.clone(), None, Vec::new()));
+        entry.0 = room.name.clone();
+        entry.2.retain(|member| member.address != local_address);
+        let is_host = hosted_room.as_ref().map(|hosted| hosted.id == room.id).unwrap_or(false);
+        entry.2.push(RoomMember {
+            name: local_name.clone(),
+            address: local_address.clone(),
+            host: is_host,
             is_self: true,
         });
     }
 
     let mut rooms = Vec::new();
-    for (id, (name, mut members)) in grouped {
+    for (id, (name, host, mut members)) in grouped {
+        let Some((host_name, host_address)) = host else { continue; };
+        for member in &mut members {
+            member.host = member.address == host_address;
+        }
         members.sort_by(|a, b| b.host.cmp(&a.host).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
-        let Some(host) = members.iter().find(|member| member.host).cloned() else { continue; };
         if members.len() > MAX_GROUP_PEERS + 1 {
-            let host_address = host.address.clone();
-            members.sort_by(|a, b| {
-                let a_rank = if a.address == host_address { 0 } else if a.is_self { 1 } else { 2 };
-                let b_rank = if b.address == host_address { 0 } else if b.is_self { 1 } else { 2 };
-                a_rank.cmp(&b_rank).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-            });
             members.truncate(MAX_GROUP_PEERS + 1);
         }
         let is_local = local_room.as_ref().map(|room| room.id == id).unwrap_or(false);
         rooms.push(RoomInfo {
             id,
             name,
-            host_name: host.name,
-            host_address: host.address,
+            host_name,
+            host_address,
             participants: members.len(),
             max_participants: MAX_GROUP_PEERS + 1,
             is_local,
@@ -269,7 +297,9 @@ fn create_room(state: State<'_, Arc<DiscoveryState>>, name: String) -> Result<Ro
         .unwrap_or(0);
     let name_hash = state.local_name.lock().unwrap().bytes().fold(0u32, |acc, value| acc.wrapping_mul(33).wrapping_add(value as u32));
     let id = format!("{:x}-{:08x}", stamp, name_hash);
-    *state.local_room.lock().unwrap() = Some(LocalRoom {
+    // Creating a room does not join it. The hosted room keeps being advertised
+    // while DuoVoice is running, even when this PC is not a participant.
+    *state.hosted_room.lock().unwrap() = Some(LocalRoom {
         id: id.clone(),
         name: cleaned.to_string(),
         is_host: true,
@@ -291,10 +321,11 @@ fn join_room(state: State<'_, Arc<DiscoveryState>>, room_id: String) -> Result<R
     if room.participants >= room.max_participants && !room.is_local {
         return Err(format!("Ce salon est complet ({}/{})", room.participants, room.max_participants));
     }
+    let is_host = state.hosted_room.lock().unwrap().as_ref().map(|hosted| hosted.id == room.id).unwrap_or(false);
     *state.local_room.lock().unwrap() = Some(LocalRoom {
         id: room.id.clone(),
         name: room.name.clone(),
-        is_host: false,
+        is_host,
     });
     Ok(room_snapshot(state.inner().as_ref())
         .into_iter()
@@ -313,24 +344,9 @@ fn get_local_room(state: State<'_, Arc<DiscoveryState>>) -> Option<RoomInfo> {
     if let Some(room) = room_snapshot(state.inner().as_ref()).into_iter().find(|room| room.id == local.id) {
         return Some(room);
     }
-    // A room is owned by its creator. If its host no longer advertises it,
-    // members leave automatically instead of remaining stuck in a ghost room.
-    if !local.is_host {
-        *state.local_room.lock().unwrap() = None;
-        return None;
-    }
-    let local_name = state.local_name.lock().unwrap().clone();
-    let local_address = primary_ipv4().unwrap_or_else(|| "127.0.0.1".into());
-    Some(RoomInfo {
-        id: local.id,
-        name: local.name,
-        host_name: if local.is_host { local_name.clone() } else { String::new() },
-        host_address: if local.is_host { local_address.clone() } else { String::new() },
-        participants: 1,
-        max_participants: MAX_GROUP_PEERS + 1,
-        is_local: true,
-        members: vec![RoomMember { name: local_name, address: local_address, host: local.is_host, is_self: true }],
-    })
+    // The room host is no longer advertising it: leave the vanished room.
+    *state.local_room.lock().unwrap() = None;
+    None
 }
 
 #[tauri::command]
@@ -454,10 +470,14 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
             if last_broadcast.elapsed() >= Duration::from_secs(2) {
                 let local_name = app_state.local_name.lock().unwrap().clone();
                 let local_room = app_state.local_room.lock().unwrap().clone();
-                let (room_id, room_name, room_role) = local_room
-                    .map(|room| (room.id, room.name, if room.is_host { "H" } else { "M" }.to_string()))
-                    .unwrap_or_else(|| (String::new(), String::new(), String::new()));
-                let msg = format!("DUOVOICE2|{}|{}|{}|{}|{}", local_name, AUDIO_PORT, room_id, room_name, room_role);
+                let hosted_room = app_state.hosted_room.lock().unwrap().clone();
+                let (hosted_id, hosted_name) = hosted_room
+                    .map(|room| (room.id, room.name))
+                    .unwrap_or_else(|| (String::new(), String::new()));
+                let (joined_id, joined_name) = local_room
+                    .map(|room| (room.id, room.name))
+                    .unwrap_or_else(|| (String::new(), String::new()));
+                let msg = format!("DUOVOICE3|{}|{}|{}|{}|{}|{}", local_name, AUDIO_PORT, hosted_id, hosted_name, joined_id, joined_name);
                 let _ = socket.send_to(msg.as_bytes(), SocketAddrV4::new(Ipv4Addr::BROADCAST, DISCOVERY_PORT));
                 last_broadcast = Instant::now();
             }
@@ -471,25 +491,39 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
                             continue;
                         }
 
-                        let parsed = if parts.len() == 6 && parts[0] == "DUOVOICE2" {
+                        let parsed = if parts.len() == 7 && parts[0] == "DUOVOICE3" {
+                            parts[2].parse::<u16>().ok().map(|port| {
+                                let hosted_room_id = (!parts[3].is_empty()).then(|| parts[3].to_string());
+                                let hosted_room_name = (!parts[4].is_empty()).then(|| parts[4].to_string());
+                                let room_id = (!parts[5].is_empty()).then(|| parts[5].to_string());
+                                let room_name = (!parts[6].is_empty()).then(|| parts[6].to_string());
+                                let room_host = room_id.as_ref().zip(hosted_room_id.as_ref()).map(|(joined, hosted)| joined == hosted).unwrap_or(false);
+                                (parts[1].to_string(), port, room_id, room_name, room_host, hosted_room_id, hosted_room_name)
+                            })
+                        } else if parts.len() == 6 && parts[0] == "DUOVOICE2" {
                             parts[2].parse::<u16>().ok().map(|port| {
                                 let room_id = (!parts[3].is_empty()).then(|| parts[3].to_string());
                                 let room_name = (!parts[4].is_empty()).then(|| parts[4].to_string());
-                                (parts[1].to_string(), port, room_id, room_name, parts[5] == "H")
+                                let room_host = parts[5] == "H";
+                                let hosted_room_id = room_host.then(|| parts[3].to_string());
+                                let hosted_room_name = room_host.then(|| parts[4].to_string());
+                                (parts[1].to_string(), port, room_id, room_name, room_host, hosted_room_id, hosted_room_name)
                             })
                         } else if parts.len() == 3 && parts[0] == "DUOVOICE" {
-                            parts[2].parse::<u16>().ok().map(|port| (parts[1].to_string(), port, None, None, false))
+                            parts[2].parse::<u16>().ok().map(|port| (parts[1].to_string(), port, None, None, false, None, None))
                         } else {
                             None
                         };
 
-                        if let Some((name, port, room_id, room_name, room_host)) = parsed {
+                        if let Some((name, port, room_id, room_name, room_host, hosted_room_id, hosted_room_name)) = parsed {
                             app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
                                 peer: Peer { name, address: ip, port },
                                 last_seen: Instant::now(),
                                 room_id,
                                 room_name,
                                 room_host,
+                                hosted_room_id,
+                                hosted_room_name,
                             });
                         }
                     }
@@ -512,7 +546,7 @@ fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Re
         return Err("Cette adresse IPv4 ne peut pas être utilisée".into());
     }
     let peer = Peer { name: format!("PC — {}", ip), address: ip.to_string(), port: AUDIO_PORT };
-    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600), room_id: None, room_name: None, room_host: false });
+    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600), room_id: None, room_name: None, room_host: false, hosted_room_id: None, hosted_room_name: None });
     Ok(peer)
 }
 
@@ -1725,6 +1759,7 @@ fn main() {
                     .unwrap_or_else(|| "DuoVoice".into())
             ),
             local_room: Mutex::new(None),
+            hosted_room: Mutex::new(None),
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(

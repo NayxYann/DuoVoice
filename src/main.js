@@ -36,9 +36,9 @@ const DEFAULT_CLOSE_ACTION = "tray";
 const FALLBACK_VERSION = "1.4.0";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 760;
-const GROUP_WINDOW_HEIGHT = 800;
-const GROUP_WINDOW_MAX_HEIGHT = 900;
+const BASE_WINDOW_HEIGHT = 820;
+const GROUP_WINDOW_HEIGHT = 850;
+const GROUP_WINDOW_MAX_HEIGHT = 940;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
@@ -973,12 +973,12 @@ async function createNamedRoom() {
   const button = $("createRoom");
   button.disabled = true;
   try {
-    if (connected) await disconnect();
-    if (activeRoom) await invoke("leave_room");
-    activeRoom = await invoke("create_room", { name });
+    // A salon is created/advertised independently from participation. Creating
+    // it must never pull the creator into it automatically.
+    const createdRoom = await invoke("create_room", { name });
     input.value = "";
-    setDetails(t("group.created", { name: activeRoom.name }));
-    await refreshRooms(true);
+    setDetails(t("group.created", { name: createdRoom.name }));
+    await refreshRooms(false);
     await emitTo("tray", "room-state-changed", { room: activeRoom });
   } catch (error) {
     reportError("Create room", error);
@@ -1762,6 +1762,16 @@ const storedTrayIconPreference = localStorage.getItem(TRAY_ICON_KEY);
 $("trayIconEnabled").checked = storedTrayIconPreference === null
   ? DEFAULT_TRAY_ICON_ENABLED
   : storedTrayIconPreference !== "false";
+
+// v1.4.0 safety/default migration: with a tray icon enabled, the X button
+// minimizes to tray by default. This also repairs installs that inherited the
+// old quit-on-close value from a previous build. The user can still choose
+// "Quit DuoVoice" afterwards in Settings.
+const closeDefaultMigrationKey = "duovoice.closeAction.v140TrayDefault";
+if (localStorage.getItem(closeDefaultMigrationKey) !== "1" && $("trayIconEnabled").checked) {
+  localStorage.setItem("duovoice.closeAction", DEFAULT_CLOSE_ACTION);
+  localStorage.setItem(closeDefaultMigrationKey, "1");
+}
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || DEFAULT_CLOSE_ACTION;
 
 function updateTrayPreferenceDependencies() {
