@@ -36,7 +36,7 @@ const DEFAULT_CLOSE_ACTION = "tray";
 const FALLBACK_VERSION = "1.4.1";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 760;
+const BASE_WINDOW_HEIGHT = 820;
 const GROUP_WINDOW_HEIGHT = 850;
 const GROUP_WINDOW_MAX_HEIGHT = 940;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
@@ -892,9 +892,12 @@ function renderRooms() {
       row.innerHTML = `<span class="active-room-member-dot"></span><span class="active-room-member-copy"><strong>${escapeHtml(member.name || member.address)}</strong><small>${escapeHtml(member.address || "")}</small></span><span class="active-room-member-role">${escapeHtml(role)}</span>`;
       members.appendChild(row);
     }
-    $("deleteRoom")?.classList.toggle("hidden", !activeRoom.is_hosted_local);
+    const deleteBtn = $("deleteRoom");
+    deleteBtn?.classList.toggle("hidden", !activeRoom.is_hosted_local);
+    document.querySelector(".active-room-actions")?.classList.toggle("single-action", !activeRoom.is_hosted_local);
   } else {
     activeCard.classList.add("hidden");
+    document.querySelector(".active-room-actions")?.classList.remove("single-action");
   }
   updateHeaderStatus();
   updateConnectionInsights();
