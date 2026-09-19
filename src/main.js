@@ -33,7 +33,7 @@ const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.4.1";
+const FALLBACK_VERSION = "1.4.2";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 820;
@@ -216,6 +216,7 @@ function applyLanguageUi(language = getLanguage(), { broadcast = false } = {}) {
   updateHeaderMode();
   updateNoiseUi();
   updateMuteUi(localStorage.getItem(MUTE_KEY) === "true");
+  updateDuoConnectionState();
   renderPeers();
   renderFavorites();
   renderSessionMembers();
@@ -802,7 +803,30 @@ function updateHeaderStatus() {
   }
 }
 
+function updateDuoConnectionState() {
+  const box = $("duoConnectionState");
+  if (!box) return;
+  const duoConnected = communicationMode === "duo" && connected && connectedPeers.length > 0;
+  box.classList.toggle("connected", duoConnected);
+  const title = $("duoConnectionTitle");
+  const meta = $("duoConnectionMeta");
+  const latency = $("duoConnectionLatency");
+  if (duoConnected) {
+    const address = connectedPeers[0];
+    const peer = peerCache.get(address);
+    const name = peer?.name || address;
+    title.textContent = t("connection.connectedTo", { name });
+    meta.textContent = t("connection.connectedMeta", { address });
+    latency.textContent = $("latency")?.textContent || "— ms";
+  } else {
+    title.textContent = t("connection.ready");
+    meta.textContent = t("connection.readyHint");
+    latency.textContent = "— ms";
+  }
+}
+
 function updateConnectionInsights() {
+  updateDuoConnectionState();
   const peers = [...peerCache.values()].filter(peer => !peer.manual).length;
   const rooms = roomsCache.length;
   const network = `${peers} PC${peers === 1 ? "" : "s"} · ${rooms} ${t("group.roomsShort")}`;
@@ -1323,7 +1347,8 @@ async function updateLatency() {
     if (!valid.length) { el.textContent = "…"; return; }
     const average = Math.round(valid.reduce((a,b) => a+b, 0) / valid.length);
     el.textContent = connectedPeers.length > 1 ? `${average} ms avg` : `${average} ms`;
-  } catch { el.textContent = "…"; }
+    updateDuoConnectionState();
+  } catch { el.textContent = "…"; updateDuoConnectionState(); }
 }
 
 async function connectToAddresses(addresses) {
@@ -1616,7 +1641,10 @@ function updateMicMonitorUi(active, level = 0) {
   button.classList.toggle("monitoring", micMonitorActive);
   $("micMonitorText").textContent = micMonitorActive ? t("audio.monitoring") : t("audio.monitor");
   const normalized = Math.max(0, Math.min(1, Number(level) || 0));
-  $("micMeterFill").style.width = `${Math.round(Math.min(1, normalized * 3.2) * 100)}%`;
+  // RMS microphone levels are naturally small. A gentle logarithmic-like curve
+  // makes normal speech readable without making the meter peg at 100%.
+  const visibleLevel = normalized <= 0 ? 0 : Math.min(1, Math.pow(normalized, 0.32) * 1.22);
+  $("micMeterFill").style.width = `${Math.round(visibleLevel * 100)}%`;
 }
 
 async function pollMicMonitor() {
@@ -1793,7 +1821,7 @@ $("trayIconEnabled").checked = storedTrayIconPreference === null
   ? DEFAULT_TRAY_ICON_ENABLED
   : storedTrayIconPreference !== "false";
 
-// v1.4.1 safety/default migration: with a tray icon enabled, the X button
+// v1.4.2 safety/default migration: with a tray icon enabled, the X button
 // minimizes to tray by default. This also repairs installs that inherited the
 // old quit-on-close value from a previous build. The user can still choose
 // "Quit DuoVoice" afterwards in Settings.

@@ -13,7 +13,7 @@
         <div>
           <div class="brand-title-row">
             <h1>DuoVoice</h1>
-            <span class="brand-version">1.4.1</span>
+            <span class="brand-version">1.4.2</span>
           </div>
           <p data-i18n="brand.subtitle">Local intercom</p>
         </div>
@@ -88,6 +88,15 @@
                   <div id="favoritesList" class="compact-popover-list"></div>
                 </div>
               </div>
+            </div>
+
+            <div id="duoConnectionState" class="duo-connection-state" aria-live="polite">
+              <span class="duo-connection-dot"></span>
+              <span class="duo-connection-copy">
+                <strong id="duoConnectionTitle" data-i18n="connection.ready">Prêt à se connecter</strong>
+                <small id="duoConnectionMeta" data-i18n="connection.readyHint">Choisissez un ordinateur détecté, une IP ou un favori.</small>
+              </span>
+              <span id="duoConnectionLatency" class="duo-connection-latency">— ms</span>
             </div>
 
             <button id="connect" class="primary duo-connect" type="button" data-i18n="connection.connect">Se connecter</button>
@@ -221,14 +230,13 @@
     </section>
 
     <section id="settingsView" class="hidden">
-      <div class="settings-head">
-        <div>
-          <h2 data-i18n="settings.title">Settings</h2>
-          <p data-i18n="settings.subtitle">DuoVoice preferences</p>
-        </div>
-      </div>
-
       <div id="settingsScroll">
+        <div class="settings-head">
+          <div>
+            <h2 data-i18n="settings.title">Settings</h2>
+            <p data-i18n="settings.subtitle">DuoVoice preferences</p>
+          </div>
+        </div>
         <section class="card">
           <div class="card-heading">
             <h3 data-i18n="settings.version">Version</h3>
@@ -240,7 +248,7 @@
               <small data-i18n="settings.versionHint">Click the version to choose another release.</small>
             </div>
             <button id="versionSelector" class="version-selector" type="button" title="Choisir une autre version" aria-haspopup="dialog">
-              <strong id="appVersion">v1.4.1</strong>
+              <strong id="appVersion">v1.4.2</strong>
               <svg class="ui-icon version-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
             </button>
           </div>

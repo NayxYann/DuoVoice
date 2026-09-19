@@ -30,25 +30,23 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 - Signed in-app updater with release history / rollback support
 - Update checks at startup and every five minutes while DuoVoice is running
 
-## What's new in 1.4.1
+## What's new in 1.4.2
 
-Version 1.4.1 separates the simple Duo workflow from named LAN rooms, tightens the home layout and improves tray behavior without changing the low-latency audio core.
+Version 1.4.2 is a UI and workflow polish release. Duo and LAN Group are kept intentionally separate: Duo is a direct connection to one detected/manual/favorite PC, while LAN Group uses named rooms advertised on the local network.
 
-A **Session** is now the single source of truth. Connecting to one remote PC creates a Duo session; adding more remote PCs automatically turns it into a Group. Removing one member only removes that member, and the remaining audio streams stay active. If a peer briefly disappears from the LAN, DuoVoice keeps the session alive so that peer can recover when it returns on the same address.
+The main window now keeps Connection and Audio aligned to the same visual height, removes dead space, and adds an in-card Duo connection summary with the active peer, address and latency. The microphone monitor meter is hidden when the test is inactive and uses a more readable response curve while monitoring.
 
-The home screen keeps the established DuoVoice layout but avoids permanently expanding long lists. **Session** and **Favorites** are compact full-width controls; clicking either opens an anchored floating panel above the interface, so a large group or favorites collection does not stretch the main window. The Windows tray uses the same compact interaction model for quick management without opening the full application.
+LAN rooms remain capped at 12 participants. Creating a room does not join it automatically; locally hosted rooms stay advertised while DuoVoice is running, show their host, can be joined with one click, and can only be deleted by their local host with confirmation. Once a room is joined, the available-room list is replaced by the active-room participant view.
 
-The Audio side also gains an **Audio actions** area for mute, output testing and direct access to Diagnostics. Device selectors, controls and spacing stay consistent with the existing DuoVoice design system, and all new surfaces use theme variables rather than a hard-coded color scheme. The native tray icon now follows the selected theme or DuoVoice accent color as well.
+Settings now scroll as one page, including the Settings title, rather than leaving a floating heading above the content. Close-to-tray remains the default close behavior when the tray icon is enabled.
 
-## Sessions and groups
+## Duo and LAN groups
 
-For the normal two-computer workflow, select a remote PC and press **Connect**. DuoVoice starts a Duo session automatically.
+In **Duo**, select a detected computer, add/select a manual IP, or choose a favorite, then press **Connect**. Favorites are shortcuts only; they are never required. While connected, the Connection card displays the active peer and current latency directly.
 
-To add another machine, choose it in **Remote computer** and use the add-participant button. The active Session becomes a Group automatically. Click the compact **Session** row to view participants, connection/recovery state and individual remove actions.
+In **LAN Group**, create or discover a named room. Creating a room advertises it but does not join it. Click a room to join it. The room view shows the host and active participants, with **Leave room** for members and **Delete room** only for a room hosted by this PC.
 
-Removing a participant never intentionally disconnects the other members. The whole audio session ends only when the last remote participant is removed or when **Leave session / Disconnect** is used.
-
-The tray quick panel exposes the same Session and Favorites summaries. It can add/remove participants, connect to a favorite, mute audio, open DuoVoice or Settings, and leave the active session without changing the mental model used by the main window.
+The tray remains a compact quick-control surface; detailed room creation and deletion stay in the main application.
 
 ## Themes
 
