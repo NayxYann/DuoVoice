@@ -1941,3 +1941,151 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 @media (max-width: 900px) {
   .state-grid { grid-template-columns: 1fr; }
 }
+
+/* v1.4.0 UI polish — compact session + first-class audio profiles */
+.connection-card,
+.audio-card {
+  min-height: 0;
+  overflow: visible;
+}
+
+.session-panel {
+  margin-top: 10px;
+  padding: 10px;
+}
+.session-panel.empty {
+  padding-bottom: 9px;
+}
+.session-panel.empty .session-panel-head {
+  margin-bottom: 3px;
+}
+.session-panel.empty .session-empty {
+  padding: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.session-members {
+  max-height: 116px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.session-members::-webkit-scrollbar { display: none; }
+.session-member {
+  min-height: 34px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.session-count {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 10px;
+}
+
+.audio-profile-block {
+  position: relative;
+  margin: 12px 0 2px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+}
+.audio-profile-heading,
+.profile-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.audio-profile-heading { margin-bottom: 8px; }
+.audio-profile-heading > div,
+.profile-popover-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.audio-profile-heading strong,
+.profile-popover-head strong { font-size: 12px; }
+.audio-profile-heading span,
+.profile-popover-head span {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.audio-profile-block > select { width: 100%; }
+.profile-popover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 46px #0008;
+}
+.profile-popover.hidden { display: none; }
+.profile-popover > input { width: 100%; margin-top: 10px; }
+.profile-device-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 9px;
+}
+.profile-device-summary > span {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-elevated);
+}
+.profile-device-summary small,
+.profile-device-summary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-device-summary small { color: var(--text-muted); font-size: 10px; margin-bottom: 3px; }
+.profile-device-summary strong { font-size: 11px; }
+.profile-popover-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.profile-popover-actions button { height: 36px; }
+.profile-popover .hint { margin: 8px 0 0; }
+
+/* Keep the status strip informative but visually secondary. */
+.state-card { padding: 11px 14px 10px; }
+.state-card .section-title { margin-bottom: 7px; }
+.state-grid { margin-top: 6px; }
+.state-item { padding-top: 7px; padding-bottom: 7px; }
+
+/* The old settings-only profile manager was intentionally removed. */
+.profile-quick-row,
+.profile-manager-grid,
+.profile-manager-actions,
+.compact-action { }
+
+/* Keep the home screen balanced at the fixed 1080x760 window size. */
+.connection-card .favorites-panel {
+  flex: 1 1 auto;
+  min-height: 78px;
+  max-height: 118px;
+}
+#favoritesList {
+  max-height: 78px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+#favoritesList::-webkit-scrollbar { display: none; }
+.connection-card .manual-row { flex: 0 0 auto; }
+.connection-card > .hint { margin-bottom: 8px; }
+.audio-card .noise-control { margin-top: 10px; }
+.audio-profile-actions { display: flex; gap: 6px; flex: 0 0 auto; }

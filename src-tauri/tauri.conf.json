@@ -23,7 +23,7 @@
         "title": "DuoVoice",
         "url": "tray.html",
         "width": 280,
-        "height": 348,
+        "height": 420,
         "resizable": false,
         "decorations": false,
         "transparent": true,

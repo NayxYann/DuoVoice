@@ -10,6 +10,7 @@ const $ = (id) => document.getElementById(id);
 const MUTE_KEY = "duovoice.muted";
 const FAVORITES_KEY = "duovoice.favorites";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
+const SESSION_KEY = "duovoice.sessionPeers";
 
 async function loadTrayVersion() {
   try {
@@ -50,6 +51,7 @@ function applyLanguage() {
   applyStaticTranslations(document, getLanguage());
   renderPeers();
   updateStatus();
+  renderTraySession();
 }
 
 function favoriteAddresses() {
@@ -57,6 +59,58 @@ function favoriteAddresses() {
     return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]").map((item) => item.address).filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+function favoriteItems() {
+  try {
+    const value = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch { return []; }
+}
+
+function configuredSessionPeers() {
+  try {
+    const value = JSON.parse(localStorage.getItem(SESSION_KEY) || "[]");
+    return Array.isArray(value) ? [...new Set(value.filter(Boolean))].slice(0, 8) : [];
+  } catch { return []; }
+}
+
+function trayPeerLabel(address) {
+  return peers.find(item => item.address === address)?.name
+    || favoriteItems().find(item => item.address === address)?.name
+    || address;
+}
+
+function renderTraySession() {
+  const configured = configuredSessionPeers();
+  const active = connected ? remotes : [];
+  const members = configured.length ? configured : active;
+  const groupMode = members.length > 1 || configured.length > 1;
+  const count = (connected ? Math.max(active.length, members.length) : members.length) + 1;
+  $("traySessionSummary").textContent = t(groupMode ? "group.trayGroup" : "group.trayDuo", { count });
+  const box = $("traySessionMembers");
+  box.innerHTML = "";
+  const visible = members.slice(0, 3);
+  if (!visible.length) {
+    const local = document.createElement("span");
+    local.className = "tray-session-empty";
+    local.textContent = connected ? t("status.connected") : t("group.duo");
+    box.appendChild(local);
+    return;
+  }
+  for (const address of visible) {
+    const row = document.createElement("div");
+    const online = active.includes(address);
+    row.className = `tray-session-member${online ? " active" : ""}`;
+    row.innerHTML = `<i></i><span>${trayPeerLabel(address)}</span>`;
+    box.appendChild(row);
+  }
+  if (members.length > visible.length) {
+    const more = document.createElement("span");
+    more.className = "tray-session-more";
+    more.textContent = `+${members.length - visible.length}`;
+    box.appendChild(more);
   }
 }
 
@@ -99,6 +153,7 @@ function updateStatus() {
   if (connected && remote && peers.some((item) => item.address === remote)) {
     $("trayPeer").value = remote;
   }
+  renderTraySession();
 }
 
 async function refreshState() {
@@ -136,8 +191,10 @@ async function connectSelected() {
       remotes = [];
       remote = "";
     } else {
+      const configured = configuredSessionPeers();
       const address = $("trayPeer").value || favoriteAddresses()[0] || peers[0]?.address;
-      if (!address) {
+      const targets = configured.length ? configured : (address ? [address] : []);
+      if (!targets.length) {
         await refreshPeers();
         $("trayPeer").focus();
         return;
@@ -145,12 +202,12 @@ async function connectSelected() {
 
       const input = localStorage.getItem("duovoice.input") || null;
       const output = localStorage.getItem("duovoice.output") || null;
-      await invoke("start_audio", { remote: address, remotes: [address], input, output });
+      await invoke("start_audio", { remote: targets[0], remotes: targets, input, output });
       const volume = Math.max(0, Math.min(2, Number(localStorage.getItem("duovoice.volume") ?? 100) / 100));
       await invoke("set_volume", { volume });
       connected = true;
-      remotes = [address];
-      remote = address;
+      remotes = targets;
+      remote = targets[0];
     }
 
     await emit("audio-state-changed");
@@ -215,6 +272,7 @@ window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY || event.key === THEME_KEY) applyTheme();
   if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
   if (event.key === LANGUAGE_KEY) applyLanguage();
+  if (event.key === SESSION_KEY || event.key === FAVORITES_KEY) renderTraySession();
 });
 
 let peerTimer = null;
@@ -243,6 +301,7 @@ window.addEventListener("blur", () => {
 listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payload?.color)).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
 listen("audio-state-changed", refreshState).catch(() => {});
+listen("session-changed", renderTraySession).catch(() => {});
 listen("language-changed", applyLanguage).catch(() => {});
 
 

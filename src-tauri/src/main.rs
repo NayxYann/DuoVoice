@@ -171,7 +171,7 @@ fn set_tray_icon_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), Str
 #[tauri::command]
 fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
     const QUICK_WIDTH: f64 = 280.0;
-    const QUICK_HEIGHT: f64 = 348.0;
+    const QUICK_HEIGHT: f64 = 420.0;
     const MENU_WIDTH: f64 = 190.0;
     const MENU_HEIGHT: f64 = 198.0;
     let scale = scale.clamp(0.9, 1.2);
@@ -1288,7 +1288,7 @@ fn main() {
                                         return;
                                     }
 
-                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 348));
+                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 420));
                                     let width = size.width as i32;
                                     let height = size.height as i32;
                                     let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();

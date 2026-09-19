@@ -29,7 +29,7 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 
 ## What's new in 1.4.0
 
-Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The Windows tray experience, themes, updater, device hot-switching and existing one-to-one workflow remain intact.
+Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The home screen was also reorganized so group controls and audio profiles fit naturally into the existing DuoVoice design. The Windows tray is now group-aware and can reconnect the configured session directly.
 
 ## Session groups
 
@@ -39,16 +39,18 @@ For a group, add several discovered computers to the **Session** list before con
 
 Group membership can be changed while audio is active. If a remote PC briefly goes offline, the local audio engine stays alive and communication resumes automatically when that PC returns on the same address.
 
+The custom Windows tray panel also shows the current Duo/group session. When a group is configured, the tray **Connect** action uses the saved group instead of silently falling back to a single peer.
+
 ## Audio profiles
 
-Audio profiles store a microphone and output-device pair locally. They are useful for setups such as:
+Audio profiles store a microphone and output-device pair locally. Profiles are created and managed directly from the **Audio** card on the main screen, next to the currently selected devices. Choosing a saved profile applies it immediately, including while a session is active. They are useful for setups such as:
 
 - GoXLR
 - Headset
 - Speakers
 - Streaming
 
-A saved profile can be applied while DuoVoice is already connected; the audio engine restarts with the new devices while preserving the current session members.
+The former settings-only profile manager was removed so this workflow stays next to the microphone and output controls where it is actually used.
 
 ## Network
 
