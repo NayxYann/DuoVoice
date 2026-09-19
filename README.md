@@ -29,7 +29,7 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 
 ## What's new in 1.4.0
 
-Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The home screen was also reorganized so group controls and audio profiles fit naturally into the existing DuoVoice design. The Windows tray is now group-aware and can reconnect the configured session directly.
+Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The home screen was also reorganized so group controls and audio profiles fit naturally into the existing DuoVoice design. The Windows tray is now group-aware and can reconnect the configured session directly. The final Windows layout uses a slightly taller fixed design canvas so device selectors, profile controls, volume options and action buttons retain their intended size instead of being compressed.
 
 ## Session groups
 
