@@ -11,6 +11,7 @@
     "core:default",
     "autostart:default",
     "updater:default",
+    "process:default",
     "core:window:allow-hide",
     "core:window:allow-set-size"
   ]

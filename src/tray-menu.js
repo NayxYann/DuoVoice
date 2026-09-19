@@ -3,7 +3,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import "./tray-menu.css";
 import { COLOR_KEY, THEME_KEY, applyThemeVariables, normalizeThemeName } from "./theme.js";
-import { LANGUAGE_KEY, getLanguage, applyStaticTranslations } from "./i18n.js";
 
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 
@@ -47,11 +46,8 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("storage", (event) => {
   if (event.key === COLOR_KEY || event.key === THEME_KEY) applyTheme();
   if (event.key === TRAY_SCALE_KEY) applyTrayScale(event.newValue || "1");
-  if (event.key === LANGUAGE_KEY) applyStaticTranslations(document, getLanguage());
 });
 listen("theme-changed", (event) => applyTheme(event.payload?.theme, event.payload?.color)).catch(() => {});
 listen("tray-scale-changed", (event) => applyTrayScale(event.payload?.scale || 1)).catch(() => {});
-listen("language-changed", () => applyStaticTranslations(document, getLanguage())).catch(() => {});
-applyStaticTranslations(document, getLanguage());
 applyTheme(localStorage.getItem(THEME_KEY) || "duovoice", localStorage.getItem(COLOR_KEY) || "violet");
 applyTrayScale(localStorage.getItem(TRAY_SCALE_KEY) || "1");

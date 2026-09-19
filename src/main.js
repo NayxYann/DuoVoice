@@ -3,10 +3,10 @@ import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import "./style.css";
 import { COLOR_KEY, THEME_KEY, PALETTE, THEMES, applyThemeVariables, normalizeThemeName } from "./theme.js";
-import { LANGUAGE_KEY, getLanguage, setLanguage, t, localeForLanguage, applyStaticTranslations } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 let connected = false;
@@ -20,44 +20,26 @@ const MUTE_KEY = "duovoice.muted";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const RECENTS_KEY = "duovoice.recentConnections";
-const SESSION_KEY = "duovoice.sessionPeers";
-const COMMUNICATION_MODE_KEY = "duovoice.communicationMode";
-const MAX_SESSION_PARTICIPANTS = 12;
-const MAX_SESSION_REMOTES = MAX_SESSION_PARTICIPANTS - 1;
 const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
 const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
-const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.4.3";
+const FALLBACK_VERSION = "1.3.4";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
-const BASE_WINDOW_HEIGHT = 720;
-const GROUP_WINDOW_HEIGHT = 850;
-const GROUP_WINDOW_MAX_HEIGHT = 940;
+const BASE_WINDOW_HEIGHT = 760;
 const SCALE_VALUES = [0.8, 0.9, 1, 1.1, 1.2, 1.3];
 const TRAY_SCALE_VALUES = [0.9, 1, 1.1, 1.2];
 let connectedPeer = "";
-let connectedPeers = [];
-let sessionPeers = new Set();
-let deviceDefaults = { input: null, output: null };
 let appliedClientName = "";
 let appliedUiScale = 1;
 let appliedTrayScale = 1;
 let appliedInputDevice = null;
 let appliedOutputDevice = null;
 let switchingAudioDevice = false;
-let communicationMode = localStorage.getItem(COMMUNICATION_MODE_KEY) === "group" ? "group" : "duo";
-let activeRoom = null;
-let roomsCache = [];
-let roomSyncBusy = false;
-let micMonitorActive = false;
-let micMonitorTimer = null;
-let currentDesignHeight = BASE_WINDOW_HEIGHT;
 
 
 
@@ -208,28 +190,6 @@ async function saveClientName() {
   }
 }
 
-function applyLanguageUi(language = getLanguage(), { broadcast = false } = {}) {
-  const lang = setLanguage(language);
-  applyStaticTranslations(document, lang);
-  const select = $("languageSelect");
-  if (select) select.value = lang;
-  updateHeaderMode();
-  updateNoiseUi();
-  updateMuteUi(localStorage.getItem(MUTE_KEY) === "true");
-  updateDuoConnectionState();
-  renderPeers();
-  renderFavorites();
-  renderSessionMembers();
-  renderRecentConnections();
-  if (updateState.status) setUpdateBanner(updateState.status, updateState.update);
-  if ($("lastUpdate")) $("lastUpdate").textContent = formatLastUpdate();
-  if (broadcast) {
-    emitTo("tray", "language-changed", { language: lang }).catch(() => {});
-    emitTo("tray-menu", "language-changed", { language: lang }).catch(() => {});
-  }
-  return lang;
-}
-
 function reportError(scope, error) {
   invoke("log_client_error", { message: `${scope}: ${String(error)}` }).catch(() => {});
 }
@@ -238,7 +198,7 @@ function updateHeaderMode() {
   const settings = !$(`settingsView`).classList.contains("hidden");
   const button = $("settingsBtn");
   button.innerHTML = settings ? NAV_ICONS.back : NAV_ICONS.settings;
-  button.title = settings ? (getLanguage() === "fr" ? "Retour" : getLanguage() === "es" ? "Volver" : getLanguage() === "de" ? "Zurück" : "Back") : t("common.settings");
+  button.title = settings ? "Retour" : "Paramètres";
   button.setAttribute("aria-label", button.title);
   button.classList.toggle("settings-back", settings);
 }
@@ -247,14 +207,12 @@ function showSettings() {
   $("mainView").classList.add("hidden");
   $("settingsView").classList.remove("hidden");
   updateHeaderMode();
-  resizeDesignWindow(BASE_WINDOW_HEIGHT).catch(() => {});
 }
 
 function showMain() {
   $("settingsView").classList.add("hidden");
   $("mainView").classList.remove("hidden");
   updateHeaderMode();
-  resizeDesignWindow(preferredMainWindowHeight()).catch(() => {});
 }
 
 function setUiScaleControl(value) {
@@ -298,36 +256,20 @@ async function applyTrayScale(value) {
   }
 }
 
-function preferredMainWindowHeight() { return BASE_WINDOW_HEIGHT; }
-
-async function resizeDesignWindow(height = currentDesignHeight, scale = appliedUiScale) {
-  currentDesignHeight = Math.max(BASE_WINDOW_HEIGHT, Math.round(Number(height) || BASE_WINDOW_HEIGHT));
-
-  // Grow with the current workflow, but never push controls below the usable
-  // desktop. On a shorter display the central view becomes scrollable instead.
-  const desiredNativeHeight = Math.round(currentDesignHeight * scale);
-  const availableHeight = Number(globalThis.screen?.availHeight) || desiredNativeHeight;
-  const nativeHeight = Math.min(desiredNativeHeight, Math.max(560, Math.floor(availableHeight - 20)));
-  const effectiveDesignHeight = Math.max(560, Math.floor(nativeHeight / scale));
-  document.documentElement.style.setProperty("--design-height", `${effectiveDesignHeight}px`);
-
-  const appWindow = getCurrentWindow();
-  await appWindow.setSize(new LogicalSize(
-    Math.round(BASE_WINDOW_WIDTH * scale),
-    nativeHeight,
-  ));
-}
-
 async function applyUiScale(value) {
   const scale = normalizedScale(value);
 
-  // DuoVoice keeps a stable 1080 px design width while its height can grow
-  // when the group-room view needs more vertical space.
+  // DuoVoice is laid out on a fixed design canvas. The same scale factor is
+  // applied to the canvas and to the native window so positions stay stable.
   document.documentElement.style.setProperty("--ui-scale", String(scale));
   setUiScaleControl(scale);
 
   try {
-    await resizeDesignWindow(currentDesignHeight, scale);
+    const window = getCurrentWindow();
+    await window.setSize(new LogicalSize(
+      Math.round(BASE_WINDOW_WIDTH * scale),
+      Math.round(BASE_WINDOW_HEIGHT * scale)
+    ));
     localStorage.setItem(SCALE_KEY, String(scale));
     appliedUiScale = scale;
     return true;
@@ -436,12 +378,10 @@ async function loadAppVersion() {
 
 function formatLastUpdate() {
   const value = localStorage.getItem(LAST_UPDATE_KEY);
-  if (!value) return t("settings.lastUpdateUnavailable");
+  if (!value) return "Date de mise à jour : non disponible";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return t("settings.lastUpdateUnavailable");
-  const locale = localeForLanguage();
-  const prefix = ({ en: "Last update", fr: "Dernière mise à jour", es: "Última actualización", de: "Letztes Update" })[getLanguage()] || "Last update";
-  return `${prefix}: ${date.toLocaleDateString(locale)} ${date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`;
+  if (Number.isNaN(date.getTime())) return "Date de mise à jour : non disponible";
+  return `Dernière mise à jour : ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 const RELEASES_API = "https://api.github.com/repos/NayxYann/DuoVoice/releases?per_page=30";
@@ -485,7 +425,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-async function loadPreviousVersions() {
+async function loadSelectableVersions() {
   const list = $("versionList");
   const status = $("versionPickerStatus");
   list.innerHTML = '<div class="version-loading">Recherche des versions disponibles…</div>';
@@ -499,23 +439,23 @@ async function loadPreviousVersions() {
     });
     if (!response.ok) throw new Error(`GitHub a répondu ${response.status}`);
     const releases = await response.json();
-    const previous = releases
+    const selectable = releases
       .filter(release => !release.draft && !release.prerelease)
       .map(release => ({
         version: String(release.tag_name || "").replace(/^v/i, ""),
         name: String(release.name || release.tag_name || "").trim(),
         hasUpdater: Array.isArray(release.assets) && release.assets.some(asset => asset.name === "latest.json"),
       }))
-      .filter(release => release.hasUpdater && parseSemver(release.version) && compareSemver(release.version, appVersion) < 0)
+      .filter(release => release.hasUpdater && parseSemver(release.version) && compareSemver(release.version, appVersion) !== 0)
       .sort((a, b) => compareSemver(b.version, a.version));
 
     list.innerHTML = "";
-    if (!previous.length) {
-      list.innerHTML = '<div class="version-empty">Aucune version précédente installable n’a été trouvée.</div>';
+    if (!selectable.length) {
+      list.innerHTML = '<div class="version-empty">Aucune autre version installable n’a été trouvée.</div>';
       return;
     }
 
-    for (const release of previous) {
+    for (const release of selectable) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "version-option";
@@ -539,10 +479,10 @@ async function loadPreviousVersions() {
 
 async function openVersionPicker() {
   setVersionPicker(true);
-  await loadPreviousVersions();
+  await loadSelectableVersions();
 }
 
-async function installPreviousVersion() {
+async function installSelectedVersion() {
   if (!rollbackVersion || rollbackBusy) return;
   rollbackBusy = true;
   const confirm = $("confirmRollback");
@@ -557,6 +497,7 @@ async function installPreviousVersion() {
     const installed = await invoke("install_version", { version: rollbackVersion });
     setLastUpdateNow();
     status.textContent = `DuoVoice v${installed} installé. Redémarrage…`;
+    if (!navigator.userAgent.toLowerCase().includes("windows")) await relaunch();
   } catch (e) {
     reportError("Version rollback", e);
     status.textContent = `Installation impossible : ${String(e)}`;
@@ -592,59 +533,52 @@ function updateFavoriteButton() {
   button.disabled = !$("peer").value;
 }
 
-function closeCompactPopovers(except = "") {
-  for (const id of ["favoritesPopover"]) {
-    if (id === except) continue;
-    const popover = $(id);
-    if (!popover) continue;
-    popover.classList.add("hidden");
-  }
-  $("favoritesSummary")?.setAttribute("aria-expanded", String(except === "favoritesPopover"));
-}
-
-function toggleCompactPopover(id) {
-  const popover = $(id);
-  if (!popover) return;
-  const willOpen = popover.classList.contains("hidden");
-  closeCompactPopovers(willOpen ? id : "");
-  if (willOpen) popover.classList.remove("hidden");
-  else popover.classList.add("hidden");
-  $("favoritesSummary")?.setAttribute("aria-expanded", String(!$("favoritesPopover")?.classList.contains("hidden")));
-}
-
 function renderFavorites() {
   const box = $("favoritesList");
   if (!box) return;
   const favorites = loadFavorites().sort((a, b) => a.name.localeCompare(b.name));
-  if ($("favoritesSummaryText")) $("favoritesSummaryText").textContent = t("connection.favoritesCount", { count: favorites.length });
-  if ($("favoritesCount")) $("favoritesCount").textContent = t("connection.favoritesCount", { count: favorites.length });
   box.innerHTML = "";
   if (!favorites.length) {
-    box.innerHTML = `<div class="favorites-empty">${({en:'No favorites yet. Select a PC, then use the Favorite button.',fr:'Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.',es:'Aún no hay favoritos. Selecciona un PC y usa el botón Favorito.',de:'Noch keine Favoriten. Wähle einen PC und nutze die Favoriten-Schaltfläche.'})[getLanguage()]}</div>`;
+    box.innerHTML = '<div class="favorites-empty">Aucun favori. Sélectionnez un PC puis utilisez le bouton Favori.</div>';
     return;
   }
 
   for (const favorite of favorites) {
     const peer = peerCache.get(favorite.address);
     const available = !!peer;
-    const selected = $("peer")?.value === favorite.address;
-    const isActive = connected && connectedPeers.includes(favorite.address);
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `favorite-item favorite-select-row${available ? " available" : " unavailable"}${selected ? " selected" : ""}${isActive ? " active" : ""}`;
+    const isActive = connected && connectedPeer === favorite.address;
+    const item = document.createElement("div");
+    item.className = `favorite-item${available ? " available" : " unavailable"}${isActive ? " active" : ""}`;
+
+    const connectBtn = document.createElement("button");
+    connectBtn.type = "button";
+    connectBtn.className = "favorite-action favorite-connect";
+    connectBtn.innerHTML = UI_ICONS.link;
+    connectBtn.title = isActive ? "Déjà connecté" : "Se connecter";
+    connectBtn.disabled = !available || isActive;
+    connectBtn.addEventListener("click", () => connectToAddress(favorite.address));
+
+    const disconnectBtn = document.createElement("button");
+    disconnectBtn.type = "button";
+    disconnectBtn.className = "favorite-action favorite-disconnect";
+    disconnectBtn.innerHTML = UI_ICONS.x;
+    disconnectBtn.title = "Se déconnecter";
+    disconnectBtn.disabled = !isActive;
+    disconnectBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      disconnectFromFavorite(favorite.address);
+    });
+
     item.innerHTML = `
       <span class="favorite-dot"></span>
       <span class="favorite-info"><strong>${escapeHtml(favorite.name)}</strong><small>${escapeHtml(favorite.address)}</small></span>
-      <span class="favorite-status">${isActive ? t("status.connected") : (available ? t("connection.available") : t("connection.unavailable"))}</span>
-      <span class="favorite-select-chevron">›</span>`;
-    item.addEventListener("click", () => {
-      if (!peer) { setDetails(t("connection.unavailable")); return; }
-      $("peer").value = favorite.address;
-      updateFavoriteButton();
-      renderFavorites();
-      closeCompactPopovers();
-      setDetails(`${favorite.name} · ${favorite.address}`);
-    });
+      <span class="favorite-status">${isActive ? "Connecté" : (available ? "Disponible" : "Indisponible")}</span>
+    `;
+    const actions = document.createElement("span");
+    actions.className = "favorite-actions";
+    actions.append(connectBtn, disconnectBtn);
+    item.appendChild(actions);
     box.appendChild(item);
   }
 }
@@ -654,443 +588,11 @@ function renderPeers(preferred = "") {
   const current = preferred || select.value;
   select.innerHTML = "";
   const list = [...peerCache.values()].sort((a,b) => a.name.localeCompare(b.name));
-  if (!list.length) select.add(new Option(t("connection.none"), ""));
+  if (!list.length) select.add(new Option("Aucun PC détecté — ajoutez une IP", ""));
   for (const p of list) select.add(new Option(`${p.name} — ${p.address}`, p.address));
   if (current && [...select.options].some(o => o.value === current)) select.value = current;
   updateFavoriteButton();
   renderFavorites();
-}
-
-function persistSessionPeers() {
-  const remotes = [...sessionPeers];
-  localStorage.setItem(SESSION_KEY, JSON.stringify(remotes));
-  emitTo("tray", "session-changed", { remotes }).catch(() => {});
-}
-
-function loadSessionPeers() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "[]");
-    sessionPeers = new Set(Array.isArray(stored) ? stored.filter(Boolean).slice(0, MAX_SESSION_REMOTES) : []);
-  } catch { sessionPeers = new Set(); }
-}
-
-function sessionLabel(address) {
-  return peerCache.get(address)?.name || favoriteFor(address)?.name || `PC — ${address}`;
-}
-
-function renderSessionMembers() {
-  const box = $("sessionMembers");
-  if (!box) return;
-  const members = [...sessionPeers];
-  const remoteCount = members.length;
-  const participantCount = remoteCount ? remoteCount + 1 : (connected ? connectedPeers.length + 1 : 1);
-  const summary = remoteCount === 0
-    ? t("group.none")
-    : remoteCount === 1
-      ? t("group.duoSummary", { count: participantCount })
-      : t("group.groupSummary", { count: participantCount });
-  if ($("sessionSummaryText")) $("sessionSummaryText").textContent = summary;
-  if ($("sessionCount")) $("sessionCount").textContent = t("group.participantCount", { count: remoteCount ? participantCount : 0 });
-  if ($("sessionState")) $("sessionState").textContent = `${connected ? connectedPeers.length + 1 : (remoteCount ? participantCount : 1)}`;
-  box.innerHTML = "";
-
-  if (!remoteCount) {
-    box.innerHTML = `<div class="session-empty">${t("group.none")}</div>`;
-  } else {
-    for (const address of members) {
-      const item = document.createElement("div");
-      const active = connectedPeers.includes(address);
-      const discovered = peerCache.has(address);
-      const state = active ? (discovered ? t("status.connected") : t("group.reconnecting")) : (discovered ? t("connection.available") : t("connection.unavailable"));
-      item.className = `session-member${active ? " active" : ""}${!discovered ? " missing" : ""}`;
-      item.innerHTML = `<span class="session-member-dot"></span><span class="session-member-copy"><strong>${escapeHtml(sessionLabel(address))}</strong><small>${escapeHtml(address)}</small></span><span class="session-member-state">${escapeHtml(state)}</span>`;
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "icon-btn compact session-remove";
-      remove.innerHTML = UI_ICONS.x;
-      remove.title = t("group.remove");
-      remove.setAttribute("aria-label", remove.title);
-      remove.addEventListener("click", (event) => { event.stopPropagation(); removePeerFromSession(address); });
-      item.appendChild(remove);
-      box.appendChild(item);
-    }
-  }
-  const add = $("addPeerToSession");
-  if (add) add.disabled = !$("peer").value || sessionPeers.has($("peer").value) || sessionPeers.size >= MAX_SESSION_REMOTES;
-}
-
-async function addSelectedPeerToSession() {
-  const address = $("peer").value;
-  if (!address) return;
-  if (connected) {
-    for (const current of connectedPeers) sessionPeers.add(current);
-  }
-  if (sessionPeers.has(address)) {
-    toggleCompactPopover("sessionPopover");
-    return;
-  }
-  if (sessionPeers.size >= MAX_SESSION_REMOTES) { setDetails(t("group.limit")); return; }
-  sessionPeers.add(address);
-  persistSessionPeers();
-  renderSessionMembers();
-  renderPeers(address);
-  if (connected) await syncLiveSessionPeers();
-  if ($("sessionPopover")?.classList.contains("hidden")) toggleCompactPopover("sessionPopover");
-}
-
-async function removePeerFromSession(address) {
-  if (!address) return;
-  if (connected) {
-    for (const current of connectedPeers) sessionPeers.add(current);
-  }
-  sessionPeers.delete(address);
-  persistSessionPeers();
-  if (connected && connectedPeers.includes(address)) {
-    if (sessionPeers.size) {
-      await syncLiveSessionPeers();
-    } else {
-      await disconnect();
-    }
-  }
-  renderSessionMembers();
-  renderFavorites();
-  renderPeers();
-}
-
-async function syncLiveSessionPeers() {
-  if (!connected) return;
-  const targets = [...sessionPeers];
-  if (!targets.length) { await disconnect(); return; }
-  try {
-    connectedPeers = await invoke("set_audio_peers", { remotes: targets });
-    connectedPeer = connectedPeers[0] || "";
-    sessionPeers = new Set(connectedPeers);
-    persistSessionPeers();
-    await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
-    renderSessionMembers();
-    renderFavorites();
-  } catch (e) {
-    reportError("Group update", e);
-    setDetails(`Session : ${e}`);
-  }
-}
-
-
-function sameAddressSet(left, right) {
-  const a = [...new Set((left || []).filter(Boolean))].sort();
-  const b = [...new Set((right || []).filter(Boolean))].sort();
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
-function roomMeta(room) {
-  if (!room) return t("group.none");
-  const host = room.host_name || t("group.hostUnavailable");
-  return `${t("group.hostedBy")} ${host} · ${room.participants}/${room.max_participants}`;
-}
-
-function updateHeaderStatus() {
-  const status = $("status");
-  if (!status) return;
-  if (connected) {
-    status.innerHTML = `<span class="status-dot"></span>${t("status.connected")}`;
-    status.className = "status online";
-  } else if (communicationMode === "group" && activeRoom) {
-    status.innerHTML = `<span class="status-dot"></span>${t("group.waiting")}`;
-    status.className = "status waiting";
-  } else {
-    status.innerHTML = `<span class="status-dot"></span>${t("status.offline")}`;
-    status.className = "status offline";
-  }
-}
-
-function updateDuoConnectionState() {
-  const box = $("duoConnectionState");
-  if (!box) return;
-  const duoConnected = communicationMode === "duo" && connected && connectedPeers.length > 0;
-  box.classList.toggle("connected", duoConnected);
-  const title = $("duoConnectionTitle");
-  const meta = $("duoConnectionMeta");
-  const latency = $("duoConnectionLatency");
-  if (duoConnected) {
-    const address = connectedPeers[0];
-    const peer = peerCache.get(address);
-    const name = peer?.name || address;
-    title.textContent = t("connection.connectedTo", { name });
-    meta.textContent = t("connection.connectedMeta", { address });
-    latency.textContent = $("latency")?.textContent || "— ms";
-  } else {
-    title.textContent = t("connection.ready");
-    meta.textContent = t("connection.readyHint");
-    latency.textContent = "— ms";
-  }
-}
-
-function updateConnectionInsights() {
-  updateDuoConnectionState();
-  const peers = [...peerCache.values()].filter(peer => !peer.manual).length;
-  const rooms = roomsCache.length;
-  const network = `${peers} PC${peers === 1 ? "" : "s"} · ${rooms} ${t("group.roomsShort")}`;
-  if ($("networkState")) $("networkState").textContent = network;
-  if ($("stateNetwork")) $("stateNetwork").textContent = network;
-
-  if ($("connectionSessionState")) {
-    if (communicationMode === "group") {
-      $("connectionSessionState").textContent = activeRoom
-        ? `${activeRoom.name} · ${activeRoom.participants}/${activeRoom.max_participants}`
-        : `${t("group.groupMode")} · ${t("group.none")}`;
-    } else if (connectedPeers.length) {
-      $("connectionSessionState").textContent = connectedPeers.length > 1
-        ? `${t("group.groupMode")} · ${connectedPeers.length + 1}`
-        : `${t("group.duo")} · ${connectedPeers.length + 1}`;
-    } else {
-      $("connectionSessionState").textContent = `${t("group.duo")} · ${t("status.offline")}`;
-    }
-  }
-
-  if (communicationMode === "group") {
-    $("mode").textContent = activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("group.groupMode");
-    $("sessionState").textContent = activeRoom ? `${activeRoom.participants}/${activeRoom.max_participants}` : "0";
-  }
-}
-
-function renderRooms() {
-  const list = $("roomsList");
-  if (!list) return;
-  const visibleRooms = roomsCache.filter(room => room && room.id);
-  if ($("roomNetworkCount")) $("roomNetworkCount").textContent = `${visibleRooms.length}`;
-  list.innerHTML = "";
-
-  const groupPanel = $("groupPanel");
-  groupPanel?.classList.toggle("room-active", Boolean(activeRoom));
-
-  if (!activeRoom) {
-    if (!visibleRooms.length) {
-      list.innerHTML = `<div class="rooms-empty">${escapeHtml(t("group.noRooms"))}</div>`;
-    } else {
-      for (const room of visibleRooms) {
-        const full = room.participants >= room.max_participants;
-        const row = document.createElement("div");
-        row.className = `room-row${full ? " full" : ""}${room.is_hosted_local ? " hosted-local" : ""}`;
-
-        const join = document.createElement("button");
-        join.type = "button";
-        join.className = "room-row-main";
-        join.disabled = full;
-        const hostLabel = room.is_hosted_local ? t("group.hostedByYou") : `${t("group.hostedBy")} ${room.host_name || t("group.hostUnavailable")}`;
-        join.innerHTML = `
-          <span class="room-row-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span class="room-row-copy"><strong>${escapeHtml(room.name)}</strong><small>${escapeHtml(hostLabel)}</small></span>
-          ${room.is_hosted_local ? `<span class="room-hosted-badge">${escapeHtml(t("group.hostedBadge"))}</span>` : ""}
-          <span class="room-row-count">${room.participants}/${room.max_participants}</span>
-          <span class="room-row-action">${escapeHtml(full ? t("group.full") : t("group.join"))}</span>`;
-        if (!full) join.addEventListener("click", () => joinNamedRoom(room.id));
-        row.appendChild(join);
-
-        if (room.is_hosted_local) {
-          const del = document.createElement("button");
-          del.type = "button";
-          del.className = "room-row-delete";
-          del.title = t("group.deleteRoom");
-          del.setAttribute("aria-label", del.title);
-          del.innerHTML = UI_ICONS.x;
-          del.addEventListener("click", event => { event.stopPropagation(); openRoomDeleteConfirm(room); });
-          row.appendChild(del);
-        }
-        list.appendChild(row);
-      }
-    }
-  }
-
-  const activeCard = $("activeRoomCard");
-  if (activeRoom) {
-    activeCard.classList.remove("hidden");
-    $("activeRoomName").textContent = activeRoom.name;
-    $("activeRoomMeta").textContent = activeRoom.is_hosted_local ? t("group.hostedByYou") : `${t("group.hostedBy")} ${activeRoom.host_name || t("group.hostUnavailable")}`;
-    $("activeRoomParticipantCount").textContent = `${activeRoom.participants}/${activeRoom.max_participants}`;
-    const members = $("activeRoomMembers");
-    members.innerHTML = "";
-    for (const member of (activeRoom.members || []).slice(0, activeRoom.max_participants)) {
-      const row = document.createElement("div");
-      row.className = `active-room-member${member.is_self ? " self" : ""}`;
-      const role = member.host ? t("group.host") : (member.is_self ? t("group.you") : t("status.connected"));
-      row.innerHTML = `<span class="active-room-member-dot"></span><span class="active-room-member-copy"><strong>${escapeHtml(member.name || member.address)}</strong><small>${escapeHtml(member.address || "")}</small></span><span class="active-room-member-role">${escapeHtml(role)}</span>`;
-      members.appendChild(row);
-    }
-    const deleteBtn = $("deleteRoom");
-    deleteBtn?.classList.toggle("hidden", !activeRoom.is_hosted_local);
-    document.querySelector(".active-room-actions")?.classList.toggle("single-action", !activeRoom.is_hosted_local);
-  } else {
-    activeCard.classList.add("hidden");
-    document.querySelector(".active-room-actions")?.classList.remove("single-action");
-  }
-  updateHeaderStatus();
-  updateConnectionInsights();
-}
-
-let pendingRoomDelete = null;
-function openRoomDeleteConfirm(room) {
-  if (!room?.id || !room.is_hosted_local) return;
-  pendingRoomDelete = room;
-  $("roomDeleteTitle").textContent = `${t("group.deleteConfirmTitle")} « ${room.name} » ?`;
-  $("roomDeleteBody").textContent = t("group.deleteConfirmBody");
-  $("roomDeleteConfirm").classList.add("open");
-  $("roomDeleteConfirm").setAttribute("aria-hidden", "false");
-}
-function closeRoomDeleteConfirm() {
-  pendingRoomDelete = null;
-  $("roomDeleteConfirm").classList.remove("open");
-  $("roomDeleteConfirm").setAttribute("aria-hidden", "true");
-}
-async function confirmRoomDelete() {
-  const room = pendingRoomDelete;
-  if (!room) return;
-  $("confirmRoomDelete").disabled = true;
-  try {
-    await invoke("delete_room", { roomId: room.id });
-    if (activeRoom?.id === room.id) {
-      activeRoom = null;
-      if (connected) await disconnect();
-      await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
-    }
-    setDetails(t("group.deleted", { name: room.name }));
-    closeRoomDeleteConfirm();
-    await refreshRooms(false);
-  } catch (error) {
-    reportError("Delete room", error);
-    setDetails(`${t("group.deleteFailed")} : ${String(error)}`);
-  } finally {
-    $("confirmRoomDelete").disabled = false;
-  }
-}
-
-async function syncActiveRoomAudio(room = activeRoom) {
-  if (!room || communicationMode !== "group" || roomSyncBusy) return;
-  roomSyncBusy = true;
-  try {
-    const targets = (room.members || [])
-      .filter(member => !member.is_self && member.address && member.address !== "127.0.0.1")
-      .map(member => member.address)
-      .slice(0, MAX_SESSION_REMOTES);
-
-    if (!targets.length) {
-      if (connected) await disconnect();
-      updateConnectionInsights();
-      return;
-    }
-
-    if (!connected) {
-      await connectToAddresses(targets);
-    } else if (!sameAddressSet(connectedPeers, targets)) {
-      connectedPeers = await invoke("set_audio_peers", { remotes: targets });
-      connectedPeer = connectedPeers[0] || "";
-      await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
-      renderFavorites();
-    }
-    $("mode").textContent = `${t("group.roomLabel")} · ${room.name}`;
-    $("sessionState").textContent = `${room.participants}/${room.max_participants}`;
-  } catch (error) {
-    reportError("Room audio sync", error);
-    setDetails(`${t("group.roomLabel")} : ${String(error)}`);
-  } finally {
-    roomSyncBusy = false;
-  }
-}
-
-async function refreshRooms(syncAudio = true) {
-  try {
-    const previousRoomId = activeRoom?.id || null;
-    const [rooms, localRoom] = await Promise.all([
-      invoke("list_rooms"),
-      invoke("get_local_room"),
-    ]);
-    roomsCache = Array.isArray(rooms) ? rooms : [];
-    activeRoom = localRoom || null;
-    if (previousRoomId && !activeRoom && communicationMode === "group") {
-      if (connected) await disconnect();
-      setDetails(t("group.closed"));
-      await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
-    }
-    renderRooms();
-    if (communicationMode === "group" && !$("mainView").classList.contains("hidden")) {
-      const preferredHeight = preferredMainWindowHeight();
-      if (preferredHeight !== currentDesignHeight) await resizeDesignWindow(preferredHeight).catch(() => {});
-    }
-    if (syncAudio && activeRoom && communicationMode === "group") await syncActiveRoomAudio(activeRoom);
-  } catch (error) {
-    reportError("Room discovery", error);
-  }
-}
-
-async function createNamedRoom() {
-  const input = $("roomName");
-  const name = input.value.trim();
-  if (!name) { input.focus(); return; }
-  const button = $("createRoom");
-  button.disabled = true;
-  try {
-    // A salon is created/advertised independently from participation. Creating
-    // it must never pull the creator into it automatically.
-    const createdRoom = await invoke("create_room", { name });
-    input.value = "";
-    setDetails(t("group.created", { name: createdRoom.name }));
-    await refreshRooms(false);
-    await emitTo("tray", "room-state-changed", { room: activeRoom });
-  } catch (error) {
-    reportError("Create room", error);
-    setDetails(`${t("group.createFailed")} : ${String(error)}`);
-  } finally { button.disabled = false; }
-}
-
-async function joinNamedRoom(roomId) {
-  if (!roomId || activeRoom?.id === roomId) return;
-  try {
-    if (connected) await disconnect();
-    if (activeRoom) await invoke("leave_room");
-    activeRoom = await invoke("join_room", { roomId });
-    setDetails(t("group.joined", { name: activeRoom.name }));
-    await refreshRooms(true);
-    await emitTo("tray", "room-state-changed", { room: activeRoom });
-  } catch (error) {
-    reportError("Join room", error);
-    setDetails(`${t("group.joinFailed")} : ${String(error)}`);
-    await refreshRooms(false);
-  }
-}
-
-async function leaveActiveRoom({ keepMode = false } = {}) {
-  try { await invoke("leave_room"); } catch (error) { reportError("Leave room", error); }
-  activeRoom = null;
-  roomsCache = roomsCache.map(room => ({ ...room, is_local: false }));
-  if (connected) await disconnect();
-  renderRooms();
-  setDetails(t("group.left"));
-  await emitTo("tray", "room-state-changed", { room: null }).catch(() => {});
-  if (!keepMode) await refreshRooms(false);
-}
-
-async function setCommunicationMode(mode, { initial = false } = {}) {
-  const target = mode === "group" ? "group" : "duo";
-  if (!initial && target === communicationMode) return;
-
-  if (!initial && target === "duo" && activeRoom) await leaveActiveRoom({ keepMode: true });
-
-  communicationMode = target;
-  localStorage.setItem(COMMUNICATION_MODE_KEY, target);
-  $("modeDuo").classList.toggle("active", target === "duo");
-  $("modeGroup").classList.toggle("active", target === "group");
-  $("duoPanel").classList.toggle("hidden", target !== "duo");
-  $("groupPanel").classList.toggle("hidden", target !== "group");
-  closeCompactPopovers();
-
-  if (target === "group") await refreshRooms(true);
-  else {
-    $("mode").textContent = connectedPeers.length > 1 ? `${t("group.groupMode")} · ${connectedPeers.length + 1}` : t("state.lan");
-    renderSessionMembers();
-  }
-  updateConnectionInsights();
-  if (!$("mainView").classList.contains("hidden")) {
-    await resizeDesignWindow(preferredMainWindowHeight()).catch(() => {});
-  }
 }
 
 function toggleFavorite() {
@@ -1101,13 +603,13 @@ function toggleFavorite() {
   if (index >= 0) {
     favorites.splice(index, 1);
     saveFavorites(favorites);
-    setDetails(t("connection.favoriteRemoved"));
+    setDetails("Favori retiré.");
   } else {
     const peer = peerCache.get(address);
     const name = peer?.name || `PC — ${address}`;
     favorites.push({ name, address });
     saveFavorites(favorites);
-    setDetails(t("connection.favoriteAdded", { name }));
+    setDetails(`${name} ajouté aux favoris.`);
   }
   updateFavoriteButton();
   renderFavorites();
@@ -1151,8 +653,8 @@ function updateNoiseUi() {
   const enabled = $("noiseEnabled").checked;
   const intensity = Number($("noiseIntensity").value);
   $("noiseIntensityValue").textContent = `${intensity}%`;
-  $("noiseStatus").textContent = enabled ? `${t("audio.enabled")} · ${intensity}%` : t("audio.disabled");
-  $("savedNoise").textContent = enabled ? `${t("audio.enabled")} · ${intensity}%` : t("audio.disabled");
+  $("noiseStatus").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
+  $("savedNoise").textContent = enabled ? `Activée · ${intensity}%` : "Désactivée";
   $("noiseSettings").classList.toggle("active", enabled);
 }
 
@@ -1177,7 +679,7 @@ async function applyVolume() {
 }
 
 function updateMuteUi(muted) {
-  $("muteText").textContent = muted ? t("audio.unmute") : t("audio.mute");
+  $("muteText").textContent = muted ? "Réactiver le son" : "Muet";
   $("mute").classList.toggle("active", muted);
 }
 
@@ -1188,93 +690,13 @@ async function loadDevices() {
     input.innerHTML = ""; output.innerHTML = "";
     for (const d of devices.inputs) input.add(new Option(d, d));
     for (const d of devices.outputs) output.add(new Option(d, d));
-    deviceDefaults = { input: devices.default_input || null, output: devices.default_output || null };
     const savedInput = localStorage.getItem("duovoice.input");
     const savedOutput = localStorage.getItem("duovoice.output");
     if (savedInput && [...input.options].some(o => o.value === savedInput)) input.value = savedInput;
-    else if (deviceDefaults.input && [...input.options].some(o => o.value === deviceDefaults.input)) input.value = deviceDefaults.input;
     if (savedOutput && [...output.options].some(o => o.value === savedOutput)) output.value = savedOutput;
-    else if (deviceDefaults.output && [...output.options].some(o => o.value === deviceDefaults.output)) output.value = deviceDefaults.output;
     appliedInputDevice = input.value || null;
     appliedOutputDevice = output.value || null;
-    } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
-}
-
-async function restartAudioWithCurrentDevices(detailText = "Audio updated.") {
-  const selectedInput = $("input").value || null;
-  const selectedOutput = $("output").value || null;
-  if (!connected || !connectedPeers.length) {
-    appliedInputDevice = selectedInput;
-    appliedOutputDevice = selectedOutput;
-    localStorage.setItem("duovoice.input", $("input").value);
-    localStorage.setItem("duovoice.output", $("output").value);
-    setDetails(detailText);
-    return true;
-  }
-  await invoke("start_audio", { remote: connectedPeers[0], remotes: connectedPeers, input: selectedInput, output: selectedOutput });
-  appliedInputDevice = selectedInput;
-  appliedOutputDevice = selectedOutput;
-  localStorage.setItem("duovoice.input", $("input").value);
-  localStorage.setItem("duovoice.output", $("output").value);
-  await applyVolume();
-  await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
-  setDetails(detailText);
-  return true;
-}
-
-function recordRecentConnections(addresses) {
-  const now = Date.now();
-  let recent = [];
-  try { recent = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch {}
-  if (!Array.isArray(recent)) recent = [];
-  for (const address of addresses) {
-    recent = recent.filter(item => item.address !== address);
-    recent.unshift({ address, name: sessionLabel(address), lastConnected: now });
-    const favorites = loadFavorites();
-    const favorite = favorites.find(item => item.address === address);
-    if (favorite) { favorite.lastConnected = now; saveFavorites(favorites); }
-  }
-  localStorage.setItem(RECENTS_KEY, JSON.stringify(recent.slice(0, MAX_SESSION_REMOTES)));
-  renderRecentConnections();
-}
-
-function renderRecentConnections() {
-  const box = $("recentConnections");
-  if (!box) return;
-  let recent = [];
-  try { recent = JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch {}
-  if (!Array.isArray(recent) || !recent.length) { box.innerHTML = `<div class="favorites-empty">${t("recent.empty")}</div>`; return; }
-  box.innerHTML = "";
-  for (const item of recent.slice(0, 5)) {
-    const row = document.createElement("div");
-    row.className = "recent-item";
-    const date = new Date(item.lastConnected || 0).toLocaleString(localeForLanguage(), { dateStyle: "short", timeStyle: "short" });
-    row.innerHTML = `<span><strong>${escapeHtml(item.name || item.address)}</strong><small>${escapeHtml(item.address)}</small></span><span class="recent-date">${escapeHtml(date)}</span>`;
-    const button = document.createElement("button");
-    button.type = "button"; button.className = "favorite-action"; button.innerHTML = UI_ICONS.link; button.title = t("connection.connect");
-    button.addEventListener("click", () => connectToAddress(item.address));
-    row.appendChild(button); box.appendChild(row);
-  }
-}
-
-async function refreshDiagnostics() {
-  const button = $("refreshDiagnostics");
-  if (button) { button.disabled = true; button.classList.add("is-spinning"); }
-  try {
-    const d = await invoke("get_diagnostics");
-    $("diagComputer").textContent = `${d.client_name} · ${d.computer_name}`;
-    $("diagIp").textContent = d.local_ipv4 || "Unavailable";
-    $("diagPorts").textContent = `UDP ${d.discovery_port} / ${d.audio_port}`;
-    $("diagEngine").textContent = d.audio_running ? `${t("status.connected")} · ${d.volume_percent}%${d.muted ? " · muted" : ""}` : t("status.offline");
-    $("diagPeers").textContent = d.session_peers.length ? d.session_peers.join(", ") : `0 · ${d.discovered_peers} detected`;
-    $("diagDevices").textContent = `${d.input_device || "—"} → ${d.output_device || "—"}`;
-    $("diagLog").textContent = d.log_path || "—";
-  } catch (e) {
-    reportError("Diagnostics", e);
-    $("diagEngine").textContent = String(e);
-  } finally {
-    if (button) { button.disabled = false; button.classList.remove("is-spinning"); }
-  }
+  } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
 }
 
 async function loadPeers(manual = false) {
@@ -1302,8 +724,6 @@ async function loadPeers(manual = false) {
     for (const [address, p] of peerCache) if (!p.manual && now - p.seenAt > 15000) peerCache.delete(address);
     renderPeers();
     renderFavorites();
-    renderSessionMembers();
-    updateConnectionInsights();
     if (manual) setDetails(peers.length ? `${peers.length} ordinateur(s) disponible(s).` : "Aucun PC détecté. Vous pouvez ajouter une IP manuellement.");
   } catch (e) { reportError("Peer discovery", e); setDetails(`Détection réseau : ${e}`); }
   finally {
@@ -1339,101 +759,94 @@ async function addManualIp() {
 
 async function updateLatency() {
   const el = $("latency");
-  if (!connected || !connectedPeers.length) { el.textContent = "— ms"; return; }
+  if (!connected) { el.textContent = "— ms"; return; }
   try {
-    const values = await Promise.all(connectedPeers.map(remote => invoke("measure_latency", { remote }).catch(() => null)));
-    const valid = values.map(Number).filter(Number.isFinite);
-    if (!valid.length) { el.textContent = "…"; return; }
-    const average = Math.round(valid.reduce((a,b) => a+b, 0) / valid.length);
-    el.textContent = connectedPeers.length > 1 ? `${average} ms avg` : `${average} ms`;
-    updateDuoConnectionState();
-  } catch { el.textContent = "…"; updateDuoConnectionState(); }
+    const ms = await invoke("measure_latency");
+    const rounded = Math.max(0, Math.round(Number(ms)));
+    el.textContent = `${rounded} ms`;
+  } catch {
+    el.textContent = "…";
+  }
 }
 
-async function connectToAddresses(addresses) {
-  const targets = [...new Set(addresses.filter(Boolean))].slice(0, MAX_SESSION_REMOTES);
-  if (!targets.length || disconnecting) return;
+async function connectToAddress(address) {
+  if (!address || disconnecting) return;
   const button = $("connect");
   button.disabled = true;
   try {
+    if (connected && connectedPeer === address) return;
     if (connected) await disconnect();
-    setDetails(`Connexion à ${targets.length} ordinateur(s)…`);
-    await invoke("start_audio", { remote: targets[0], remotes: targets, input: $("input").value || null, output: $("output").value || null });
+    setDetails(`Connexion à ${address}…`);
+    await invoke("start_audio", { remote: address, input: $("input").value || null, output: $("output").value || null });
     appliedInputDevice = $("input").value || null;
     appliedOutputDevice = $("output").value || null;
     await applyVolume();
     connected = true;
-    connectedPeers = targets;
-    connectedPeer = targets[0];
-    if (!(communicationMode === "group" && activeRoom)) {
-      sessionPeers = new Set(targets);
-      persistSessionPeers();
-    }
-    $("peer").value = connectedPeer;
-    button.textContent = t("connection.disconnect");
+    connectedPeer = address;
+    $("peer").value = address;
+    button.textContent = "Se déconnecter";
     button.classList.add("disconnect-state");
-    updateHeaderStatus();
-    $("mode").textContent = communicationMode === "group" && activeRoom
-      ? `${t("group.roomLabel")} · ${activeRoom.name}`
-      : (targets.length > 1 ? `${t("group.groupMode")} · ${targets.length + 1}` : t("state.lan"));
-    setDetails(communicationMode === "group" && activeRoom
-      ? `${activeRoom.name} · ${targets.length + 1}/${MAX_SESSION_PARTICIPANTS} · ${t("state.active")}`
-      : (targets.length > 1 ? `${targets.length} machines · ${t("state.active")}` : t("state.active")));
-    recordRecentConnections(targets);
-    renderSessionMembers();
+    $("status").innerHTML = '<span class="status-dot"></span>Connecté';
+    $("status").className = "status online";
+    setDetails("Audio bidirectionnel actif.");
     renderFavorites();
-    updateConnectionInsights();
-    await emitTo("tray", "audio-state-changed", { connected: true, remotes: targets });
     await updateLatency();
   } catch (e) {
-    connected = false; connectedPeers = []; connectedPeer = "";
-    button.textContent = t("connection.connect");
+    connected = false;
+    connectedPeer = "";
+    button.textContent = "Se connecter";
     button.classList.remove("disconnect-state");
-    updateHeaderStatus();
-    $("mode").textContent = communicationMode === "group" && activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("state.lan");
+    $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+    $("status").className = "status offline";
     reportError("Audio connect", e);
     setDetails(`Connexion impossible : ${e}`);
-    renderSessionMembers(); renderFavorites(); updateConnectionInsights();
-  } finally { button.disabled = false; }
-}
-
-async function connectToAddress(address) {
-  if (!address) return;
-  await connectToAddresses([address]);
+    renderFavorites();
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function disconnect() {
   if (disconnecting) return;
   disconnecting = true;
-  const hadPeers = connectedPeers.length;
-  connected = false; connectedPeers = []; connectedPeer = "";
-  $("connect").textContent = t("connection.connect");
+  const oldPeer = connectedPeer;
+  connected = false;
+  connectedPeer = "";
+  $("connect").textContent = "Se connecter";
   $("connect").classList.remove("disconnect-state");
-  updateHeaderStatus();
+  $("status").innerHTML = '<span class="status-dot"></span>Hors ligne';
+  $("status").className = "status offline";
   $("latency").textContent = "— ms";
-  $("mode").textContent = communicationMode === "group" && activeRoom ? `${t("group.roomLabel")} · ${activeRoom.name}` : t("state.lan");
-  renderSessionMembers(); renderFavorites(); updateConnectionInsights();
+  renderFavorites();
   try {
     await invoke("stop_audio");
-    await emitTo("tray", "audio-state-changed", { connected: false });
-    setDetails(hadPeers ? t("state.disconnected") : t("state.disconnected"));
+    setDetails(oldPeer ? "Déconnecté." : "Audio arrêté.");
   } catch (e) {
     reportError("Audio disconnect", e);
     setDetails(`Déconnexion : ${e}`);
-  } finally { disconnecting = false; renderFavorites(); updateConnectionInsights(); refreshDiagnostics(); }
+  } finally {
+    disconnecting = false;
+    renderFavorites();
+  }
+}
+
+async function disconnectFromFavorite(address) {
+  if (!connected || connectedPeer !== address) return;
+  await disconnect();
 }
 
 async function connect() {
+  const peer = $("peer").value;
+  if (!peer) { setDetails("Sélectionnez un ordinateur ou ajoutez une IP."); return; }
   if (connected) {
-    const button = $("connect"); button.disabled = true;
-    try { await disconnect(); } finally { button.disabled = false; }
+    const button = $("connect");
+    button.disabled = true;
+    try { await disconnect(); }
+    catch (_) {}
+    finally { button.disabled = false; }
     return;
   }
-  const selected = $("peer").value;
-  if (!selected) { setDetails("Sélectionnez un ordinateur détecté, un favori ou ajoutez une IP manuellement."); return; }
-  sessionPeers = new Set([selected]);
-  persistSessionPeers();
-  await connectToAddresses([selected]);
+  await connectToAddress(peer);
 }
 
 
@@ -1449,18 +862,18 @@ async function setUpdateBanner(status, update = null, error = "") {
   banner.title = "";
 
   if (status === "checking") {
-    banner.innerHTML = iconLabel(UI_ICONS.refresh, t("update.checking"));
+    banner.innerHTML = iconLabel(UI_ICONS.refresh, "Recherche des mises à jour…");
     banner.disabled = true;
   } else if (status === "current") {
-    banner.innerHTML = iconLabel(UI_ICONS.check, t("update.current"));
+    banner.innerHTML = iconLabel(UI_ICONS.check, "Pas de mise à jour disponible · Cliquez pour vérifier");
     banner.onclick = checkForUpdates;
     banner.title = "Cliquer pour lancer une nouvelle vérification.";
   } else if (status === "available") {
-    banner.innerHTML = iconLabel(UI_ICONS.download, t("update.available", { version: update.version }));
+    banner.innerHTML = iconLabel(UI_ICONS.download, `Mise à jour disponible · v${update.version} · Cliquez pour télécharger`);
     banner.onclick = installUpdate;
     banner.title = `Télécharger et installer DuoVoice v${update.version}`;
   } else {
-    banner.innerHTML = iconLabel(UI_ICONS.alert, t("update.error"));
+    banner.innerHTML = iconLabel(UI_ICONS.alert, "Vérification impossible · Cliquez pour réessayer");
     banner.onclick = checkForUpdates;
     banner.title = error || "Vérification impossible";
   }
@@ -1479,7 +892,7 @@ async function checkForUpdates() {
       setDetails(`Mise à jour v${update.version} disponible.`);
     } else {
       await setUpdateBanner("current");
-      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString(localeForLanguage(), { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
+      setDetails(`Vérification terminée à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} : aucune mise à jour disponible.`);
     }
   } catch (e) {
     reportError("Updater check", e);
@@ -1528,6 +941,15 @@ async function installUpdate() {
     setDetails("Téléchargement terminé. Installation de la mise à jour…");
     await update.install();
 
+    // Windows exits automatically when the updater installer is launched.
+    // Linux needs an explicit restart after the installation finishes.
+    const isWindows = navigator.userAgent.toLowerCase().includes("windows");
+    if (!isWindows) {
+      setLastUpdateNow();
+      $("lastUpdate").textContent = formatLastUpdate();
+      setDetails("Mise à jour installée. Redémarrage de DuoVoice…");
+      await relaunch();
+    }
   } catch (e) {
     const message = String(e);
     banner.disabled = false;
@@ -1539,21 +961,9 @@ async function installUpdate() {
 }
 
 $("connect").addEventListener("click", connect);
-$("refresh").addEventListener("click", async () => { await loadPeers(true); if (communicationMode === "group") await refreshRooms(false); });
-$("modeDuo").addEventListener("click", () => setCommunicationMode("duo"));
-$("modeGroup").addEventListener("click", () => setCommunicationMode("group"));
-$("createRoom").addEventListener("click", createNamedRoom);
-$("roomName").addEventListener("keydown", event => { if (event.key === "Enter") { event.preventDefault(); createNamedRoom(); } });
-$("leaveRoom").addEventListener("click", () => leaveActiveRoom());
-$("deleteRoom").addEventListener("click", () => { if (activeRoom) openRoomDeleteConfirm(activeRoom); });
-$("cancelRoomDelete").addEventListener("click", closeRoomDeleteConfirm);
-$("confirmRoomDelete").addEventListener("click", confirmRoomDelete);
-$("roomDeleteConfirm").addEventListener("click", event => { if (event.target === $("roomDeleteConfirm")) closeRoomDeleteConfirm(); });
+$("refresh").addEventListener("click", () => loadPeers(true));
 $("favoriteBtn").addEventListener("click", toggleFavorite);
-$("peer").addEventListener("change", () => { updateFavoriteButton(); renderFavorites(); });
-$("favoritesSummary").addEventListener("click", (event) => { event.stopPropagation(); toggleCompactPopover("favoritesPopover"); });
-$("closeFavoritesPopover").addEventListener("click", (event) => { event.stopPropagation(); closeCompactPopovers(); });
-$("favoritesPopover").addEventListener("click", event => event.stopPropagation());
+$("peer").addEventListener("change", updateFavoriteButton);
 $("addIp").addEventListener("click", addManualIp);
 $("manualIp").addEventListener("keydown", e => { if (e.key === "Enter") addManualIp(); });
 $("saveClientName").addEventListener("click", saveClientName);
@@ -1576,28 +986,13 @@ $("boostVolume").addEventListener("change", () => {
   applyVolume();
 });
 
-$("micMonitor").addEventListener("click", toggleMicMonitor);
-$("testAudio").addEventListener("click", runAudioTest);
-$("openDiagnostics").addEventListener("click", openDiagnosticsPanel);
-
 $("mute").addEventListener("click", async () => {
-  const previous = localStorage.getItem(MUTE_KEY) === "true";
-  const optimistic = !previous;
-  // Match the tray: show the red muted state immediately on click instead of
-  // waiting for the native round-trip or for the hover state to end.
-  localStorage.setItem(MUTE_KEY, String(optimistic));
-  updateMuteUi(optimistic);
   try {
     const muted = await invoke("toggle_mute");
     localStorage.setItem(MUTE_KEY, String(muted));
     updateMuteUi(muted);
     await emitTo("tray", "audio-state-changed", { muted });
-  } catch (e) {
-    localStorage.setItem(MUTE_KEY, String(previous));
-    updateMuteUi(previous);
-    reportError("Mute", e);
-    setDetails(`Muet : ${e}`);
-  }
+  } catch (e) { reportError("Mute", e); setDetails(`Muet : ${e}`); }
 });
 
 $("noiseEnabled").addEventListener("change", applyNoiseSettings);
@@ -1622,95 +1017,7 @@ document.querySelectorAll("[data-noise-preset]").forEach(button => {
 document.addEventListener("click", event => {
   const popover = $("noisePopover");
   if (!popover.classList.contains("hidden") && !event.target.closest(".noise-control")) popover.classList.add("hidden");
-  if (!event.target.closest(".compact-list-anchor")) closeCompactPopovers();
 });
-
-async function runAudioTest() {
-  const button = $("testAudio");
-  if (!button || button.disabled) return;
-  const original = button.innerHTML;
-  button.disabled = true;
-  button.innerHTML = `${UI_ICONS.refresh}<span>${t("audio.testing")}</span>`;
-  try {
-    await invoke("test_audio_output", { output: $("output").value || null });
-    setDetails(t("audio.testDone"));
-  } catch (error) {
-    reportError("Audio test", error);
-    setDetails(`${t("audio.testFailed")} : ${String(error)}`);
-  } finally {
-    button.innerHTML = original;
-    button.disabled = false;
-  }
-}
-
-
-function updateMicMonitorUi(active, level = 0) {
-  micMonitorActive = Boolean(active);
-  const button = $("micMonitor");
-  if (!button) return;
-  button.classList.toggle("monitoring", micMonitorActive);
-  $("micMonitorText").textContent = micMonitorActive ? t("audio.monitoring") : t("audio.monitor");
-  const normalized = Math.max(0, Math.min(1, Number(level) || 0));
-  // RMS microphone levels are naturally small. A gentle logarithmic-like curve
-  // makes normal speech readable without making the meter peg at 100%.
-  const visibleLevel = normalized <= 0 ? 0 : Math.min(1, Math.pow(normalized, 0.32) * 1.22);
-  $("micMeterFill").style.width = `${Math.round(visibleLevel * 100)}%`;
-}
-
-async function pollMicMonitor() {
-  if (!micMonitorActive) return;
-  try {
-    const status = await invoke("mic_monitor_status");
-    updateMicMonitorUi(Boolean(status.active), Number(status.level) || 0);
-    if (!status.active && micMonitorTimer) {
-      clearInterval(micMonitorTimer);
-      micMonitorTimer = null;
-    }
-  } catch (error) {
-    reportError("Microphone monitor status", error);
-  }
-}
-
-async function startMicMonitor() {
-  try {
-    await invoke("start_mic_monitor", { input: $("input").value || null, output: $("output").value || null });
-    updateMicMonitorUi(true, 0);
-    if (micMonitorTimer) clearInterval(micMonitorTimer);
-    micMonitorTimer = setInterval(pollMicMonitor, 120);
-    setDetails(t("audio.monitorHint"));
-  } catch (error) {
-    updateMicMonitorUi(false, 0);
-    reportError("Microphone monitor", error);
-    setDetails(`${t("audio.monitorFailed")} : ${String(error)}`);
-  }
-}
-
-async function stopMicMonitor({ announce = true } = {}) {
-  try { await invoke("stop_mic_monitor"); }
-  catch (error) { reportError("Stop microphone monitor", error); }
-  if (micMonitorTimer) { clearInterval(micMonitorTimer); micMonitorTimer = null; }
-  updateMicMonitorUi(false, 0);
-  if (announce) setDetails(t("audio.monitorStopped"));
-}
-
-async function toggleMicMonitor() {
-  const button = $("micMonitor");
-  if (!button || button.disabled) return;
-  button.disabled = true;
-  try {
-    if (micMonitorActive) await stopMicMonitor();
-    else await startMicMonitor();
-  } finally { button.disabled = false; }
-}
-
-function openDiagnosticsPanel() {
-  closeCompactPopovers();
-  showSettings();
-  requestAnimationFrame(() => {
-    $("diagnosticsCard")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    refreshDiagnostics();
-  });
-}
 
 async function applyAudioDeviceChange(kind) {
   const inputEl = $("input");
@@ -1718,45 +1025,63 @@ async function applyAudioDeviceChange(kind) {
   const selectedInput = inputEl.value || null;
   const selectedOutput = outputEl.value || null;
 
-  if (!connected || !connectedPeers.length) {
+  if (!connected || !connectedPeer) {
     appliedInputDevice = selectedInput;
     appliedOutputDevice = selectedOutput;
     localStorage.setItem("duovoice.input", inputEl.value);
     localStorage.setItem("duovoice.output", outputEl.value);
     return;
   }
+
   if (switchingAudioDevice) return;
-  switchingAudioDevice = true; inputEl.disabled = true; outputEl.disabled = true;
-  const previousInput = appliedInputDevice, previousOutput = appliedOutputDevice;
+  switchingAudioDevice = true;
+  inputEl.disabled = true;
+  outputEl.disabled = true;
+
+  const previousInput = appliedInputDevice;
+  const previousOutput = appliedOutputDevice;
   const label = kind === "input" ? "source audio" : "sortie audio";
   setDetails(`Changement de ${label}…`);
+
   try {
-    await restartAudioWithCurrentDevices(`${kind === "input" ? "Source" : "Sortie"} audio changée sans déconnexion.`);
+    await invoke("start_audio", { remote: connectedPeer, input: selectedInput, output: selectedOutput });
+    appliedInputDevice = selectedInput;
+    appliedOutputDevice = selectedOutput;
+    localStorage.setItem("duovoice.input", inputEl.value);
+    localStorage.setItem("duovoice.output", outputEl.value);
+    await applyVolume();
+    await emitTo("tray", "audio-state-changed", { connected: true, remote: connectedPeer });
+    setDetails(`${kind === "input" ? "Source" : "Sortie"} audio changée sans déconnexion.`);
   } catch (error) {
     reportError("Audio device hot switch", error);
     let restored = false;
     try {
+      await invoke("start_audio", { remote: connectedPeer, input: previousInput, output: previousOutput });
+      restored = true;
+    } catch (rollbackError) {
+      reportError("Audio device rollback", rollbackError);
+    }
+
+    if (restored) {
       if (previousInput && [...inputEl.options].some(o => o.value === previousInput)) inputEl.value = previousInput;
       if (previousOutput && [...outputEl.options].some(o => o.value === previousOutput)) outputEl.value = previousOutput;
-      await invoke("start_audio", { remote: connectedPeers[0], remotes: connectedPeers, input: previousInput, output: previousOutput });
-      appliedInputDevice = previousInput; appliedOutputDevice = previousOutput; restored = true;
-    } catch (rollbackError) { reportError("Audio device rollback", rollbackError); }
-    if (restored) {
-      localStorage.setItem("duovoice.input", inputEl.value); localStorage.setItem("duovoice.output", outputEl.value); await applyVolume();
-      setDetails("Impossible d'utiliser ce périphérique. L'ancien périphérique a été restauré.");
-    } else { await refreshFromTray(); setDetails(`Changement audio impossible : ${error}`); }
-  } finally { inputEl.disabled = false; outputEl.disabled = false; switchingAudioDevice = false; }
+      localStorage.setItem("duovoice.input", inputEl.value);
+      localStorage.setItem("duovoice.output", outputEl.value);
+      await applyVolume();
+      setDetails(`Impossible d'utiliser ce périphérique. L'ancien périphérique a été restauré.`);
+    } else {
+      await refreshFromTray();
+      setDetails(`Changement audio impossible : ${error}`);
+    }
+  } finally {
+    inputEl.disabled = false;
+    outputEl.disabled = false;
+    switchingAudioDevice = false;
+  }
 }
 
-$("input").addEventListener("change", async () => { if (micMonitorActive) await stopMicMonitor({ announce: false }); await applyAudioDeviceChange("input"); });
-$("output").addEventListener("change", async () => { if (micMonitorActive) await stopMicMonitor({ announce: false }); await applyAudioDeviceChange("output"); });
-$("refreshDiagnostics").addEventListener("click", refreshDiagnostics);
-
-$("languageSelect").value = getLanguage();
-$("languageSelect").addEventListener("change", async () => {
-  const language = applyLanguageUi($("languageSelect").value, { broadcast: true });
-  setDetails(t("language.changed", {}, language));
-});
+$("input").addEventListener("change", () => applyAudioDeviceChange("input"));
+$("output").addEventListener("change", () => applyAudioDeviceChange("output"));
 
 $("settingsBtn").addEventListener("click", () => {
   if ($("settingsView").classList.contains("hidden")) showSettings(); else showMain();
@@ -1775,16 +1100,12 @@ $("cancelRollback").addEventListener("click", () => {
   $("versionRollbackConfirm").classList.add("hidden");
   $("versionPickerStatus").textContent = "";
 });
-$("confirmRollback").addEventListener("click", installPreviousVersion);
+$("confirmRollback").addEventListener("click", installSelectedVersion);
 $("versionPicker").addEventListener("click", event => {
   if (event.target === $("versionPicker") && !rollbackBusy) setVersionPicker(false);
 });
 document.addEventListener("keydown", event => {
   if (event.key !== "Escape") return;
-  if (!$("sessionPopover")?.classList.contains("hidden") || !$("favoritesPopover")?.classList.contains("hidden")) {
-    closeCompactPopovers();
-    return;
-  }
   if ($("versionPicker").classList.contains("open") && !rollbackBusy) {
     setVersionPicker(false);
     return;
@@ -1804,7 +1125,7 @@ $("trayScale").addEventListener("input", () => {
 $("applyUiScale").addEventListener("click", async () => {
   const button = $("applyUiScale");
   button.disabled = true;
-  button.textContent = ({en:"Applying…",fr:"Application…",es:"Aplicando…",de:"Wird angewendet…"})[getLanguage()];
+  button.textContent = "Application…";
   const results = await Promise.all([applyUiScale($("uiScale").value), applyTrayScale($("trayScale").value)]);
   updateScaleActionsState(results.every(Boolean));
   if (results.every(Boolean)) {
@@ -1817,7 +1138,7 @@ updateHeaderMode();
 $("autostart").addEventListener("change", async e => {
   try {
     if (e.target.checked) await enableAutostart(); else await disableAutostart();
-    $("autostartDetails").textContent = e.target.checked ? t("autostart.enabled") : t("autostart.disabled");
+    $("autostartDetails").textContent = e.target.checked ? "Démarrage automatique activé." : "Démarrage automatique désactivé.";
   } catch (err) {
     reportError("Autostart", err);
     e.target.checked = await isAutostartEnabled().catch(() => false);
@@ -1830,16 +1151,6 @@ const storedTrayIconPreference = localStorage.getItem(TRAY_ICON_KEY);
 $("trayIconEnabled").checked = storedTrayIconPreference === null
   ? DEFAULT_TRAY_ICON_ENABLED
   : storedTrayIconPreference !== "false";
-
-// v1.4.3 safety/default migration: with a tray icon enabled, the X button
-// minimizes to tray by default. This also repairs installs that inherited the
-// old quit-on-close value from a previous build. The user can still choose
-// "Quit DuoVoice" afterwards in Settings.
-const closeDefaultMigrationKey = "duovoice.closeAction.v141TrayDefault";
-if (localStorage.getItem(closeDefaultMigrationKey) !== "1" && $("trayIconEnabled").checked) {
-  localStorage.setItem("duovoice.closeAction", DEFAULT_CLOSE_ACTION);
-  localStorage.setItem(closeDefaultMigrationKey, "1");
-}
 $("closeAction").value = localStorage.getItem("duovoice.closeAction") || DEFAULT_CLOSE_ACTION;
 
 function updateTrayPreferenceDependencies() {
@@ -1875,7 +1186,9 @@ async function applyTrayIconPreference(enabled, announce = false) {
 
     updateTrayPreferenceDependencies();
     if (announce) {
-      $("autostartDetails").textContent = desired ? t("trayIcon.enabled") : t("trayIcon.disabled");
+      $("autostartDetails").textContent = desired
+        ? "Icône du systray activée."
+        : "Icône du systray désactivée. Le démarrage minimisé est désactivé pour garder DuoVoice accessible.";
     }
     return true;
   } catch (e) {
@@ -1954,71 +1267,48 @@ async function refreshFromTray() {
   try {
     const state = await invoke("audio_status");
     connected = Boolean(state.connected);
-    connectedPeers = Array.isArray(state.remotes) ? state.remotes : (state.remote ? [state.remote] : []);
-    connectedPeer = connectedPeers[0] || "";
+    connectedPeer = state.remote || "";
     if (connected) {
+      // Keep the hot-switch rollback target aligned with the device choices that
+      // were used by a connection started from the tray or restored externally.
       if (appliedInputDevice === null) appliedInputDevice = $("input").value || localStorage.getItem("duovoice.input") || null;
       if (appliedOutputDevice === null) appliedOutputDevice = $("output").value || localStorage.getItem("duovoice.output") || null;
-      if (!(communicationMode === "group" && activeRoom)) {
-        sessionPeers = new Set(connectedPeers);
-        persistSessionPeers();
-      }
-    } else { appliedInputDevice = null; appliedOutputDevice = null; }
+    } else {
+      appliedInputDevice = null;
+      appliedOutputDevice = null;
+    }
     const muted = Boolean(state.muted);
-    localStorage.setItem(MUTE_KEY, String(muted)); updateMuteUi(muted);
-    $("connect").textContent = connected ? t("connection.disconnect") : t("connection.connect");
+    localStorage.setItem(MUTE_KEY, String(muted));
+    updateMuteUi(muted);
+    $("connect").textContent = connected ? "Se déconnecter" : "Se connecter";
     $("connect").classList.toggle("disconnect-state", connected);
-    updateHeaderStatus();
-    $("mode").textContent = communicationMode === "group" && activeRoom
-      ? `${t("group.roomLabel")} · ${activeRoom.name}`
-      : (connectedPeers.length > 1 ? `${t("group.groupMode")} · ${connectedPeers.length + 1}` : t("state.lan"));
-    if (connectedPeer) $("peer").value = connectedPeer;
+    $("status").innerHTML = `<span class="status-dot"></span>${connected ? "Connecté" : "Hors ligne"}`;
+    $("status").className = `status ${connected ? "online" : "offline"}`;
+    $("peer").value = connectedPeer;
     await loadPeers(false);
-    if (communicationMode === "group") await refreshRooms(false);
-    await updateLatency(); renderSessionMembers(); renderFavorites(); updateConnectionInsights(); refreshDiagnostics();
+    await updateLatency();
+    renderFavorites();
   } catch {}
 }
 
 listen("audio-state-changed", refreshFromTray).catch(() => {});
-listen("session-changed", (event) => {
-  if (communicationMode === "group" && activeRoom) return;
-  const remotes = Array.isArray(event.payload?.remotes) ? event.payload.remotes : [];
-  sessionPeers = new Set(remotes.slice(0, MAX_SESSION_REMOTES));
-  localStorage.setItem(SESSION_KEY, JSON.stringify([...sessionPeers]));
-  renderSessionMembers();
-  renderPeers();
-  updateConnectionInsights();
-}).catch(() => {});
-listen("room-state-changed", () => refreshRooms(communicationMode === "group")).catch(() => {});
-listen("favorites-changed", () => { renderFavorites(); updateFavoriteButton(); }).catch(() => {});
 
-loadSessionPeers();
-applyLanguageUi(getLanguage(), { broadcast: true });
 loadManualIps();
 renderFavorites();
 loadClientName();
 loadDevices();
-renderRecentConnections();
 loadAutostart();
 loadAudioPreferences();
 loadNoisePreferences();
 initColors();
-setCommunicationMode(communicationMode, { initial: true }).catch(error => reportError("Communication mode", error));
 loadPeers();
-refreshRooms(communicationMode === "group");
 setInterval(() => { if (!document.hidden) loadPeers(false); }, 3000);
-setInterval(() => { if (!document.hidden || communicationMode === "group") refreshRooms(communicationMode === "group"); }, 2000);
 setInterval(() => { if (!document.hidden) updateLatency(); }, 1000);
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    if (micMonitorActive) stopMicMonitor({ announce: false });
-    return;
+  if (!document.hidden) {
+    loadPeers(false);
+    updateLatency();
   }
-  loadPeers(false);
-  refreshRooms(communicationMode === "group");
-  updateLatency();
 });
 updateLatency();
-refreshDiagnostics();
 checkForUpdates();
-setInterval(() => { checkForUpdates(); }, UPDATE_CHECK_INTERVAL_MS);

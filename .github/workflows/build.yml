@@ -1,4 +1,4 @@
-name: Build DuoVoice
+name: Build Windows
 
 on:
   workflow_dispatch:

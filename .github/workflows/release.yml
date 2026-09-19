@@ -1,10 +1,10 @@
-name: Release DuoVoice
+name: Release Windows
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to release (example: v1.4.3)'
+        description: 'Git tag to release (example: v1.3.4)'
         required: true
         type: string
 
@@ -63,7 +63,7 @@ jobs:
         with:
           tagName: ${{ inputs.tag }}
           releaseName: "DuoVoice ${{ inputs.tag }}"
-          releaseBody: 'DuoVoice Windows release.'
+          releaseBody: 'DuoVoice Windows update release.'
           releaseDraft: false
           prerelease: false
           projectPath: .

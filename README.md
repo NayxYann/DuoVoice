@@ -1,130 +1,143 @@
-# DuoVoice
+# DuoVoice 1.3.4
 
-> **DuoVoice is fully vibe-coded / AI-assisted.** I am not a software developer; this project started as a personal tool for communicating between Windows PCs on my local network. It is shared publicly because it may also be useful to others.
+## Nouveautés 1.3.4
 
-DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri, Rust and a small HTML/CSS/JavaScript interface. It sends microphone audio directly between computers on the same local network without an account or cloud relay.
+- **Sélecteur de versions bidirectionnel** : il est désormais possible d’installer une release signée plus ancienne **ou plus récente** que la version courante, tant qu’elle fournit un `latest.json` compatible.
+- **Carte Audio rééquilibrée** : son contenu est légèrement redescendu pour utiliser plus proprement l’espace disponible sous le bouton Muet sans modifier la structure générale de l’interface.
+- **Icône du systray liée au thème** : l’icône `D` change automatiquement selon le thème ou la couleur d’accent active.
+- **Build Windows uniquement** : GitHub Actions ne conserve plus que **Build Windows** et **Release Windows** ; les cibles de paquets Linux sont retirées de cette branche.
 
-## Highlights
 
-- Direct bidirectional audio over the local network
-- Automatic Duo / Group sessions with up to **8 remote PCs**
-- Add or remove one participant without dropping the rest of the active session
-- Automatic recovery when a peer temporarily disappears and returns on the same IP
-- Independent jitter buffers per remote peer and local mixing of received voices
-- Compact Session and Favorites controls with floating management panels
-- Session and Favorites management directly from the custom Windows tray panel
-- Microphone mute synchronized between the main window and tray controls
-- Hot switching of microphone and output devices while connected
-- RNNoise-based local microphone noise reduction
-- Remote playback volume up to 200%
-- Built-in output test and one-click access to diagnostics
-- Automatic LAN discovery plus manual IPv4 addresses
-- Favorites and recent connection history
-- Built-in diagnostics for network, audio devices, session state and logs
-- Custom Windows system-tray quick panel and context menu
-- Theme-aware tray icon that follows the selected DuoVoice theme/accent
-- Optional start with Windows, start minimized and close-to-tray behavior
-- UI and tray scaling controls
-- Multiple complete themes and accent colors
-- English, French, Spanish and German interface languages
-- Signed in-app updater with release history / rollback support
-- Update checks at startup and every five minutes while DuoVoice is running
+DuoVoice est une application légère d’intercom audio bidirectionnel pour Windows, pensée pour fonctionner sur un réseau local avec une interface simple et un impact minimal sur les ressources.
 
-## What's new in 1.4.3
+## Nouveautés 1.3.2
 
-Version 1.4.3 is a UI and workflow polish release. Duo and LAN Group are kept intentionally separate: Duo is a direct connection to one detected/manual/favorite PC, while LAN Group uses named rooms advertised on the local network.
+- **Palette unifiée** : les couleurs de l’application sont désormais pilotées par un jeu commun de variables (fond, surfaces, bordures, texte, accent, succès, danger et mise à jour) afin d’éviter les écarts visuels entre l’interface principale, le panneau systray et le menu clic droit.
+- **Couleur d’accent mieux cadrée** : la couleur choisie dans Apparence sert aux actions, sliders, focus et sélections. Le vert est réservé aux succès/états positifs, le rouge aux actions dangereuses et le rose-violet à une mise à jour disponible. L’état « à jour » redevient neutre pour ne pas surcharger l’écran.
+- **Thèmes++** : nouvelle section sous les couleurs d’accent avec six palettes complètes : **DuoVoice**, **Windows XP**, **Axolotl**, **Cherry Blossom**, **Sage** et **Ocean**. Les thèmes modifient ensemble le fond, les panneaux, les bordures, les textes et les couleurs fonctionnelles.
+- **Lisibilité préservée** : Windows XP et Cherry Blossom utilisent automatiquement une palette claire avec texte sombre ; les autres thèmes conservent des contrastes élevés sur fond sombre.
+- **Systray synchronisé avec les thèmes** : le clic gauche et le clic droit utilisent la même palette que l’application et se mettent à jour immédiatement lorsqu’un thème ou une couleur est sélectionné.
+- **Bouton de déconnexion clarifié** : lorsqu’une session est active, l’action « Se déconnecter » utilise désormais la couleur danger plutôt que la couleur d’accent du thème.
+- Les corrections audio de la **1.3.1** restent conservées : changement de périphérique à chaud et synchronisation complète du Muet entre l’application et le systray.
 
-The main window now keeps Connection and Audio aligned to the same visual height, removes dead space, and adds an in-card Duo connection summary with the active peer, address and latency. The microphone monitor meter is hidden when the test is inactive and uses a more readable response curve while monitoring.
+## Fonctionnalités principales
 
-LAN rooms remain capped at 12 participants. Creating a room does not join it automatically; locally hosted rooms stay advertised while DuoVoice is running, show their host, can be joined with one click, and can only be deleted by their local host with confirmation. Once a room is joined, the available-room list is replaced by the active-room participant view.
+- audio bidirectionnel simultané sur le LAN ;
+- transport PCM mono 48 kHz / 16 bits, trames de 10 ms ;
+- sélection et mémorisation du microphone et de la sortie audio ;
+- volume distant 0–100 %, avec option jusqu’à 200 % ;
+- muet disponible même hors connexion ;
+- réduction de bruit RNNoise réglable et persistante ;
+- détection automatique des autres PC DuoVoice ;
+- nom de client personnalisable et diffusé sur le réseau ;
+- ajout d’adresses IPv4 manuelles et favoris persistants ;
+- reconnexion et resynchronisation du flux audio après coupure/reconnexion d’un seul côté ;
+- mesure RTT réelle pendant la connexion ;
+- mini-interface de contrôle depuis le systray ;
+- fermeture vers le tray ou fermeture complète au choix ;
+- démarrage automatique Windows ;
+- option indépendante « Démarrer minimisé dans le tray » ;
+- couleur et échelle d’interface persistantes ;
+- échelle indépendante et sécurisée du mini-panneau systray ;
+- mise à jour automatique signée via GitHub Releases ;
+- journal borné à 2 Mo avec une seule archive `duovoice.log.1`.
 
-Settings now scroll as one page, including the Settings title, rather than leaving a floating heading above the content. Close-to-tray remains the default close behavior when the tray icon is enabled.
+## Réseau
 
-## Duo and LAN groups
+DuoVoice utilise :
 
-In **Duo**, select a detected computer, add/select a manual IP, or choose a favorite, then press **Connect**. Favorites are shortcuts only; they are never required. While connected, the Connection card displays the active peer and current latency directly.
+- UDP `39471` pour la découverte ;
+- UDP `39472` pour l’audio et les sondes de latence ;
+- TCP `39473` sur `127.0.0.1` uniquement pour empêcher plusieurs instances locales.
 
-In **LAN Group**, create or discover a named room. Creating a room advertises it but does not join it. Click a room to join it. The room view shows the host and active participants, with **Leave room** for members and **Delete room** only for a room hosted by this PC.
+Si un pare-feu bloque DuoVoice, autorisez les ports UDP 39471 et 39472 sur le réseau privé/local.
 
-The tray remains a compact quick-control surface; detailed room creation and deletion stay in the main application.
+## Installation des dépendances
 
-## Themes
+Depuis la racine du projet :
 
-The default **DuoVoice** theme remains the neutral dark theme with a selectable accent color (violet by default on a fresh profile). Additional complete themes such as Windows XP, Axolotl, Cherry Blossom, Sage and Ocean keep their own palettes.
-
-All main-window, tray-panel and tray-menu components use the selected theme variables. The native notification-area icon also changes to a matching variant, so a theme change stays coherent without redefining the base DuoVoice palette.
-
-## Network
-
-DuoVoice uses the following UDP ports:
-
-| Port | Purpose |
-| --- | --- |
-| `39471/UDP` | LAN discovery |
-| `39472/UDP` | Audio and latency probes |
-
-Windows Firewall may ask for permission the first time DuoVoice starts. LAN discovery requires the computers to be able to exchange UDP broadcast traffic on the local network.
-
-No account or Internet connection is required for audio communication. Internet access is only used for GitHub release/update checks and the GitHub link.
-
-## Diagnostics
-
-The Settings page includes a diagnostics section showing useful runtime information such as:
-
-- local machine / DuoVoice name
-- local IPv4 address
-- DuoVoice UDP ports
-- current audio-engine state
-- active session peers
-- active microphone and output device
-- DuoVoice log-file path
-
-The home Audio card includes a shortcut to this section and a short output-device test. Runtime logs are stored under `%LOCALAPPDATA%\DuoVoice\duovoice.log`; the log is size-limited and rotated automatically.
-
-## Installation
-
-Official release artifacts are Windows installers:
-
-- NSIS `.exe`
-- MSI `.msi`
-
-Install a published release from the repository's **Releases** page. Signed updater artifacts are also published so installed copies can update through DuoVoice itself.
-
-## Development
-
-Requirements:
-
-- Windows 10 or Windows 11
-- Node.js
-- Rust toolchain
-- Tauri prerequisites for Windows
-
-Install frontend dependencies:
-
-```powershell
+```bash
 npm install
 ```
 
-Run the development build:
+`node_modules` ne doit jamais être commit dans Git. Le `.gitignore` du projet l’exclut volontairement.
 
-```powershell
+Si une ancienne version du dépôt suivait déjà `node_modules`, nettoyez une seule fois l’index Git :
+
+```bash
+git rm -r --cached node_modules
+```
+
+puis réinstallez localement avec `npm install`.
+
+## Développement
+
+Frontend :
+
+```bash
+npm run dev
+```
+
+Application Tauri :
+
+```bash
 npm run tauri -- dev
 ```
 
-Create a Windows build:
+Build local :
 
-```powershell
+```bash
 npm run tauri -- build
 ```
 
-## Privacy
+## GitHub Actions
 
-DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites, recent connections and the saved Session are stored locally.
+Les workflows sont volontairement **manuels uniquement**.
 
-## Project status
+Un commit ou un **Push origin** ne lance aucun build automatiquement.
 
-DuoVoice is primarily a personal project and should be considered best-effort software. The current target is **Windows only**.
+Pour lancer un build :
 
-## License
+1. pousser les fichiers sur GitHub ;
+2. ouvrir l’onglet **Actions** ;
+3. choisir **Build Windows** ;
+4. cliquer sur **Run workflow**.
 
-No separate license has been declared yet. Unless a license file is added, normal copyright rules apply.
+Pour publier une release :
+
+1. pousser les fichiers sur GitHub ;
+2. ouvrir l’onglet **Actions** ;
+3. choisir **Release Windows** ;
+4. cliquer sur **Run workflow** ;
+5. saisir le tag voulu, par exemple `v1.3.4`.
+
+Le build produit notamment :
+
+- Windows : NSIS `.exe` + MSI `.msi` ;
+
+Le workflow refuse explicitement un dépôt dans lequel `node_modules` serait suivi par Git. Cela garde le dépôt propre et reproductible pour les builds Windows.
+
+## Mise à jour automatique
+
+Le fichier public de vérification est :
+
+`https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json`
+
+La clé publique est intégrée à `src-tauri/tauri.conf.json`. La clé privée ne doit jamais être présente dans le dépôt.
+
+Les secrets GitHub Actions nécessaires à la signature sont :
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Le workflow de release crée les artefacts de mise à jour et leurs signatures. Sur Windows, le manifeste préfère l’installateur NSIS pour la mise à jour.
+
+Consultez `UPDATER_SETUP.md` pour la procédure de publication.
+
+## Journal de diagnostic
+
+Le journal technique est écrit dans :
+
+- Windows : `%LOCALAPPDATA%\\DuoVoice\\duovoice.log`
+
+Il contient uniquement des événements utiles : démarrage, arrêt, erreurs réseau/audio/updater, connexion et déconnexion. Les paquets audio ne sont pas journalisés.
