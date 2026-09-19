@@ -501,7 +501,7 @@ fn test_audio_output(output: Option<String>) -> Result<(), String> {
     let out_cfg = choose_stream_config(&output_device, false)?;
     let output_config: StreamConfig = out_cfg.clone().into();
     let channels = output_config.channels.max(1) as usize;
-    let sample_rate = output_config.sample_rate.0 as f32;
+    let sample_rate = output_config.sample_rate as f32;
     let duration = Duration::from_millis(420);
     let amplitude = 0.12f32;
     let frequency = 523.25f32;
