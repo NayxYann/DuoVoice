@@ -20,7 +20,6 @@ const MUTE_KEY = "duovoice.muted";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
-const AUDIO_PROFILES_KEY = "duovoice.audioProfiles";
 const RECENTS_KEY = "duovoice.recentConnections";
 const SESSION_KEY = "duovoice.sessionPeers";
 const SCALE_KEY = "duovoice.uiScale";
@@ -201,7 +200,6 @@ function applyLanguageUi(language = getLanguage(), { broadcast = false } = {}) {
   renderPeers();
   renderFavorites();
   renderSessionMembers();
-  renderAudioProfiles();
   renderRecentConnections();
   if (updateState.status) setUpdateBanner(updateState.status, updateState.update);
   if ($("lastUpdate")) $("lastUpdate").textContent = formatLastUpdate();
@@ -815,61 +813,8 @@ async function loadDevices() {
     else if (deviceDefaults.output && [...output.options].some(o => o.value === deviceDefaults.output)) output.value = deviceDefaults.output;
     appliedInputDevice = input.value || null;
     appliedOutputDevice = output.value || null;
-    renderAudioProfiles();
-  } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
+    } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
 }
-
-function loadAudioProfiles() {
-  try {
-    const value = JSON.parse(localStorage.getItem(AUDIO_PROFILES_KEY) || "[]");
-    return Array.isArray(value) ? value.filter(p => p && p.id && p.name) : [];
-  } catch { return []; }
-}
-
-function saveAudioProfiles(profiles) {
-  localStorage.setItem(AUDIO_PROFILES_KEY, JSON.stringify(profiles));
-}
-
-function currentAudioProfile() {
-  const id = $("quickAudioProfile")?.value || "";
-  return loadAudioProfiles().find(p => p.id === id) || null;
-}
-
-function updateAudioProfileSummary() {
-  const input = $("input");
-  const output = $("output");
-  if ($("profileInputSummary")) $("profileInputSummary").textContent = input?.selectedOptions?.[0]?.textContent || "—";
-  if ($("profileOutputSummary")) $("profileOutputSummary").textContent = output?.selectedOptions?.[0]?.textContent || "—";
-}
-
-function renderAudioProfiles(preferredId = null) {
-  const profiles = loadAudioProfiles();
-  const select = $("quickAudioProfile");
-  if (!select) return;
-  const current = preferredId ?? select.value;
-  select.innerHTML = `<option value="">${t("profiles.none")}</option>`;
-  for (const profile of profiles) select.add(new Option(profile.name, profile.id));
-  if (profiles.some(p => p.id === current)) select.value = current;
-  else select.value = "";
-  if ($("deleteAudioProfile")) $("deleteAudioProfile").disabled = !select.value;
-  if ($("manageAudioProfile")) $("manageAudioProfile").disabled = !select.value;
-  updateAudioProfileSummary();
-}
-
-function setAudioProfilePopover(open, mode = "manage") {
-  const popover = $("audioProfilePopover");
-  if (!popover) return;
-  popover.classList.toggle("hidden", !open);
-  if (!open) return;
-  popover.dataset.mode = mode;
-  const profile = mode === "manage" ? currentAudioProfile() : null;
-  $("profileName").value = profile?.name || "";
-  $("deleteAudioProfile").disabled = !profile;
-  $("profileManagerHint").textContent = profile ? t("profiles.editHint") : t("profiles.hint");
-  updateAudioProfileSummary();
-  setTimeout(() => $("profileName").focus(), 0);
-}
-
 
 async function restartAudioWithCurrentDevices(detailText = "Audio updated.") {
   const selectedInput = $("input").value || null;
@@ -891,50 +836,6 @@ async function restartAudioWithCurrentDevices(detailText = "Audio updated.") {
   await emitTo("tray", "audio-state-changed", { connected: true, remotes: connectedPeers });
   setDetails(detailText);
   return true;
-}
-
-async function applyAudioProfileById(id) {
-  const profile = loadAudioProfiles().find(p => p.id === id);
-  if (!profile) return;
-  const input = $("input"), output = $("output");
-  if (profile.input && [...input.options].some(o => o.value === profile.input)) input.value = profile.input;
-  if (profile.output && [...output.options].some(o => o.value === profile.output)) output.value = profile.output;
-  try {
-    await restartAudioWithCurrentDevices(`✓ ${profile.name}`);
-    renderAudioProfiles(profile.id);
-  } catch (e) {
-    reportError("Apply audio profile", e);
-    setDetails(`Profil audio : ${e}`);
-  }
-}
-
-function saveCurrentAudioProfile() {
-  const name = ($("profileName").value || "").trim();
-  if (!name) { $("profileName").focus(); return; }
-  const profiles = loadAudioProfiles();
-  const selectedId = $("audioProfilePopover").dataset.mode === "manage" ? $("quickAudioProfile").value : "";
-  const existingIndex = profiles.findIndex(p => p.id === selectedId || p.name.toLowerCase() === name.toLowerCase());
-  const profile = {
-    id: existingIndex >= 0 ? profiles[existingIndex].id : `profile-${Date.now().toString(36)}`,
-    name,
-    input: $("input").value || "",
-    output: $("output").value || ""
-  };
-  if (existingIndex >= 0) profiles[existingIndex] = profile; else profiles.push(profile);
-  saveAudioProfiles(profiles.slice(0, 20));
-  renderAudioProfiles(profile.id);
-  $("profileManagerHint").textContent = t("profiles.saved");
-  setTimeout(() => setAudioProfilePopover(false), 420);
-}
-
-function deleteSelectedAudioProfile() {
-  const id = $("quickAudioProfile").value;
-  if (!id) return;
-  saveAudioProfiles(loadAudioProfiles().filter(p => p.id !== id));
-  $("profileName").value = "";
-  renderAudioProfiles("");
-  $("profileManagerHint").textContent = t("profiles.deleted");
-  setTimeout(() => setAudioProfilePopover(false), 320);
 }
 
 function recordRecentConnections(addresses) {
@@ -1354,27 +1255,7 @@ async function applyAudioDeviceChange(kind) {
 
 $("input").addEventListener("change", () => applyAudioDeviceChange("input"));
 $("output").addEventListener("change", () => applyAudioDeviceChange("output"));
-$("quickAudioProfile").addEventListener("change", async () => {
-  const id = $("quickAudioProfile").value;
-  if (id) await applyAudioProfileById(id);
-});
-$("createAudioProfile").addEventListener("click", () => setAudioProfilePopover(true, "create"));
-$("manageAudioProfile").addEventListener("click", () => setAudioProfilePopover(true, "manage"));
-$("closeAudioProfilePopover").addEventListener("click", () => setAudioProfilePopover(false));
-$("saveAudioProfile").addEventListener("click", saveCurrentAudioProfile);
-$("deleteAudioProfile").addEventListener("click", deleteSelectedAudioProfile);
-$("profileName").addEventListener("keydown", event => { if (event.key === "Enter") saveCurrentAudioProfile(); });
 $("refreshDiagnostics").addEventListener("click", refreshDiagnostics);
-for (const id of ["input", "output"]) {
-  $(id).addEventListener("change", () => {
-    updateAudioProfileSummary();
-    const profile = currentAudioProfile();
-    if (profile && (profile.input !== $("input").value || profile.output !== $("output").value)) {
-      $("quickAudioProfile").value = "";
-    }
-  });
-}
-
 
 $("languageSelect").value = getLanguage();
 $("languageSelect").addEventListener("change", async () => {
@@ -1409,7 +1290,6 @@ document.addEventListener("keydown", event => {
     setVersionPicker(false);
     return;
   }
-  if (!$("audioProfilePopover")?.classList.contains("hidden")) setAudioProfilePopover(false);
   if ($("appQuitConfirm").classList.contains("open")) setAppQuitConfirmation(false);
 });
 bindGithubLink($("githubBrand"));
@@ -1595,7 +1475,6 @@ loadManualIps();
 renderFavorites();
 loadClientName();
 loadDevices();
-renderAudioProfiles();
 renderRecentConnections();
 loadAutostart();
 loadAudioPreferences();

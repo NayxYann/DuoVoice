@@ -13,7 +13,6 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 - Independent jitter buffers per remote peer and local mixing of received voices
 - Microphone mute synchronized between the main window and tray controls
 - Hot switching of microphone and output devices while connected
-- Reusable audio profiles for microphone/output combinations
 - RNNoise-based local microphone noise reduction
 - Remote playback volume up to 200%
 - Automatic LAN discovery plus manual IPv4 addresses
@@ -29,7 +28,7 @@ DuoVoice is a lightweight, low-latency **Windows LAN intercom** built with Tauri
 
 ## What's new in 1.4.0
 
-Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, saved audio profiles, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The home screen was also reorganized so group controls and audio profiles fit naturally into the existing DuoVoice design. The Windows tray is now group-aware and can reconnect the configured session directly. The final Windows layout uses a slightly taller fixed design canvas so device selectors, profile controls, volume options and action buttons retain their intended size instead of being compressed.
+Version 1.4.0 focuses on making the Windows application more complete and resilient: LAN group sessions for up to eight remote PCs, recent-connection history, automatic session recovery when a peer returns on the same IP, and a built-in diagnostics panel. The Windows tray is group-aware and can reconnect the configured session directly. The home screen was refined again after real-world testing: the audio-profile experiment was removed, device selectors keep their full size, the machine-name row no longer overflows into the Audio card, and remote-volume controls now live in a single contained panel.
 
 ## Session groups
 
@@ -41,16 +40,6 @@ Group membership can be changed while audio is active. If a remote PC briefly go
 
 The custom Windows tray panel also shows the current Duo/group session. When a group is configured, the tray **Connect** action uses the saved group instead of silently falling back to a single peer.
 
-## Audio profiles
-
-Audio profiles store a microphone and output-device pair locally. Profiles are created and managed directly from the **Audio** card on the main screen, next to the currently selected devices. Choosing a saved profile applies it immediately, including while a session is active. They are useful for setups such as:
-
-- GoXLR
-- Headset
-- Speakers
-- Streaming
-
-The former settings-only profile manager was removed so this workflow stays next to the microphone and output controls where it is actually used.
 
 ## Network
 
@@ -117,7 +106,7 @@ npm run tauri -- build
 
 ## Privacy
 
-DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites, recent connections and audio profiles are stored locally.
+DuoVoice does not require an account and does not intentionally upload voice traffic to a server. Audio packets are sent directly to the selected LAN peers. Application preferences, favorites and recent connections are stored locally.
 
 ## Project status
 

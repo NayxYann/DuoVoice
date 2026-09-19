@@ -90,39 +90,6 @@
           <label for="output" data-i18n="audio.output">Audio output</label>
           <select id="output"></select>
 
-          <div class="audio-profile-block">
-            <div class="audio-profile-heading">
-              <div>
-                <strong data-i18n="profiles.quick">Audio profile</strong>
-                <span data-i18n="profiles.quickHint">Recall or save the current microphone and output.</span>
-              </div>
-              <div class="audio-profile-actions">
-                <button id="createAudioProfile" class="icon-btn compact" type="button" data-i18n-title="profiles.create" data-i18n-aria="profiles.create" title="Create an audio profile" aria-label="Create an audio profile"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
-                <button id="manageAudioProfile" class="icon-btn compact" type="button" data-i18n-title="profiles.manage" data-i18n-aria="profiles.manage" title="Manage selected profile" aria-label="Manage selected profile" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button>
-              </div>
-            </div>
-            <select id="quickAudioProfile"><option value="" data-i18n="profiles.none">No saved profile</option></select>
-            <div id="audioProfilePopover" class="profile-popover hidden">
-              <div class="profile-popover-head">
-                <div>
-                  <strong data-i18n="profiles.createTitle">Save audio profile</strong>
-                  <span data-i18n="profiles.createDesc">Save the devices currently selected above.</span>
-                </div>
-                <button id="closeAudioProfilePopover" class="icon-btn compact" type="button" aria-label="Close"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-              </div>
-              <input id="profileName" type="text" maxlength="32" data-i18n-placeholder="profiles.namePlaceholder" placeholder="Profile name">
-              <div class="profile-device-summary">
-                <span><small data-i18n="audio.microphone">Microphone</small><strong id="profileInputSummary">—</strong></span>
-                <span><small data-i18n="audio.output">Audio output</small><strong id="profileOutputSummary">—</strong></span>
-              </div>
-              <div class="profile-popover-actions">
-                <button id="deleteAudioProfile" class="secondary" type="button" data-i18n="profiles.delete">Delete</button>
-                <button id="saveAudioProfile" class="primary" type="button" data-i18n="profiles.saveCurrent">Save current devices</button>
-              </div>
-              <p id="profileManagerHint" class="hint" data-i18n="profiles.hint">Profiles are stored locally on this PC.</p>
-            </div>
-          </div>
-
           <div class="noise-control">
             <div class="noise-line">
               <div>
@@ -160,21 +127,23 @@
             </div>
           </div>
 
-          <div class="volume-line">
-            <label for="volume" data-i18n="audio.remoteVolume">Remote volume</label>
-            <strong id="volumeValue">100%</strong>
+          <div class="volume-control">
+            <div class="volume-line">
+              <label for="volume" data-i18n="audio.remoteVolume">Remote volume</label>
+              <strong id="volumeValue">100%</strong>
+            </div>
+            <input id="volume" type="range" min="0" max="100" step="1" value="100">
+
+            <label class="switch-row boost-volume-row">
+              <input id="boostVolume" type="checkbox">
+              <span class="switch"></span>
+              <span data-i18n="audio.boost">Allow volume above 100%</span>
+            </label>
+
+            <button id="mute" class="secondary mute-btn" type="button">
+              <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText" data-i18n="audio.mute">Mute</span>
+            </button>
           </div>
-          <input id="volume" type="range" min="0" max="100" step="1" value="100">
-
-          <label class="switch-row boost-volume-row">
-            <input id="boostVolume" type="checkbox">
-            <span class="switch"></span>
-            <span data-i18n="audio.boost">Allow volume above 100%</span>
-          </label>
-
-          <button id="mute" class="secondary mute-btn" type="button">
-            <svg class="ui-icon mute-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path class="mute-slash" d="M4 4l16 16"/></svg><span id="muteText" data-i18n="audio.mute">Mute</span>
-          </button>
         </section>
 
         <section class="card state-card">

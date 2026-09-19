@@ -1774,7 +1774,7 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .mute-btn:hover:not(:disabled), .version-selector:hover { color: var(--text); }
 .color-choice.active { border-color: var(--text); }
 
-/* v1.4.0 — Windows session groups, audio profiles and diagnostics */
+/* v1.4.0 — Windows session groups and diagnostics */
 .group-add-btn {
   flex: 0 0 auto;
 }
@@ -1869,30 +1869,6 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   width: 28px;
   height: 28px;
 }
-.profile-quick-row,
-.profile-manager-grid,
-.profile-manager-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.profile-quick-row select,
-.profile-manager-grid select,
-.profile-manager-grid input {
-  min-width: 0;
-  flex: 1 1 0;
-}
-.compact-action {
-  flex: 0 0 auto;
-  min-width: 76px;
-  height: 40px;
-}
-.profile-manager-grid {
-  margin-bottom: 10px;
-}
-.profile-manager-actions button {
-  flex: 1 1 0;
-}
 .recent-connections {
   display: grid;
   gap: 7px;
@@ -1942,7 +1918,7 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   .state-grid { grid-template-columns: 1fr; }
 }
 
-/* v1.4.0 UI polish — compact session + first-class audio profiles */
+/* v1.4.0 UI polish — compact session and balanced home layout */
 .connection-card,
 .audio-card {
   min-height: 0;
@@ -1984,82 +1960,6 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
   font-size: 10px;
 }
 
-.audio-profile-block {
-  position: relative;
-  margin: 12px 0 2px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
-}
-.audio-profile-heading,
-.profile-popover-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.audio-profile-heading { margin-bottom: 8px; }
-.audio-profile-heading > div,
-.profile-popover-head > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.audio-profile-heading strong,
-.profile-popover-head strong { font-size: 12px; }
-.audio-profile-heading span,
-.profile-popover-head span {
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.3;
-}
-.audio-profile-block > select { width: 100%; }
-.profile-popover {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 30;
-  padding: 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 18px 46px #0008;
-}
-.profile-popover.hidden { display: none; }
-.profile-popover > input { width: 100%; margin-top: 10px; }
-.profile-device-summary {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
-  margin-top: 9px;
-}
-.profile-device-summary > span {
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-elevated);
-}
-.profile-device-summary small,
-.profile-device-summary strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.profile-device-summary small { color: var(--text-muted); font-size: 10px; margin-bottom: 3px; }
-.profile-device-summary strong { font-size: 11px; }
-.profile-popover-actions {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-  margin-top: 10px;
-}
-.profile-popover-actions button { height: 36px; }
-.profile-popover .hint { margin: 8px 0 0; }
 
 /* Keep the status strip informative but visually secondary. */
 .state-card { padding: 11px 14px 10px; }
@@ -2067,11 +1967,6 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .state-grid { margin-top: 6px; }
 .state-item { padding-top: 7px; padding-bottom: 7px; }
 
-/* The old settings-only profile manager was intentionally removed. */
-.profile-quick-row,
-.profile-manager-grid,
-.profile-manager-actions,
-.compact-action { }
 
 /* Keep the home screen balanced at the fixed 1080x840 window size. */
 .connection-card .favorites-panel {
@@ -2088,7 +1983,6 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .connection-card .manual-row { flex: 0 0 auto; }
 .connection-card > .hint { margin-bottom: 8px; }
 .audio-card .noise-control { margin-top: 10px; }
-.audio-profile-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 
 
 /* v1.4.0 layout repair — preserve control sizes and give the home screen breathing room. */
@@ -2125,35 +2019,11 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .audio-card > select,
 .peer-row select,
 .client-name-row input,
-.manual-row input,
-.audio-profile-block > select {
+.manual-row input {
   min-height: 38px;
   flex-shrink: 0;
 }
 
-/* Profile actions are a single horizontal control group: + then settings. */
-.audio-profile-heading > .audio-profile-actions {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 7px;
-}
-
-.audio-profile-actions .icon-btn {
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-}
-
-.audio-profile-block {
-  margin-top: 10px;
-  margin-bottom: 4px;
-  padding: 10px;
-}
-
-.audio-profile-heading {
-  margin-bottom: 7px;
-}
 
 /* Keep volume controls and mute fully inside the Audio card. */
 .boost-volume-row {
@@ -2176,3 +2046,126 @@ select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 
 .state-card {
   min-height: 105px;
 }
+
+/* v1.4.0 final Windows layout — post-profile cleanup and overflow repair. */
+.main-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.connection-card,
+.audio-card {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Rows with an action button must fit inside their own card, never overhang the grid gap. */
+.client-name-row,
+.peer-row,
+.manual-row {
+  width: 100%;
+  min-width: 0;
+}
+.client-name-row input,
+.peer-row select,
+.manual-row input {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.client-name-save,
+.peer-row > .icon-btn,
+.manual-row > .add-btn {
+  flex: 0 0 40px;
+}
+.client-name-save {
+  width: 40px;
+  height: 40px;
+}
+
+/* Native device selectors keep a stable, unclipped control box. */
+.audio-card > label {
+  margin-bottom: 7px;
+}
+.audio-card > select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  flex: 0 0 40px;
+}
+
+/* The two audio feature groups now form a simple vertical stack. */
+.audio-card .noise-control {
+  margin: 8px 0 12px;
+  flex: 0 0 auto;
+}
+
+.volume-control {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel-soft);
+  flex: 0 0 auto;
+}
+.volume-control .volume-line {
+  width: 100%;
+  justify-content: space-between;
+  gap: 12px;
+}
+.volume-control .volume-line label {
+  margin: 0;
+}
+.volume-control > input[type="range"] {
+  display: block;
+  width: 100%;
+  margin: 8px 0 9px;
+}
+.volume-control .boost-volume-row {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  margin: 0 0 9px;
+}
+.volume-control .boost-volume-row > span:last-child {
+  min-width: 0;
+  line-height: 1.25;
+}
+.volume-control .mute-btn {
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+}
+
+/* Keep session/favorites useful without allowing their dynamic content to push actions out. */
+.session-panel {
+  flex: 0 0 auto;
+}
+.session-members {
+  max-height: 94px;
+}
+.connection-card .favorites-panel {
+  flex: 1 1 auto;
+  min-height: 78px;
+  max-height: 108px;
+}
+#favoritesList {
+  max-height: 72px;
+}
+.connection-card .manual-row,
+.connection-card > .hint,
+.connection-card > .primary {
+  flex: 0 0 auto;
+}
+
+/* Status remains aligned and secondary. */
+.state-card {
+  min-height: 104px;
+}
+
