@@ -199,6 +199,152 @@ fn set_tray_scale(app: tauri::AppHandle, scale: f64) -> Result<(), String> {
     Ok(())
 }
 
+// All bounds, centers and sizes are in physical virtual-screen coordinates.
+fn tray_popup_position(
+    monitor: (i32, i32, i32, i32),
+    work: (i32, i32, i32, i32),
+    icon_center: (i32, i32),
+    size: (i32, i32),
+    scale_factor: f64,
+) -> (i32, i32) {
+    let (left, top, right, bottom) = work;
+    let (cx, cy) = icon_center;
+    let (width, height) = size;
+    let edge_gap = (4.0 * scale_factor).round() as i32;
+    let taskbar_gap = (3.0 * scale_factor).round() as i32;
+
+    // Prefer a reserved work-area edge. If the taskbar auto-hides, the work
+    // area can cover the entire monitor: use the edge nearest the tray icon.
+    // Bottom comes first to keep the existing placement when distances tie.
+    let edges = [
+        (0, bottom < monitor.3, (monitor.3 - cy).abs()),
+        (1, top > monitor.1, (cy - monitor.1).abs()),
+        (2, left > monitor.0, (cx - monitor.0).abs()),
+        (3, right < monitor.2, (monitor.2 - cx).abs()),
+    ];
+    let edge = edges
+        .iter()
+        .min_by_key(|(_, reserved, distance)| (!reserved, *distance))
+        .unwrap().0;
+    let (x, y) = match edge {
+        1 => (cx - width / 2, top + taskbar_gap),
+        2 => (left + taskbar_gap, cy - height / 2),
+        3 => (right - width - taskbar_gap, cy - height / 2),
+        _ => (cx - width / 2, bottom - height - taskbar_gap),
+    };
+    let min_x = left + if edge == 2 { taskbar_gap } else { edge_gap };
+    let min_y = top + if edge == 1 { taskbar_gap } else { edge_gap };
+    let max_x = right - width - if edge == 3 { taskbar_gap } else { edge_gap };
+    let max_y = bottom - height - if edge == 0 { taskbar_gap } else { edge_gap };
+    (x.clamp(min_x, max_x.max(min_x)), y.clamp(min_y, max_y.max(min_y)))
+}
+
+#[cfg(test)]
+mod tray_position_tests {
+    use super::tray_popup_position;
+
+    #[test]
+    fn all_taskbar_edges_with_both_popups_dpi_and_secondary_monitors() {
+        for scale in [1.0_f64, 1.25, 1.5, 2.0] {
+            for (left, top) in [(0, 0), (-2560, -1440), (1920, 240)] {
+                let monitor = (left, top, left + 1920, top + 1080);
+                let gap = (3.0 * scale).round() as i32;
+                for (w, h) in [(280.0, 348.0), (190.0, 198.0)] {
+                    for ui_scale in [0.9, 1.0, 1.2] {
+                        let size = ((w * ui_scale * scale).round() as i32, (h * ui_scale * scale).round() as i32);
+                        let (width, height) = size;
+                        let cases = [
+                            ((left, top, left + 1920, top + 1032), (left + 960, top + 1056), (left + 960 - width / 2, top + 1032 - height - gap)),
+                            ((left, top + 48, left + 1920, top + 1080), (left + 960, top + 24), (left + 960 - width / 2, top + 48 + gap)),
+                            ((left + 48, top, left + 1920, top + 1080), (left + 24, top + 540), (left + 48 + gap, top + 540 - height / 2)),
+                            ((left, top, left + 1872, top + 1080), (left + 1896, top + 540), (left + 1872 - width - gap, top + 540 - height / 2)),
+                        ];
+                        for (work, icon, expected) in cases {
+                            assert_eq!(tray_popup_position(monitor, work, icon, size, scale), expected);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reserved_taskbar_edge_wins_near_a_monitor_corner() {
+        assert_eq!(tray_popup_position((0, 0, 1920, 1080), (48, 0, 1920, 1080), (24, 1070), (280, 348), 1.0), (51, 728));
+        assert_eq!(tray_popup_position((0, 0, 1920, 1080), (0, 0, 1920, 1032), (1910, 1056), (280, 348), 1.0), (1636, 681));
+        assert_eq!(tray_popup_position((0, 0, 1920, 1080), (0, 48, 1920, 1080), (10, 24), (190, 198), 1.0), (4, 51));
+        assert_eq!(tray_popup_position((0, 0, 1920, 1080), (0, 0, 1872, 1080), (1896, 10), (190, 198), 1.0), (1679, 4));
+    }
+
+    #[test]
+    fn auto_hidden_taskbar_uses_the_nearest_monitor_edge() {
+        let monitor = (-1920, -1080, 0, 0);
+        for (icon, expected) in [
+            ((-960, -1), (-1100, -351)),
+            ((-960, -1079), (-1100, -1077)),
+            ((-1919, -540), (-1917, -714)),
+            ((-1, -540), (-283, -714)),
+        ] {
+            assert_eq!(tray_popup_position(monitor, monitor, icon, (280, 348), 1.0), expected);
+        }
+    }
+
+    #[test]
+    fn oversized_popup_does_not_panic_when_clamping() {
+        assert_eq!(tray_popup_position((0, 0, 200, 200), (0, 0, 200, 152), (100, 176), (280, 348), 1.0), (4, 4));
+    }
+}
+
+fn position_tray_popup(
+    window: &tauri::WebviewWindow,
+    click: tauri::PhysicalPosition<f64>,
+    rect: tauri::Rect,
+    fallback_size: tauri::PhysicalSize<u32>,
+) {
+    let size = window.outer_size().unwrap_or(fallback_size);
+    let window_scale = window.scale_factor().unwrap_or(1.0);
+    let monitor = window.monitor_from_point(click.x, click.y).ok().flatten();
+    let mut position = (
+        click.x.round() as i32 - size.width as i32 / 2,
+        click.y.round() as i32 - size.height as i32 - 3,
+    );
+    let mut target_size = size;
+    if let Some(monitor) = monitor {
+        let scale = monitor.scale_factor();
+        // A hidden popup may still have the DPI of the previously used monitor.
+        target_size = size.to_logical::<f64>(window_scale).to_physical::<u32>(scale);
+        let icon_position = rect.position.to_physical::<i32>(scale);
+        let icon_size = rect.size.to_physical::<u32>(scale);
+        let work = monitor.work_area();
+        let origin = monitor.position();
+        let resolution = monitor.size();
+        position = tray_popup_position(
+            (
+                origin.x, origin.y,
+                origin.x + resolution.width as i32,
+                origin.y + resolution.height as i32,
+            ),
+            (
+                work.position.x, work.position.y,
+                work.position.x + work.size.width as i32,
+                work.position.y + work.size.height as i32,
+            ),
+            (
+                icon_position.x + icon_size.width as i32 / 2,
+                icon_position.y + icon_size.height as i32 / 2,
+            ),
+            (target_size.width as i32, target_size.height as i32),
+            scale,
+        );
+    }
+    let _ = window.set_position(tauri::PhysicalPosition::new(position.0, position.1));
+    if target_size != size {
+        // Apply the destination's physical size after moving, preserving the
+        // user's logical tray scale even when Windows changes the popup's DPI.
+        let _ = window.set_size(tauri::Size::Physical(target_size));
+    }
+}
+
 fn start_discovery(app_state: Arc<DiscoveryState>) {
     thread::spawn(move || {
         let socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT)) {
@@ -1201,38 +1347,7 @@ fn main() {
                                         return;
                                     }
 
-                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(280, 348));
-                                    let width = size.width as i32;
-                                    let height = size.height as i32;
-                                    let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
-                                    let icon_center_x = monitor.as_ref().map(|monitor| {
-                                        let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
-                                        let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
-                                        icon_position.x + icon_size.width as i32 / 2
-                                    }).unwrap_or_else(|| position.x.round() as i32);
-
-                                    let mut x = icon_center_x - width / 2;
-                                    let mut y = position.y.round() as i32 - height - 3;
-
-                                    if let Some(monitor) = monitor {
-                                        let work = monitor.work_area();
-                                        let left = work.position.x;
-                                        let top = work.position.y;
-                                        let right = left + work.size.width as i32;
-                                        let bottom = top + work.size.height as i32;
-                                        const EDGE_GAP: i32 = 4;
-                                        const TASKBAR_GAP: i32 = 3;
-
-                                        x = x.clamp(left + EDGE_GAP, (right - width - EDGE_GAP).max(left + EDGE_GAP));
-                                        // Keep the quick panel visually close to the taskbar while
-                                        // still detached from it by a thin, consistent gap.
-                                        y = bottom - height - TASKBAR_GAP;
-                                        if y < top + EDGE_GAP {
-                                            y = top + EDGE_GAP;
-                                        }
-                                    }
-
-                                    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+                                    position_tray_popup(&w, position, rect, tauri::PhysicalSize::new(280, 348));
                                     let _ = w.show();
                                     let _ = w.set_focus();
                                 }
@@ -1242,40 +1357,7 @@ fn main() {
                                     let _ = quick.hide();
                                 }
                                 if let Some(w) = app.get_webview_window("tray-menu") {
-                                    let size = w.outer_size().unwrap_or(tauri::PhysicalSize::new(190, 198));
-                                    let width = size.width as i32;
-                                    let height = size.height as i32;
-                                    let monitor = w.monitor_from_point(position.x, position.y).ok().flatten();
-                                    let icon_center_x = monitor.as_ref().map(|monitor| {
-                                        let icon_position = rect.position.to_physical::<i32>(monitor.scale_factor());
-                                        let icon_size = rect.size.to_physical::<u32>(monitor.scale_factor());
-                                        icon_position.x + icon_size.width as i32 / 2
-                                    }).unwrap_or_else(|| position.x.round() as i32);
-
-                                    // Use the exact same anchor model as the left-click quick panel:
-                                    // centered on the DuoVoice tray icon and detached from the taskbar
-                                    // by the same thin gap. The two tray surfaces therefore feel like
-                                    // alternate views of the same control, regardless of their size.
-                                    let mut x = icon_center_x - width / 2;
-                                    let mut y = position.y.round() as i32 - height - 3;
-
-                                    if let Some(monitor) = monitor {
-                                        let work = monitor.work_area();
-                                        let left = work.position.x;
-                                        let top = work.position.y;
-                                        let right = left + work.size.width as i32;
-                                        let bottom = top + work.size.height as i32;
-                                        const EDGE_GAP: i32 = 4;
-                                        const TASKBAR_GAP: i32 = 3;
-
-                                        x = x.clamp(left + EDGE_GAP, (right - width - EDGE_GAP).max(left + EDGE_GAP));
-                                        y = bottom - height - TASKBAR_GAP;
-                                        if y < top + EDGE_GAP {
-                                            y = top + EDGE_GAP;
-                                        }
-                                    }
-
-                                    let _ = w.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(x, y)));
+                                    position_tray_popup(&w, position, rect, tauri::PhysicalSize::new(190, 198));
                                     let _ = w.show();
                                     let _ = w.set_focus();
                                 }

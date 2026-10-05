@@ -1,4 +1,4 @@
-# DuoVoice 1.4.5
+# DuoVoice 1.4.6
 
 DuoVoice is a lightweight Windows LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
 
