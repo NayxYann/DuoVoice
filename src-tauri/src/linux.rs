@@ -3,7 +3,7 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use ksni::blocking::TrayMethods;
 use serde::Serialize;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 pub fn audio_host() -> Result<cpal::Host, String> {
     // PipeWire's PulseAudio service exposes capture sources/sinks, rather than
