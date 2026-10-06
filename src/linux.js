@@ -94,7 +94,9 @@ async function connect(address) {
 async function disconnect() {
   if (busy) return;
   connectionRevision++;
-  await invoke("stop_audio"); remote = null; renderPeers(); renderStatus();
+  busy = true; renderPeers(); renderStatus();
+  try { await invoke("stop_audio"); remote = null; }
+  finally { busy = false; renderPeers(); renderStatus(); }
 }
 async function refreshDevices() {
   const revision = connectionRevision;

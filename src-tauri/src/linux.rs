@@ -243,7 +243,7 @@ pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), S
         };
     }
     let path = match app.env().appimage {
-        Some(path) => path,
+        Some(path) => std::path::PathBuf::from(path),
         None => portable_launcher(&std::env::current_exe().map_err(|e| e.to_string())?),
     };
     let exec = desktop_exec(path.to_str().ok_or("Launch path is not UTF-8")?)?;
