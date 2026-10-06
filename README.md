@@ -1,10 +1,10 @@
-# DuoVoice 1.4.6
+# DuoVoice 1.5.0
 
-DuoVoice is a lightweight Windows LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
+DuoVoice is a lightweight Windows and Linux LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
 
 It is built for people who want a simple alternative to running a full voice-chat platform just to talk between nearby PCs. DuoVoice keeps the workflow direct: choose another DuoVoice computer, connect, and talk in both directions at the same time.
 
-## What DuoVoice does
+## Windows features
 
 - Full-duplex two-way voice communication over the local network.
 - Automatic discovery of other DuoVoice computers on the LAN.
@@ -28,11 +28,11 @@ It is built for people who want a simple alternative to running a full voice-cha
 
 DuoVoice uses the local network directly. No external voice server or account is required for normal LAN communication.
 
-1. Install and launch DuoVoice on both Windows computers.
+1. Launch DuoVoice on both computers (Windows or Linux).
 2. Make sure both computers are connected to the same local network.
 3. Choose the microphone and audio output you want to use.
 4. Select the other computer from the detected-computer list.
-5. Click **Connect**.
+5. Click **Connect** on each computer, selecting the other computer.
 6. Both computers can now speak and listen at the same time.
 
 If the other computer does not appear automatically, enter its local IPv4 address manually and add it to the list.
@@ -97,10 +97,10 @@ Only releases that include the updater metadata and valid signatures can be inst
 
 ## Windows builds
 
-This branch is Windows-only. The included GitHub Actions workflows are:
+The included GitHub Actions workflows are:
 
-- **Build Windows** — creates Windows installers.
-- **Release Windows** — publishes a signed Windows release and updater metadata.
+- **Build Windows and Linux** — builds and tests both platforms on every push to `dev`, producing Windows installers and Linux downloads.
+- **Release Windows and Linux** — manually publishes Windows installers/updater metadata and Linux AppImage/portable archive. The requested tag must match the project version.
 
 The Windows bundle produces NSIS `.exe` and MSI `.msi` installers.
 
@@ -118,10 +118,31 @@ DuoVoice is intended for direct local-network communication. Voice traffic is ex
 
 ## Requirements
 
-- Windows 10 or Windows 11
+- Windows 10/11, or the Linux desktop described below
 - A working microphone and audio output device
 - Two computers reachable over the same local network for direct LAN use
 
 ## Project
 
 DuoVoice is built with Tauri, Rust and a lightweight web frontend.
+
+## Linux preview (KDE / Wayland)
+
+Linux has its own simplified Breeze-inspired interface, native window decorations and KDE tray menu. Discovery, audio packets and RNNoise are shared with Windows. Windows retains its current interface and updater.
+
+Linux includes editable machine name, detected computers/manual IPv4, microphone/output selection, mute, received volume (up to 200%), adjustable noise reduction, latency, saved preferences, French/English, login autostart and optional tray behavior. Left-click the tray icon to open/focus DuoVoice; right-click for Open, Settings and Quit. No Linux updater or rollback is included.
+
+Audio uses the desktop's existing PipeWire PulseAudio service (or PulseAudio). Output monitors and application streams are omitted from the microphone list; usable virtual microphones remain available. Device lists refresh automatically; a failed stream or removed selected device stops the connection and displays an error.
+
+To try it, open the latest successful **Build Windows and Linux** run on the Actions page and download **DuoVoice-Linux-x86_64**. Unzip it, mark the AppImage executable in KDE's file properties and launch it, or use:
+
+```sh
+chmod +x DuoVoice*.AppImage
+./DuoVoice*.AppImage
+```
+
+If AppImage execution requires FUSE, extract the included `*-portable.tar.gz` instead and launch `DuoVoice/AppRun`. Keep the extracted folder in a stable location before enabling autostart. Runtime libraries are bundled: no separate Qt, WebKit or Rust installation is intended. A normal KDE desktop with its audio service and x86_64 Linux with glibc 2.35 or newer is required (Ubuntu/Kubuntu 22.04+). No virtual audio driver is installed.
+
+Open DuoVoice on both computers and connect each to the other. Allow UDP ports `39471` and `39472` through both firewalls if needed.
+
+Linux logs are at `$XDG_DATA_HOME/DuoVoice/duovoice.log`, normally `~/.local/share/DuoVoice/duovoice.log`. This is a first Linux preview; build checks do not replace a real KDE/Wayland audio test.

@@ -14,5 +14,9 @@
     "process:default",
     "core:window:allow-hide",
     "core:window:allow-set-size"
+  ],
+  "platforms": [
+    "windows",
+    "macOS"
   ]
 }

@@ -16,7 +16,10 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState},
     Emitter, Manager, State,
 };
+#[cfg(not(target_os = "linux"))]
 use tauri_plugin_updater::UpdaterExt;
+#[cfg(target_os = "linux")]
+mod linux;
 
 const DISCOVERY_PORT: u16 = 39471;
 const AUDIO_PORT: u16 = 39472;
@@ -46,6 +49,7 @@ struct Peer {
 struct AudioState {
     engine: Mutex<Option<AudioEngine>>,
     close_to_tray: std::sync::atomic::AtomicBool,
+    stream_failed: Arc<std::sync::atomic::AtomicBool>,
     volume: Arc<Mutex<f32>>,
     muted: Arc<std::sync::atomic::AtomicBool>,
     noise_enabled: Arc<std::sync::atomic::AtomicBool>,
@@ -75,8 +79,24 @@ struct Packet {
     samples: Vec<i16>,
 }
 
+fn audio_host() -> Result<cpal::Host, String> {
+    #[cfg(target_os = "linux")]
+    { linux::audio_host() }
+    #[cfg(not(target_os = "linux"))]
+    { Ok(cpal::default_host()) }
+}
+
+fn stream_error_callback(failed: Arc<std::sync::atomic::AtomicBool>)
+    -> impl FnMut(cpal::Error) + Send + 'static
+{
+    move |error| {
+        app_log(&format!("Audio stream error: {error}"));
+        failed.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 fn device_names(input: bool) -> Vec<String> {
-    let host = cpal::default_host();
+    let Ok(host) = audio_host() else { return Vec::new(); };
     let iter = if input { host.input_devices() } else { host.output_devices() };
     iter.map(|it| it.filter_map(|d| d.description().ok().map(|desc| desc.name().to_string())).collect()).unwrap_or_default()
 }
@@ -407,6 +427,11 @@ fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Re
 }
 
 fn choose_device(host: &cpal::Host, name: Option<&str>, input: bool) -> Result<cpal::Device, String> {
+    #[cfg(target_os = "linux")]
+    if let Some(target) = name {
+        let id = target.parse::<cpal::DeviceId>().map_err(|e| e.to_string())?;
+        return host.device_by_id(&id).ok_or_else(|| "Audio device unavailable".to_string());
+    }
     if let Some(target) = name {
         let devices = if input { host.input_devices() } else { host.output_devices() };
         if let Ok(mut it) = devices {
@@ -563,8 +588,9 @@ fn start_audio(
     output: Option<String>,
 ) -> Result<(), String> {
     stop_audio_inner(&state)?;
+    state.stream_failed.store(false, std::sync::atomic::Ordering::Relaxed);
 
-    let host = cpal::default_host();
+    let host = audio_host()?;
     let input_device = choose_device(&host, input.as_deref(), true)?;
     let output_device = choose_device(&host, output.as_deref(), false)?;
     let in_cfg = choose_stream_config(&input_device, true)?;
@@ -657,7 +683,7 @@ fn start_audio(
                         b.drain(..FRAME_SAMPLES);
                     }
                 },
-                |e| app_log(&format!("Microphone stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -702,7 +728,7 @@ fn start_audio(
                         b.drain(..FRAME_SAMPLES);
                     }
                 },
-                |e| app_log(&format!("Microphone stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -747,7 +773,7 @@ fn start_audio(
                         b.drain(..FRAME_SAMPLES);
                     }
                 },
-                |e| app_log(&format!("Microphone stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -782,7 +808,7 @@ fn start_audio(
                         data.fill(0.0);
                     }
                 },
-                |e| app_log(&format!("Output stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -805,7 +831,7 @@ fn start_audio(
                         data.fill(0);
                     }
                 },
-                |e| app_log(&format!("Output stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -828,7 +854,7 @@ fn start_audio(
                         data.fill(32768);
                     }
                 },
-                |e| app_log(&format!("Output stream error: {e}")),
+                stream_error_callback(Arc::clone(&state.stream_failed)),
                 None,
             )
         }
@@ -1018,6 +1044,7 @@ fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), 
 #[derive(Serialize)]
 struct AudioStatus {
     connected: bool,
+    stream_failed: bool,
     muted: bool,
     remote: Option<String>,
 }
@@ -1025,6 +1052,7 @@ struct AudioStatus {
 #[tauri::command]
 fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
     AudioStatus {
+        stream_failed: state.stream_failed.load(std::sync::atomic::Ordering::Relaxed),
         connected: state.engine.lock().unwrap().is_some(),
         muted: state.muted.load(std::sync::atomic::Ordering::Relaxed),
         remote: state.remote.lock().unwrap().map(|addr| addr.ip().to_string()),
@@ -1180,6 +1208,7 @@ fn open_project_github() -> Result<(), String> {
         .map_err(|e| format!("Impossible d’ouvrir GitHub : {e}"))
 }
 
+#[cfg(not(target_os = "linux"))]
 #[tauri::command]
 async fn install_version(app: tauri::AppHandle, version: String) -> Result<String, String> {
     let cleaned = version.trim().trim_start_matches('v');
@@ -1228,6 +1257,8 @@ async fn install_version(app: tauri::AppHandle, version: String) -> Result<Strin
 
 #[tauri::command]
 fn hide_window_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if !linux::can_hide(&app) { return Err("System tray unavailable".into()); }
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "Fenêtre principale introuvable".to_string())?;
@@ -1257,10 +1288,11 @@ fn main() {
     let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
     app_log(&format!("autostart={launched_from_autostart}"));
 
-    let result = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(AudioState {
             engine: Mutex::new(None),
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
+            stream_failed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             volume: Arc::new(Mutex::new(1.0)),
             muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -1275,17 +1307,28 @@ fn main() {
                     .filter(|name| !name.trim().is_empty())
                     .unwrap_or_else(|| "DuoVoice".into())
             ),
-        }))
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        }));
+    #[cfg(not(target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    let builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
-        ))
-        .invoke_handler(tauri::generate_handler![
+        ));
+    #[cfg(not(target_os = "linux"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
             list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
-        ])
-        .on_window_event(|window, event| {
+        ]);
+    #[cfg(target_os = "linux")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        list_peers, add_manual_peer, get_client_name, set_client_name,
+        start_audio, stop_audio, audio_status, set_volume, set_mute, measure_latency,
+        set_noise_reduction, set_close_action, show_main_window, quit_app,
+        log_client_error, hide_window_to_tray,
+        linux::list_linux_devices, linux::linux_startup, linux::configure_linux_tray
+    ]);
+    let result = builder.on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "tray" || window.label() == "tray-menu" {
                     api.prevent_close();
@@ -1293,6 +1336,8 @@ fn main() {
                     return;
                 }
                 let to_tray = window.state::<AudioState>().close_to_tray.load(std::sync::atomic::Ordering::Relaxed);
+                #[cfg(target_os = "linux")]
+                let to_tray = to_tray && linux::can_hide(window.app_handle());
                 if to_tray {
                     api.prevent_close();
                     let _ = window.set_skip_taskbar(true);
@@ -1323,6 +1368,10 @@ fn main() {
                 }
             });
 
+            #[cfg(target_os = "linux")]
+            linux::setup(app.handle(), launched_from_autostart);
+            #[cfg(not(target_os = "linux"))]
+            {
             // The right-click menu is rendered by DuoVoice itself instead of the
             // native Windows menu so it can share the same spacing, colors and
             // interaction language as the rest of the application.
@@ -1377,6 +1426,8 @@ fn main() {
                 let _ = w.set_skip_taskbar(true);
             }
 
+
+            }
 
             app_log("Tauri setup completed");
             Ok(())
