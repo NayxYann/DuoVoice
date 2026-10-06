@@ -1326,7 +1326,8 @@ fn main() {
         start_audio, stop_audio, audio_status, set_volume, set_mute, measure_latency,
         set_noise_reduction, set_close_action, show_main_window, quit_app,
         log_client_error, hide_window_to_tray,
-        linux::list_linux_devices, linux::linux_startup, linux::configure_linux_tray
+        linux::list_linux_devices, linux::linux_startup, linux::configure_linux_tray,
+        linux::linux_autostart_enabled, linux::set_linux_autostart
     ]);
     let result = builder.on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

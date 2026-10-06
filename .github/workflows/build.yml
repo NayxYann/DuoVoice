@@ -33,6 +33,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
@@ -40,7 +45,7 @@ jobs:
         run: npm run build
 
       - name: Test shared backend
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri application
         run: npm run tauri -- build
@@ -62,6 +67,11 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -73,7 +83,7 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Test Linux and shared backend
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml
       - name: Build AppImage
         run: npm run tauri -- build --bundles appimage
       - name: Package portable fallback

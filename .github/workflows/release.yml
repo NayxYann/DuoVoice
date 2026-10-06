@@ -39,6 +39,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
@@ -79,6 +84,7 @@ jobs:
           retryAttempts: 3
 
   linux:
+    needs: windows
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
@@ -86,6 +92,11 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
       - name: Verify release version
         run: node -e "if (process.env.RELEASE_TAG !== 'v' + require('./package.json').version) process.exit(1)"
       - name: Install Linux build dependencies
@@ -99,7 +110,7 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Test Linux backend
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml
       - name: Publish Linux AppImage
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:

@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
-import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { normalizePreferences, validIPv4 } from "./linux-state.js";
 import "./linux.css";
 
@@ -180,7 +179,7 @@ for (const id of ["noise","intensity"]) $(id).addEventListener(id === "intensity
 }));
 $("language").addEventListener("change",safe(async () => { prefs.language=$("language").value; save(); renderLanguage(); await configureTray(); }));
 $("autostart").addEventListener("change",safe(async () => {
-  try { if($("autostart").checked) await enable(); else await disable(); }
+  try { await invoke("set_linux_autostart",{enabled:$("autostart").checked}); }
   catch(error) { $("autostart").checked = !$("autostart").checked; throw error; }
 }));
 for (const id of ["trayEnabled","closeToTray","startHidden"]) $(id).addEventListener("change",safe(async () => { prefs[id]=$(id).checked; save(); await configureTray(); }));
@@ -195,7 +194,7 @@ async function initialize() {
     if(prefs.name) { try { prefs.name=await invoke("set_client_name",{name:prefs.name}); } catch { prefs.name=""; } }
     if(!prefs.name) prefs.name=await invoke("get_client_name"); $("name").value=prefs.name; save();
     await applyAudio(); await configureTray();
-    $("autostart").checked=await isEnabled();
+    $("autostart").checked=await invoke("linux_autostart_enabled");
     const startup=await invoke("linux_startup");
     if(startup.autostart && prefs.startHidden && trayAvailable) await invoke("hide_window_to_tray");
   } catch(error) { message(String(error)); }

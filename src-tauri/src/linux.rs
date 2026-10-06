@@ -188,3 +188,79 @@ mod tests {
         assert!(is_capture_source("noise_cancelled_microphone"));
     }
 }
+
+fn autostart_file() -> Result<std::path::PathBuf, String> {
+    let config = std::env::var_os("XDG_CONFIG_HOME").filter(|p| !p.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|p| std::path::PathBuf::from(p).join(".config")))
+        .ok_or_else(|| "Home directory unavailable".to_string())?;
+    Ok(config.join("autostart").join("DuoVoice.desktop"))
+}
+
+fn desktop_exec(path: &str) -> Result<String, String> {
+    if path.contains(['\n', '\r', '=']) { return Err("Unsupported launch path".into()); }
+    // Two escape layers: Exec quoting, then Desktop Entry string escaping.
+    let quoted: String = path.chars().flat_map(|c| match c {
+        '%' => vec!['%', '%'],
+        '\\' | '"' | '`' | '$' => vec!['\\', c],
+        _ => vec![c],
+    }).collect();
+    Ok(format!("\"{}\" --autostart", quoted.replace('\\', "\\\\").replace('\t', "\\t")))
+}
+
+fn portable_launcher(executable: &std::path::Path) -> std::path::PathBuf {
+    // The extracted archive must launch AppRun to set its bundled library paths.
+    if let Some(bin) = executable.parent() {
+        if bin.file_name().is_some_and(|p| p == "bin") {
+            if let Some(usr) = bin.parent().filter(|p| p.file_name().is_some_and(|n| n == "usr")) {
+                if let Some(root) = usr.parent() {
+                    let launcher = root.join("AppRun");
+                    if launcher.is_file() { return launcher; }
+                }
+            }
+        }
+    }
+    executable.to_path_buf()
+}
+
+#[tauri::command]
+pub fn linux_autostart_enabled() -> Result<bool, String> {
+    match std::fs::read_to_string(autostart_file()?) {
+        Ok(contents) => Ok(!contents.lines().any(|line| line == "Hidden=true")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let file = autostart_file()?;
+    if !enabled {
+        return match std::fs::remove_file(file) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
+        };
+    }
+    let path = match app.env().appimage {
+        Some(path) => path,
+        None => portable_launcher(&std::env::current_exe().map_err(|e| e.to_string())?),
+    };
+    let exec = desktop_exec(path.to_str().ok_or("Launch path is not UTF-8")?)?;
+    std::fs::create_dir_all(file.parent().unwrap()).map_err(|e| e.to_string())?;
+    let contents = format!("[Desktop Entry]\nType=Application\nName=DuoVoice\nExec={exec}\nIcon=audio-input-microphone\nTerminal=false\nX-GNOME-Autostart-enabled=true\n");
+    let temporary = file.with_extension("desktop.tmp");
+    std::fs::write(&temporary, contents).map_err(|e| e.to_string())?;
+    std::fs::rename(temporary, file).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod autostart_tests {
+    use super::desktop_exec;
+    #[test]
+    fn quotes_spaces_and_escapes_desktop_field_codes_and_shell_characters() {
+        assert_eq!(desktop_exec("/home/yann/My Apps/DuoVoice.AppImage").unwrap(), "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart");
+        assert_eq!(desktop_exec("/home/yann/50%/$x").unwrap(), "\"/home/yann/50%%/\\\\$x\" --autostart");
+        assert!(desktop_exec("/home/yann/app\nHidden=true").is_err());
+    }
+}
