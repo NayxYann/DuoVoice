@@ -1,17 +1,24 @@
 name: Release Windows
 
 on:
+  push:
+    branches: [windows-v1.4.7]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to release (example: v1.4.5)'
+        description: 'Git tag to release (example: v1.4.7)'
         required: true
         type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: windows-release-${{ inputs.tag || 'v1.4.7' }}
+  cancel-in-progress: false
+
 env:
+  RELEASE_TAG: ${{ inputs.tag || 'v1.4.7' }}
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -19,56 +26,97 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Verify repository hygiene
-        shell: bash
-        run: |
-          if git ls-files node_modules | grep -q .; then
-            echo "::error::node_modules must not be committed. Run: git rm -r --cached node_modules"
-            exit 1
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
       - name: Install frontend dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Verify updater configuration
+        run: npm ci --no-audit --no-fund
+      - name: Verify release configuration
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'PY'
-          import json
-          base = json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))
-          release = json.load(open("src-tauri/tauri.release.conf.json", encoding="utf-8"))
-          updater = base["plugins"]["updater"]
-          assert release["bundle"]["createUpdaterArtifacts"] is True
-          assert updater["pubkey"] and "__TAURI" not in updater["pubkey"]
-          assert updater["endpoints"] == ["https://github.com/NayxYann/DuoVoice/releases/latest/download/latest.json"]
-          assert base["bundle"]["targets"] == ["nsis", "msi"]
-          print("Windows updater configuration OK")
+          import json, os, subprocess
+          version = json.load(open('package.json'))['version']
+          assert os.environ['RELEASE_TAG'] == 'v' + version
+          base = json.load(open('src-tauri/tauri.conf.json'))
+          release = json.load(open('src-tauri/tauri.release.conf.json'))
+          assert base['version'] == version
+          assert release['bundle']['createUpdaterArtifacts'] is True
+          assert base['bundle']['targets'] == ['nsis', 'msi']
+          assert base['plugins']['updater']['pubkey']
+          result = subprocess.run(['gh', 'release', 'view', os.environ['RELEASE_TAG'], '--json', 'isDraft'], capture_output=True, text=True)
+          if result.returncode == 0:
+              assert json.loads(result.stdout)['isDraft'], 'This version is already published; do not overwrite it'
+          elif 'release not found' not in result.stderr.lower() and '404' not in result.stderr:
+              raise RuntimeError(result.stderr)
+          print('Release configuration ready')
           PY
-
-      - name: Publish Windows release
+      - name: Build and sign Windows installers
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ inputs.tag }}
-          releaseName: "DuoVoice ${{ inputs.tag }}"
-          releaseBody: 'DuoVoice Windows update release.'
-          releaseDraft: false
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseCommitish: ${{ github.sha }}
+          releaseName: DuoVoice ${{ env.RELEASE_TAG }}
+          releaseBody: |
+            Mise à jour Windows : amélioration du moteur audio lorsque le CPU ou le réseau est fortement sollicité.
+
+            - Réduction de bruit et envoi réseau déplacés hors des callbacks audio.
+            - Files audio préallouées sans verrou et priorité multimédia des workers Windows.
+            - Buffer adaptatif de 40 à 180 ms, remise en ordre des paquets et atténuation des pertes brèves.
+            - Backlogs audio limités et compteurs de diagnostic dans le journal local.
+
+            Le protocole réseau reste compatible avec les versions Windows précédentes et la version Linux de développement.
+            Installateurs Windows EXE/MSI et fichiers de mise à jour signés inclus.
+          releaseDraft: true
           prerelease: false
-          projectPath: .
-          args: --config src-tauri/tauri.release.conf.json
+          args: --config src-tauri/tauri.release.conf.json -- --locked
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
           updaterJsonPreferNsis: true
-          retryAttempts: 3
+          retryAttempts: 2
+      - name: Publish completed release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern latest.json --dir release-metadata
+          python - <<'PY'
+          import json, os, subprocess
+          tag = os.environ['RELEASE_TAG']
+          version = tag.removeprefix('v')
+          release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'isDraft,assets'], text=True))
+          assert release['isDraft']
+          names = [asset['name'] for asset in release['assets']]
+          assert any(name.endswith('.exe') for name in names)
+          assert any(name.endswith('.msi') for name in names)
+          manifest = json.load(open('release-metadata/latest.json'))
+          assert manifest['version'].removeprefix('v') == version
+          platform = manifest['platforms']['windows-x86_64']
+          assert platform['signature']
+          assert '/releases/download/' + tag + '/' in platform['url']
+          repo = os.environ['GITHUB_REPOSITORY']
+          ref = 'repos/' + repo + '/git/refs/tags/' + tag
+          read_ref = 'repos/' + repo + '/git/ref/tags/' + tag
+          result = subprocess.run(['gh', 'api', read_ref], capture_output=True, text=True)
+          if result.returncode == 0:
+              obj = json.loads(result.stdout)['object']
+              assert obj['type'] == 'commit'
+              if obj['sha'] != os.environ['GITHUB_SHA']:
+                  # A retry can replace a tag belonging to this unpublished draft.
+                  subprocess.check_call(['gh', 'api', ref, '--method', 'PATCH', '-f', 'sha=' + os.environ['GITHUB_SHA'], '-F', 'force=true'])
+          elif '404' in result.stderr:
+              subprocess.check_call(['gh', 'api', 'repos/' + repo + '/git/refs', '--method', 'POST', '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['GITHUB_SHA']])
+          else:
+              raise RuntimeError(result.stderr)
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --latest

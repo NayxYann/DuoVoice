@@ -5,7 +5,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream, StreamConfig, SupportedStreamConfig};
 use serde::Serialize;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket, TcpListener, TcpStream},
     sync::{Arc, Mutex},
@@ -17,6 +17,7 @@ use tauri::{
     Emitter, Manager, State,
 };
 use tauri_plugin_updater::UpdaterExt;
+mod audio;
 
 const DISCOVERY_PORT: u16 = 39471;
 const AUDIO_PORT: u16 = 39472;
@@ -25,9 +26,6 @@ const PING_MAGIC: &[u8; 4] = b"DVP1";
 const PONG_MAGIC: &[u8; 4] = b"DVP2";
 const SAMPLE_RATE: u32 = 48_000;
 const FRAME_SAMPLES: usize = 480;
-const JITTER_START_FRAMES: usize = 4;
-const JITTER_TARGET_FRAMES: usize = 6;
-const JITTER_MAX_FRAMES: usize = 12;
 const INSTANCE_PORT: u16 = 39473;
 
 #[derive(Serialize)]
@@ -46,10 +44,10 @@ struct Peer {
 struct AudioState {
     engine: Mutex<Option<AudioEngine>>,
     close_to_tray: std::sync::atomic::AtomicBool,
-    volume: Arc<Mutex<f32>>,
+    volume: Arc<std::sync::atomic::AtomicU32>,
     muted: Arc<std::sync::atomic::AtomicBool>,
     noise_enabled: Arc<std::sync::atomic::AtomicBool>,
-    noise_intensity: Arc<Mutex<f32>>,
+    noise_intensity: Arc<std::sync::atomic::AtomicU32>,
     remote: Arc<Mutex<Option<SocketAddr>>>,
 }
 
@@ -65,14 +63,33 @@ struct DiscoveryState {
 
 struct AudioEngine {
     stop: Arc<std::sync::atomic::AtomicBool>,
-    _input: Stream,
-    _output: Stream,
-    _network: thread::JoinHandle<()>,
+    input: Option<Stream>,
+    output: Option<Stream>,
+    network: Option<thread::JoinHandle<()>>,
+    transmit: Option<thread::JoinHandle<()>>,
+    metrics: Arc<audio::Metrics>,
 }
 
+impl Drop for AudioEngine {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        // Stop callbacks before destroying their queues and joining the workers.
+        self.input.take();
+        self.output.take();
+        if let Some(worker) = self.transmit.take() {
+            worker.thread().unpark();
+            let _ = worker.join();
+        }
+        if let Some(worker) = self.network.take() { let _ = worker.join(); }
+        app_log(&format!("Final audio diagnostics: {:?}", self.metrics.snapshot()));
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Packet {
     seq: u32,
-    samples: Vec<i16>,
+    samples: [i16; FRAME_SAMPLES],
+    received_at: Instant,
 }
 
 fn device_names(input: bool) -> Vec<String> {
@@ -463,54 +480,30 @@ fn choose_stream_config(device: &cpal::Device, input: bool) -> Result<SupportedS
     ))
 }
 
-fn push_packet(socket: &UdpSocket, remote: SocketAddr, seq: &mut u32, samples: &[i16]) {
-    let mut data = Vec::with_capacity(12 + samples.len() * 2);
-    data.extend_from_slice(MAGIC);
-    data.extend_from_slice(&seq.to_be_bytes());
-    data.extend_from_slice(&(SAMPLE_RATE as u16).to_be_bytes());
-    data.extend_from_slice(&(samples.len() as u16).to_be_bytes());
-    for s in samples {
-        data.extend_from_slice(&s.to_le_bytes());
+fn push_packet(socket: &UdpSocket, remote: SocketAddr, seq: &mut u32, samples: &[i16; FRAME_SAMPLES]) -> io::Result<()> {
+    let mut data = [0u8; 12 + FRAME_SAMPLES * 2];
+    data[..4].copy_from_slice(MAGIC);
+    data[4..8].copy_from_slice(&seq.to_be_bytes());
+    data[8..10].copy_from_slice(&(SAMPLE_RATE as u16).to_be_bytes());
+    data[10..12].copy_from_slice(&(FRAME_SAMPLES as u16).to_be_bytes());
+    for (bytes, sample) in data[12..].chunks_exact_mut(2).zip(samples) {
+        bytes.copy_from_slice(&sample.to_le_bytes());
     }
-    let _ = socket.send_to(&data, remote);
     *seq = seq.wrapping_add(1);
+    socket.send_to(&data, remote).map(|_| ())
 }
 
 fn read_packet(buf: &[u8]) -> Option<Packet> {
-    if buf.len() < 12 || &buf[..4] != MAGIC {
-        return None;
-    }
+    if buf.len() < 12 || &buf[..4] != MAGIC { return None; }
     let seq = u32::from_be_bytes(buf[4..8].try_into().ok()?);
     let sample_rate = u16::from_be_bytes(buf[8..10].try_into().ok()?) as u32;
     let count = u16::from_be_bytes(buf[10..12].try_into().ok()?) as usize;
-    if sample_rate != SAMPLE_RATE || count != FRAME_SAMPLES || buf.len() < 12 + count * 2 {
-        return None;
+    if sample_rate != SAMPLE_RATE || count != FRAME_SAMPLES || buf.len() < 12 + count * 2 { return None; }
+    let mut samples = [0; FRAME_SAMPLES];
+    for (sample, bytes) in samples.iter_mut().zip(buf[12..12 + count * 2].chunks_exact(2)) {
+        *sample = i16::from_le_bytes([bytes[0], bytes[1]]);
     }
-    let mut samples = Vec::with_capacity(count);
-    for chunk in buf[12..12 + count * 2].chunks_exact(2) {
-        samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
-    }
-    Some(Packet { seq, samples })
-}
-
-fn next_playback_sample(queue: &mut VecDeque<i16>, ready: &mut bool) -> i16 {
-    if *ready && queue.is_empty() {
-        *ready = false;
-    }
-    if !*ready {
-        if queue.len() >= FRAME_SAMPLES * JITTER_START_FRAMES {
-            *ready = true;
-        } else {
-            return 0;
-        }
-    }
-    match queue.pop_front() {
-        Some(sample) => sample,
-        None => {
-            *ready = false;
-            0
-        }
-    }
+    Some(Packet { seq, samples, received_at: Instant::now() })
 }
 
 fn denoise_frame(
@@ -594,351 +587,98 @@ fn start_audio(
 
     let tx = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
         .map_err(|e| format!("Socket d'envoi audio impossible: {e}"))?;
-    tx.set_nonblocking(true)
-        .map_err(|e| format!("Configuration socket d'envoi impossible: {e}"))?;
-
+    tx.set_nonblocking(true).map_err(|e| e.to_string())?;
     let rx = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, AUDIO_PORT))
         .map_err(|e| format!("Port audio {AUDIO_PORT} indisponible: {e}"))?;
-    rx.set_nonblocking(true)
-        .map_err(|e| format!("Configuration socket de réception impossible: {e}"))?;
-
+    rx.set_read_timeout(Some(Duration::from_millis(10))).map_err(|e| e.to_string())?;
+    rx.set_write_timeout(Some(Duration::from_millis(10))).map_err(|e| e.to_string())?;
+    if let Err(error) = socket2::SockRef::from(&rx).set_recv_buffer_size(256 * 1024) {
+        app_log(&format!("Receive buffer: {error}; keeping system default"));
+    }
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let volume = Arc::clone(&state.volume);
-    let muted = Arc::clone(&state.muted);
-    let noise_enabled = Arc::clone(&state.noise_enabled);
-    let noise_intensity = Arc::clone(&state.noise_intensity);
-
-    let input_samples = Arc::new(Mutex::new(Vec::<i16>::with_capacity(FRAME_SAMPLES * 2)));
-    let tx_buf = Arc::clone(&input_samples);
-    let tx_socket = tx.try_clone().map_err(|e| e.to_string())?;
-    let muted_in = Arc::clone(&muted);
-    let mut seq = 0u32;
-
-    let input_config: StreamConfig = in_cfg.clone().into();
+    let metrics = Arc::new(audio::Metrics::default());
+    let wake = Arc::new(std::sync::OnceLock::<thread::Thread>::new());
+    let (capture_producer, capture_consumer) = rtrb::RingBuffer::new(FRAME_SAMPLES * 20);
+    let (packet_producer, packet_consumer) = rtrb::RingBuffer::new(audio::PACKET_CAPACITY);
+    let mut capture = audio::Capture::new(capture_producer, wake.clone(), metrics.clone(), state.muted.clone());
+    let mut playback = audio::Playback::new(packet_consumer, metrics.clone());
+    let input_format = in_cfg.sample_format();
+    let input_config: StreamConfig = in_cfg.into();
     let input_channels = input_config.channels as usize;
-    let input_stream = match in_cfg.sample_format() {
-        SampleFormat::F32 => {
-            let mut denoiser = None;
-            let mut delayed_dry = None;
-            let noise_enabled = Arc::clone(&noise_enabled);
-            let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(
-                input_config,
-                move |data: &[f32], _| {
-                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                        tx_buf.lock().unwrap().clear();
-                        denoiser = None;
-                        delayed_dry = None;
-                        return;
-                    }
-
-                    let mut b = tx_buf.lock().unwrap();
-                    for frame in data.chunks(input_channels.max(1)) {
-                        let avg = frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32;
-                        b.push((avg.clamp(-1.0, 1.0) * 32767.0) as i16);
-                    }
-                    while b.len() >= FRAME_SAMPLES {
-                        let mut processed = [0i16; FRAME_SAMPLES];
-                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                            let intensity = *noise_intensity.lock().unwrap();
-                            denoise_frame(
-                                &mut denoiser,
-                                &mut delayed_dry,
-                                &b[..FRAME_SAMPLES],
-                                intensity,
-                                &mut processed,
-                            );
-                        } else {
-                            denoiser = None;
-                            delayed_dry = None;
-                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
-                        }
-                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                        b.drain(..FRAME_SAMPLES);
-                    }
-                },
-                |e| app_log(&format!("Microphone stream error: {e}")),
-                None,
-            )
-        }
-        SampleFormat::I16 => {
-            let mut denoiser = None;
-            let mut delayed_dry = None;
-            let noise_enabled = Arc::clone(&noise_enabled);
-            let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(
-                input_config,
-                move |data: &[i16], _| {
-                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                        tx_buf.lock().unwrap().clear();
-                        denoiser = None;
-                        delayed_dry = None;
-                        return;
-                    }
-
-                    let mut b = tx_buf.lock().unwrap();
-                    for frame in data.chunks(input_channels.max(1)) {
-                        let avg = frame.iter().map(|&x| x as i32).sum::<i32>()
-                            / frame.len().max(1) as i32;
-                        b.push(avg.clamp(-32768, 32767) as i16);
-                    }
-                    while b.len() >= FRAME_SAMPLES {
-                        let mut processed = [0i16; FRAME_SAMPLES];
-                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                            let intensity = *noise_intensity.lock().unwrap();
-                            denoise_frame(
-                                &mut denoiser,
-                                &mut delayed_dry,
-                                &b[..FRAME_SAMPLES],
-                                intensity,
-                                &mut processed,
-                            );
-                        } else {
-                            denoiser = None;
-                            delayed_dry = None;
-                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
-                        }
-                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                        b.drain(..FRAME_SAMPLES);
-                    }
-                },
-                |e| app_log(&format!("Microphone stream error: {e}")),
-                None,
-            )
-        }
-        SampleFormat::U16 => {
-            let mut denoiser = None;
-            let mut delayed_dry = None;
-            let noise_enabled = Arc::clone(&noise_enabled);
-            let noise_intensity = Arc::clone(&noise_intensity);
-            input_device.build_input_stream(
-                input_config,
-                move |data: &[u16], _| {
-                    if muted_in.load(std::sync::atomic::Ordering::Relaxed) {
-                        tx_buf.lock().unwrap().clear();
-                        denoiser = None;
-                        delayed_dry = None;
-                        return;
-                    }
-
-                    let mut b = tx_buf.lock().unwrap();
-                    for frame in data.chunks(input_channels.max(1)) {
-                        let avg = frame.iter().map(|&x| x as i32 - 32768).sum::<i32>()
-                            / frame.len().max(1) as i32;
-                        b.push(avg.clamp(-32768, 32767) as i16);
-                    }
-                    while b.len() >= FRAME_SAMPLES {
-                        let mut processed = [0i16; FRAME_SAMPLES];
-                        if noise_enabled.load(std::sync::atomic::Ordering::Relaxed) {
-                            let intensity = *noise_intensity.lock().unwrap();
-                            denoise_frame(
-                                &mut denoiser,
-                                &mut delayed_dry,
-                                &b[..FRAME_SAMPLES],
-                                intensity,
-                                &mut processed,
-                            );
-                        } else {
-                            denoiser = None;
-                            delayed_dry = None;
-                            processed.copy_from_slice(&b[..FRAME_SAMPLES]);
-                        }
-                        push_packet(&tx_socket, remote_addr, &mut seq, &processed);
-                        b.drain(..FRAME_SAMPLES);
-                    }
-                },
-                |e| app_log(&format!("Microphone stream error: {e}")),
-                None,
-            )
-        }
-        _ => return Err("Format audio non pris en charge".into()),
-    }
-    .map_err(|e| format!("Ouverture du micro impossible: {e}"))?;
-
-    let output_config: StreamConfig = out_cfg.clone().into();
+    let input_stream = match input_format {
+            SampleFormat::F32 => input_device.build_input_stream(input_config,
+                move |data: &[f32], _| capture.write(data.chunks(input_channels.max(1)).map(|frame| {
+                    let average = frame.iter().copied().sum::<f32>() / frame.len().max(1) as f32;
+                    (average.clamp(-1.0, 1.0) * 32767.0) as i16
+                })), audio::error_callback(metrics.clone()), None),
+            SampleFormat::I16 => input_device.build_input_stream(input_config,
+                move |data: &[i16], _| capture.write(data.chunks(input_channels.max(1)).map(|frame| {
+                    (frame.iter().map(|sample| *sample as i32).sum::<i32>() / frame.len().max(1) as i32) as i16
+                })), audio::error_callback(metrics.clone()), None),
+            SampleFormat::U16 => input_device.build_input_stream(input_config,
+                move |data: &[u16], _| capture.write(data.chunks(input_channels.max(1)).map(|frame| {
+                    (frame.iter().map(|sample| *sample as i32 - 32768).sum::<i32>() / frame.len().max(1) as i32) as i16
+                })), audio::error_callback(metrics.clone()), None),
+            _ => return Err("Format d'entrée non pris en charge".into()),
+    }.map_err(|e| format!("Ouverture du microphone impossible: {e}"))?;
+    let output_format = out_cfg.sample_format();
+    let output_config: StreamConfig = out_cfg.into();
     let output_channels = output_config.channels as usize;
-    let rx_queue = Arc::new(Mutex::new(VecDeque::<i16>::with_capacity(
-        FRAME_SAMPLES * JITTER_MAX_FRAMES,
-    )));
-    let output_volume = Arc::clone(&volume);
-
-    let output_stream = match out_cfg.sample_format() {
-        SampleFormat::F32 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(
-                output_config,
-                move |data: &mut [f32], _| {
-                    let vol = *output_volume.lock().unwrap();
-                    if let Ok(mut queue) = q.try_lock() {
-                        for frame in data.chunks_mut(output_channels.max(1)) {
-                            let sample = next_playback_sample(&mut queue, &mut ready);
-                            let value = sample as f32 / 32768.0 * vol;
-                            for s in frame {
-                                *s = value;
-                            }
-                        }
-                    } else {
-                        data.fill(0.0);
-                    }
-                },
-                |e| app_log(&format!("Output stream error: {e}")),
-                None,
-            )
-        }
-        SampleFormat::I16 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(
-                output_config,
-                move |data: &mut [i16], _| {
-                    let vol = *output_volume.lock().unwrap();
-                    if let Ok(mut queue) = q.try_lock() {
-                        for frame in data.chunks_mut(output_channels.max(1)) {
-                            let sample = next_playback_sample(&mut queue, &mut ready);
-                            let value = (sample as f32 * vol).clamp(-32768.0, 32767.0) as i16;
-                            for s in frame {
-                                *s = value;
-                            }
-                        }
-                    } else {
-                        data.fill(0);
-                    }
-                },
-                |e| app_log(&format!("Output stream error: {e}")),
-                None,
-            )
-        }
-        SampleFormat::U16 => {
-            let q = Arc::clone(&rx_queue);
-            let mut ready = false;
-            output_device.build_output_stream(
-                output_config,
-                move |data: &mut [u16], _| {
-                    let vol = *output_volume.lock().unwrap();
-                    if let Ok(mut queue) = q.try_lock() {
-                        for frame in data.chunks_mut(output_channels.max(1)) {
-                            let sample = next_playback_sample(&mut queue, &mut ready);
-                            let value = (sample as f32 * vol + 32768.0).clamp(0.0, 65535.0) as u16;
-                            for s in frame {
-                                *s = value;
-                            }
-                        }
-                    } else {
-                        data.fill(32768);
-                    }
-                },
-                |e| app_log(&format!("Output stream error: {e}")),
-                None,
-            )
-        }
-        _ => return Err("Format de sortie non pris en charge".into()),
-    }
-    .map_err(|e| format!("Ouverture de la sortie impossible: {e}"))?;
-
-    // Start both device streams before spawning the UDP receive thread. If a
-    // device refuses to start, all sockets/streams are dropped here and the
-    // fixed audio port cannot be left occupied by an orphan receive thread.
-    input_stream
-        .play()
-        .map_err(|e| format!("Démarrage du micro impossible: {e}"))?;
-    output_stream
-        .play()
-        .map_err(|e| format!("Démarrage de la sortie impossible: {e}"))?;
-
-    let rx_queue_net = Arc::clone(&rx_queue);
-    let stop_net = Arc::clone(&stop);
-    let network = thread::spawn(move || {
-        let mut buf = [0u8; 4096];
-        let mut last_seq: Option<u32> = None;
-        let mut last_audio_packet_at: Option<Instant> = None;
-
-        while !stop_net.load(std::sync::atomic::Ordering::Relaxed) {
-            match rx.recv_from(&mut buf) {
-                Ok((n, sender)) => {
-                    if n >= 12 && &buf[..4] == PING_MAGIC {
-                        let mut pong = Vec::with_capacity(12);
-                        pong.extend_from_slice(PONG_MAGIC);
-                        pong.extend_from_slice(&buf[4..n.min(12)]);
-                        let _ = rx.send_to(&pong, sender);
-                        continue;
-                    }
-
-                    if sender.ip() != remote_addr.ip() {
-                        continue;
-                    }
-
-                    if let Some(packet) = read_packet(&buf[..n]) {
-                        let now = Instant::now();
-                        if let Some(prev) = last_seq {
-                            let delta = packet.seq.wrapping_sub(prev);
-                            if delta == 0 {
-                                // Exact duplicate: UDP can occasionally deliver the same
-                                // datagram twice, so there is nothing to play again.
-                                continue;
-                            }
-
-                            if delta > u32::MAX / 2 {
-                                // The remote sender starts its sequence counter at zero on
-                                // every audio reconnect. Previously, if only the remote side
-                                // reconnected, this receiver kept the old sequence number and
-                                // rejected the whole new stream as stale. That produced the
-                                // classic one-way-audio state until both PCs reconnected.
-                                //
-                                // A genuine UDP reordering is normally only a few packets.
-                                // Treat a large backwards jump as a restarted stream when the
-                                // new counter is near its beginning, or after a short silence.
-                                let silent_for = last_audio_packet_at
-                                    .map(|t| now.duration_since(t))
-                                    .unwrap_or(Duration::MAX);
-                                let remote_restarted = packet.seq < 256
-                                    || silent_for >= Duration::from_millis(500);
-
-                                if remote_restarted {
-                                    app_log(&format!(
-                                        "Remote audio stream restarted (seq {prev} -> {}), resynchronizing",
-                                        packet.seq
-                                    ));
-                                    if let Ok(mut q) = rx_queue_net.try_lock() {
-                                        q.clear();
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        last_seq = Some(packet.seq);
-                        last_audio_packet_at = Some(now);
-
-                        if let Ok(mut q) = rx_queue_net.try_lock() {
-                            q.extend(packet.samples);
-                            if q.len() > FRAME_SAMPLES * JITTER_MAX_FRAMES {
-                                let target = FRAME_SAMPLES * JITTER_TARGET_FRAMES;
-                                while q.len() > target {
-                                    q.pop_front();
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(1));
-                }
-                Err(e) => {
-                    app_log(&format!("Audio receive error: {e}"));
-                    break;
-                }
+    let volume = state.volume.clone();
+    let output_stream = match output_format {
+        SampleFormat::F32 => output_device.build_output_stream(output_config, move |data: &mut [f32], _| {
+            playback.receive();
+            let volume = f32::from_bits(volume.load(std::sync::atomic::Ordering::Relaxed));
+            for frame in data.chunks_mut(output_channels.max(1)) {
+                frame.fill((playback.next_sample() as f32 / 32768.0 * volume).clamp(-1.0, 1.0));
             }
+        }, audio::error_callback(metrics.clone()), None),
+        SampleFormat::I16 => output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
+            playback.receive();
+            let volume = f32::from_bits(volume.load(std::sync::atomic::Ordering::Relaxed));
+            for frame in data.chunks_mut(output_channels.max(1)) {
+                frame.fill((playback.next_sample() as f32 * volume).clamp(-32768.0, 32767.0) as i16);
+            }
+        }, audio::error_callback(metrics.clone()), None),
+        SampleFormat::U16 => output_device.build_output_stream(output_config, move |data: &mut [u16], _| {
+            playback.receive();
+            let volume = f32::from_bits(volume.load(std::sync::atomic::Ordering::Relaxed));
+            for frame in data.chunks_mut(output_channels.max(1)) {
+                frame.fill((playback.next_sample() as f32 * volume + 32768.0).clamp(0.0, 65535.0) as u16);
+            }
+        }, audio::error_callback(metrics.clone()), None),
+        _ => return Err("Format de sortie non pris en charge".into()),
+    }.map_err(|e| format!("Ouverture de la sortie impossible: {e}"))?;
+    // A failed device start cannot leave an orphan thread holding the audio port.
+    input_stream.play().map_err(|e| format!("Démarrage du micro impossible: {e}"))?;
+    output_stream.play().map_err(|e| format!("Démarrage de la sortie impossible: {e}"))?;
+    let tx_stop = stop.clone();
+    let tx_metrics = metrics.clone();
+    let muted = state.muted.clone();
+    let noise = state.noise_enabled.clone();
+    let intensity = state.noise_intensity.clone();
+    let tx_wake = wake.clone();
+    let transmit = thread::Builder::new().name("DuoVoice capture".into()).spawn(move || {
+        let _ = tx_wake.set(thread::current());
+        audio::transmit(capture_consumer, tx, remote_addr, tx_stop, muted, noise, intensity, tx_metrics);
+    }).map_err(|e| e.to_string())?;
+    let rx_stop = stop.clone();
+    let rx_metrics = metrics.clone();
+    let network = match thread::Builder::new().name("DuoVoice receive".into()).spawn(move || {
+        audio::receive(packet_producer, rx, remote_addr, rx_stop, rx_metrics);
+    }) {
+        Ok(worker) => worker,
+        Err(error) => {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            transmit.thread().unpark();
+            let _ = transmit.join();
+            return Err(error.to_string());
         }
-    });
-
+    };
     *state.remote.lock().unwrap() = Some(remote_addr);
     *state.engine.lock().unwrap() = Some(AudioEngine {
-        stop,
-        _input: input_stream,
-        _output: output_stream,
-        _network: network,
+        stop, input: Some(input_stream), output: Some(output_stream),
+        network: Some(network), transmit: Some(transmit), metrics,
     });
     app_log(&format!("Audio connected to {remote_addr}"));
     Ok(())
@@ -946,11 +686,8 @@ fn start_audio(
 
 fn stop_audio_inner(state: &State<'_, AudioState>) -> Result<(), String> {
     *state.remote.lock().unwrap() = None;
-    if let Some(engine) = state.engine.lock().unwrap().take() {
-        engine.stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        let _ = engine._network.join();
-        app_log("Audio disconnected");
-    }
+    let engine = state.engine.lock().unwrap().take();
+    if let Some(engine) = engine { drop(engine); app_log("Audio disconnected"); }
     Ok(())
 }
 
@@ -1000,7 +737,7 @@ fn set_noise_reduction(state: State<'_, AudioState>, enabled: bool, intensity: f
         return Err("Intensité de réduction de bruit invalide".into());
     }
     state.noise_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
-    *state.noise_intensity.lock().unwrap() = intensity.clamp(0.0, 1.0);
+    state.noise_intensity.store(intensity.clamp(0.0, 1.0).to_bits(), std::sync::atomic::Ordering::Relaxed);
     Ok(())
 }
 
@@ -1017,6 +754,7 @@ fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), 
 
 #[derive(Serialize)]
 struct AudioStatus {
+    diagnostics: Option<audio::Snapshot>,
     connected: bool,
     muted: bool,
     remote: Option<String>,
@@ -1024,8 +762,10 @@ struct AudioStatus {
 
 #[tauri::command]
 fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
+    let engine = state.engine.lock().unwrap();
     AudioStatus {
-        connected: state.engine.lock().unwrap().is_some(),
+        diagnostics: engine.as_ref().map(|engine| engine.metrics.snapshot()),
+        connected: engine.is_some(),
         muted: state.muted.load(std::sync::atomic::Ordering::Relaxed),
         remote: state.remote.lock().unwrap().map(|addr| addr.ip().to_string()),
     }
@@ -1039,7 +779,7 @@ fn set_volume(state: State<'_, AudioState>, volume: f32) -> Result<(), String> {
     if !volume.is_finite() {
         return Err("Volume invalide".into());
     }
-    *state.volume.lock().unwrap() = volume.clamp(0.0, 2.0);
+    state.volume.store(volume.clamp(0.0, 2.0).to_bits(), std::sync::atomic::Ordering::Relaxed);
     Ok(())
 }
 
@@ -1261,10 +1001,10 @@ fn main() {
         .manage(AudioState {
             engine: Mutex::new(None),
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
-            volume: Arc::new(Mutex::new(1.0)),
+            volume: Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits())),
             muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             noise_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            noise_intensity: Arc::new(Mutex::new(0.65)),
+            noise_intensity: Arc::new(std::sync::atomic::AtomicU32::new(0.65f32.to_bits())),
             remote: Arc::new(Mutex::new(None)),
         })
         .manage(Arc::new(DiscoveryState {

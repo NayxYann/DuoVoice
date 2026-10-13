@@ -1,4 +1,4 @@
-# DuoVoice 1.4.6
+# DuoVoice 1.4.7
 
 DuoVoice is a lightweight Windows LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
 
@@ -125,3 +125,11 @@ DuoVoice is intended for direct local-network communication. Voice traffic is ex
 ## Project
 
 DuoVoice is built with Tauri, Rust and a lightweight web frontend.
+
+## Audio under load (v1.4.7)
+
+Capture and playback use bounded, preallocated SPSC queues. Noise reduction and UDP transmission run on a separate worker rather than inside the device callback. Audio workers register with Windows MMCSS; device callbacks retain CPAL realtime scheduling.
+
+Playback reorders UDP frames within a bounded window. Its startup reserve begins at 40 ms, increases after starvation up to 180 ms and slowly decreases during stable playback. Short missing frames are concealed with a fading copy (up to 20 ms); extended interruptions rebuffer instead of repeating speech indefinitely. Backlogs are bounded and stale audio is trimmed after a load spike.
+
+The DV01 mono PCM protocol remains unchanged: compatible with older Windows releases and the Linux preview. Saturated network links or stalled audio drivers can still cause interruptions. Diagnostic counters are written every 30 seconds while connected and at disconnect in the existing local log; they are also included in `audio_status`.
