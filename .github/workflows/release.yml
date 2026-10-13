@@ -92,6 +92,7 @@ jobs:
           gh release download "$RELEASE_TAG" --pattern latest.json --dir release-metadata
           python - <<'PY'
           import json, os, subprocess
+          from urllib.parse import urlparse, unquote, quote
           tag = os.environ['RELEASE_TAG']
           version = tag.removeprefix('v')
           release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'isDraft,assets'], text=True))
@@ -103,8 +104,17 @@ jobs:
           assert manifest['version'].removeprefix('v') == version
           platform = manifest['platforms']['windows-x86_64']
           assert platform['signature']
-          assert '/releases/download/' + tag + '/' in platform['url']
           repo = os.environ['GITHUB_REPOSITORY']
+          # Draft assets have temporary 'untagged-*' URLs. Signatures cover the
+          # installer bytes, so normalize URLs before publishing the manifest.
+          for entry in manifest['platforms'].values():
+              name = unquote(urlparse(entry['url']).path.rsplit('/', 1)[-1])
+              assert name in names
+              entry['url'] = 'https://github.com/' + repo + '/releases/download/' + tag + '/' + quote(name)
+          assert '/releases/download/' + tag + '/' in platform['url']
+          with open('release-metadata/latest.json', 'w', encoding='utf-8') as file:
+              json.dump(manifest, file, indent=2)
+          subprocess.check_call(['gh', 'release', 'upload', tag, 'release-metadata/latest.json', '--clobber'])
           ref = 'repos/' + repo + '/git/refs/tags/' + tag
           read_ref = 'repos/' + repo + '/git/ref/tags/' + tag
           result = subprocess.run(['gh', 'api', read_ref], capture_output=True, text=True)
