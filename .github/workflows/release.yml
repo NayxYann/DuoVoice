@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: windows-release-${{ inputs.tag || 'v1.4.7' }}
@@ -59,7 +60,33 @@ jobs:
               raise RuntimeError(result.stderr)
           print('Release configuration ready')
           PY
+      - name: Reuse completed signed build when audio sources match
+        id: signed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          source = '5d581ff904e2b41d9ad51725f55a33611018f77c'
+          ready = False
+          try:
+              subprocess.check_call(['git', 'fetch', '--depth=1', 'origin', source])
+              same = subprocess.run(['git', 'diff', '--quiet', source, os.environ['GITHUB_SHA'], '--', '.', ':!.github/workflows/release.yml']).returncode == 0
+              jobs = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/38436967342/jobs'], text=True))['jobs']
+              built = any(step['name'] == 'Build and sign Windows installers' and step['conclusion'] == 'success' for job in jobs for step in job['steps'])
+              release = json.loads(subprocess.check_output(['gh', 'release', 'view', os.environ['RELEASE_TAG'], '--json', 'isDraft,assets'], text=True))
+              names = [asset['name'] for asset in release['assets']]
+              complete = 'latest.json' in names and all(any(name.endswith(extension) for name in names) for extension in ['.exe', '.exe.sig', '.msi', '.msi.sig'])
+              ready = same and built and release['isDraft'] and complete
+          except Exception as error:
+              print('A fresh signed build is required:', str(error))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('ready=' + str(ready).lower() + '\n')
+          print('Reusing signed installers' if ready else 'Building new signed installers')
+          PY
       - name: Build and sign Windows installers
+        if: steps.signed.outputs.ready != 'true'
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,10 +116,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download "$RELEASE_TAG" --pattern latest.json --dir release-metadata
+          gh release download "$RELEASE_TAG" --pattern latest.json --pattern "*.sig" --dir release-metadata
           python - <<'PY'
           import json, os, subprocess
-          from urllib.parse import urlparse, unquote, quote
+          from urllib.parse import quote
+          from pathlib import Path
           tag = os.environ['RELEASE_TAG']
           version = tag.removeprefix('v')
           branch = os.environ['GITHUB_REF_NAME']
@@ -106,16 +134,19 @@ jobs:
           assert any(name.endswith('.msi') for name in names)
           manifest = json.load(open('release-metadata/latest.json'))
           assert manifest['version'].removeprefix('v') == version
-          platform = manifest['platforms']['windows-x86_64']
-          assert platform['signature']
-          repo = os.environ['GITHUB_REPOSITORY']
-          # Draft assets have temporary 'untagged-*' URLs. Signatures cover the
-          # installer bytes, so normalize URLs before publishing the manifest.
-          for entry in manifest['platforms'].values():
-              name = unquote(urlparse(entry['url']).path.rsplit('/', 1)[-1])
-              assert name in names
-              entry['url'] = 'https://github.com/' + repo + '/releases/download/' + tag + '/' + quote(name)
-          assert '/releases/download/' + tag + '/' in platform['url']
+          # Construct public URLs from uploaded installer names. Draft asset URLs
+          # can be private API endpoints rather than final browser download URLs.
+          platforms = {}
+          for extension, keys in [('.exe', ['windows-x86_64', 'windows-x86_64-nsis']), ('.msi', ['windows-x86_64-msi'])]:
+              candidates = [name for name in names if name.endswith(extension) and version in name]
+              assert len(candidates) == 1, str(candidates)
+              name = candidates[0]
+              signature = Path('release-metadata', name + '.sig').read_text(encoding='utf-8').strip()
+              assert signature
+              entry = {'signature': signature, 'url': 'https://github.com/' + repo + '/releases/download/' + tag + '/' + quote(name)}
+              for key in keys:
+                  platforms[key] = entry
+          manifest['platforms'] = platforms
           with open('release-metadata/latest.json', 'w', encoding='utf-8') as file:
               json.dump(manifest, file, indent=2)
           subprocess.check_call(['gh', 'release', 'upload', tag, 'release-metadata/latest.json', '--clobber'])
