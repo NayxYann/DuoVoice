@@ -27,6 +27,7 @@ pub struct Metrics {
     trimmed: AtomicU64,
     reserve: AtomicU64,
     stream_errors: AtomicU64,
+    last_logged: AtomicU64,
 }
 
 #[derive(Serialize, Debug)]
@@ -46,6 +47,16 @@ pub struct Snapshot {
 }
 
 impl Metrics {
+    // Called by the UI status command: disk I/O must not stall an audio worker.
+    pub fn log_if_due(&self) {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .map(|time| time.as_secs()).unwrap_or(0);
+        let previous = self.last_logged.load(Ordering::Relaxed);
+        if now.saturating_sub(previous) >= 30
+            && self.last_logged.compare_exchange(previous, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            super::app_log(&format!("Audio diagnostics: {:?}", self.snapshot()));
+        }
+    }
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             received_packets: self.received.load(Ordering::Relaxed),
@@ -65,10 +76,7 @@ impl Metrics {
 }
 
 pub fn error_callback(metrics: Arc<Metrics>) -> impl FnMut(cpal::Error) + Send + 'static {
-    move |error| {
-        metrics.stream_errors.fetch_add(1, Ordering::Relaxed);
-        super::app_log(&format!("Audio device error: {error}"));
-    }
+    move |_error| { metrics.stream_errors.fetch_add(1, Ordering::Relaxed); }
 }
 
 pub struct Capture {
@@ -301,7 +309,6 @@ pub fn transmit(mut input: Consumer<i16>, socket: UdpSocket, remote: SocketAddr,
 pub fn receive(mut output: Producer<Packet>, socket: UdpSocket, remote: SocketAddr, stop: Arc<AtomicBool>, metrics: Arc<Metrics>) {
     let _priority = MultimediaPriority::new();
     let mut buffer = [0; 4096];
-    let mut last_log = Instant::now();
     while !stop.load(Ordering::Relaxed) {
         match socket.recv_from(&mut buffer) {
             Ok((length, sender)) => {
@@ -319,10 +326,6 @@ pub fn receive(mut output: Producer<Packet>, socket: UdpSocket, remote: SocketAd
             }
             Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => {},
             Err(error) => { super::app_log(&format!("Audio receive error: {error}")); break; }
-        }
-        if last_log.elapsed() >= Duration::from_secs(30) {
-            super::app_log(&format!("Audio diagnostics: {:?}", metrics.snapshot()));
-            last_log = Instant::now();
         }
     }
 }

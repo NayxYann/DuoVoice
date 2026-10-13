@@ -630,7 +630,7 @@ fn start_audio(
             playback.receive();
             let volume = f32::from_bits(volume.load(std::sync::atomic::Ordering::Relaxed));
             for frame in data.chunks_mut(output_channels.max(1)) {
-                frame.fill((playback.next_sample() as f32 / 32768.0 * volume).clamp(-1.0, 1.0));
+                frame.fill(playback.next_sample() as f32 / 32768.0 * volume);
             }
         }, audio::error_callback(metrics.clone()), None),
         SampleFormat::I16 => output_device.build_output_stream(output_config, move |data: &mut [i16], _| {
@@ -763,9 +763,13 @@ struct AudioStatus {
 #[tauri::command]
 fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
     let engine = state.engine.lock().unwrap();
+    let metrics = engine.as_ref().map(|engine| engine.metrics.clone());
+    let connected = engine.is_some();
+    drop(engine);
+    if let Some(metrics) = metrics.as_ref() { metrics.log_if_due(); }
     AudioStatus {
-        diagnostics: engine.as_ref().map(|engine| engine.metrics.snapshot()),
-        connected: engine.is_some(),
+        diagnostics: metrics.map(|metrics| metrics.snapshot()),
+        connected,
         muted: state.muted.load(std::sync::atomic::Ordering::Relaxed),
         remote: state.remote.lock().unwrap().map(|addr| addr.ip().to_string()),
     }

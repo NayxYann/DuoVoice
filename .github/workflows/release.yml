@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: windows-release-${{ inputs.tag || 'v1.4.7' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   RELEASE_TAG: ${{ inputs.tag || 'v1.4.7' }}
@@ -95,6 +95,10 @@ jobs:
           from urllib.parse import urlparse, unquote, quote
           tag = os.environ['RELEASE_TAG']
           version = tag.removeprefix('v')
+          branch = os.environ['GITHUB_REF_NAME']
+          repo = os.environ['GITHUB_REPOSITORY']
+          head = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repo + '/branches/' + branch], text=True))['commit']['sha']
+          assert head == os.environ['GITHUB_SHA'], 'A newer commit superseded this release build'
           release = json.loads(subprocess.check_output(['gh', 'release', 'view', tag, '--json', 'isDraft,assets'], text=True))
           assert release['isDraft']
           names = [asset['name'] for asset in release['assets']]
