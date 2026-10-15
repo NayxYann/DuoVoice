@@ -42,6 +42,8 @@ struct Peer {
 }
 
 struct AudioState {
+    // Serialize changes across windows; manual commands disarm startup automation.
+    startup_connection: Mutex<bool>,
     engine: Mutex<Option<AudioEngine>>,
     close_to_tray: std::sync::atomic::AtomicBool,
     volume: Arc<std::sync::atomic::AtomicU32>,
@@ -54,6 +56,7 @@ struct AudioState {
 struct DiscoveredPeer {
     peer: Peer,
     last_seen: Instant,
+    announced_at: Option<Instant>,
 }
 
 struct DiscoveryState {
@@ -112,6 +115,18 @@ fn list_peers(state: State<'_, Arc<DiscoveryState>>) -> Vec<Peer> {
     let mut peers = state.peers.lock().unwrap();
     peers.retain(|_, p| now.duration_since(p.last_seen) < Duration::from_secs(15));
     peers.values().map(|p| p.peer.clone()).collect()
+}
+
+#[tauri::command]
+fn list_startup_peers(state: State<'_, Arc<DiscoveryState>>) -> Vec<Peer> {
+    state.peers.lock().unwrap().values()
+        .filter(|p| p.announced_at.is_some_and(|seen| seen.elapsed() < Duration::from_secs(6)))
+        .map(|p| p.peer.clone()).collect()
+}
+
+#[tauri::command]
+fn cancel_startup_connection(state: State<'_, AudioState>) {
+    *state.startup_connection.lock().unwrap() = false;
 }
 
 #[tauri::command]
@@ -396,6 +411,7 @@ fn start_discovery(app_state: Arc<DiscoveryState>) {
                                 app_state.peers.lock().unwrap().insert(ip.clone(), DiscoveredPeer {
                                     peer: Peer { name: parts[1].to_string(), address: ip, port },
                                     last_seen: Instant::now(),
+                                    announced_at: Some(Instant::now()),
                                 });
                             }
                         }
@@ -419,7 +435,9 @@ fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Re
         return Err("Cette adresse IPv4 ne peut pas être utilisée".into());
     }
     let peer = Peer { name: format!("PC — {}", ip), address: ip.to_string(), port: AUDIO_PORT };
-    state.peers.lock().unwrap().insert(ip.to_string(), DiscoveredPeer { peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600) });
+    state.peers.lock().unwrap().entry(ip.to_string()).or_insert(DiscoveredPeer {
+        peer: peer.clone(), last_seen: Instant::now() + Duration::from_secs(3600), announced_at: None,
+    });
     Ok(peer)
 }
 
@@ -551,11 +569,33 @@ fn denoise_frame(
 #[tauri::command]
 fn start_audio(
     state: State<'_, AudioState>,
+    discovery: State<'_, Arc<DiscoveryState>>,
+    remote: String,
+    input: Option<String>,
+    output: Option<String>,
+    automatic: Option<bool>,
+) -> Result<Option<bool>, String> {
+    let mut allowed = state.startup_connection.lock().unwrap();
+    if automatic.unwrap_or(false) {
+        if !*allowed || state.engine.lock().unwrap().is_some() { return Ok(Some(false)); }
+        let available = discovery.peers.lock().unwrap().get(&remote)
+            .is_some_and(|peer| peer.announced_at.is_some_and(|seen| seen.elapsed() < Duration::from_secs(6)));
+        if !available { return Ok(None); }
+    } else {
+        *allowed = false;
+    }
+    start_audio_inner(&state, remote, input, output)?;
+    *allowed = false;
+    Ok(Some(true))
+}
+
+fn start_audio_inner(
+    state: &State<'_, AudioState>,
     remote: String,
     input: Option<String>,
     output: Option<String>,
 ) -> Result<(), String> {
-    stop_audio_inner(&state)?;
+    stop_audio_inner(state)?;
 
     let host = cpal::default_host();
     let input_device = choose_device(&host, input.as_deref(), true)?;
@@ -776,7 +816,11 @@ fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
 }
 
 #[tauri::command]
-fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> { stop_audio_inner(&state) }
+fn stop_audio(state: State<'_, AudioState>) -> Result<(), String> {
+    let mut allowed = state.startup_connection.lock().unwrap();
+    *allowed = false;
+    stop_audio_inner(&state)
+}
 
 #[tauri::command]
 fn set_volume(state: State<'_, AudioState>, volume: f32) -> Result<(), String> {
@@ -1003,6 +1047,7 @@ fn main() {
 
     let result = tauri::Builder::default()
         .manage(AudioState {
+            startup_connection: Mutex::new(true),
             engine: Mutex::new(None),
             close_to_tray: std::sync::atomic::AtomicBool::new(true),
             volume: Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits())),
@@ -1027,7 +1072,7 @@ fn main() {
             Some(vec!["--autostart"]),
         ))
         .invoke_handler(tauri::generate_handler![
-            list_devices, list_peers, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
+            list_devices, list_peers, list_startup_peers, cancel_startup_connection, add_manual_peer, get_client_name, set_client_name, set_tray_icon_enabled, set_tray_theme_icon, set_tray_scale, start_audio, stop_audio, audio_status, set_volume, set_mute, toggle_mute, measure_latency, set_noise_reduction, set_close_action, show_main_window, quit_app, open_project_github, install_version, hide_window_to_tray, log_client_error
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

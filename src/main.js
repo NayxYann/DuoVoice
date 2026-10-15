@@ -9,6 +9,8 @@ import "./style.css";
 import { COLOR_KEY, THEME_KEY, PALETTE, THEMES, applyThemeVariables, normalizeThemeName } from "./theme.js";
 import { LANGUAGE_KEY, getLanguage, setLanguage, initializeI18n, localeForLanguage } from "./i18n.js";
 
+import { createStartupFavorites } from "./startup-favorites.js";
+
 const $ = (id) => document.getElementById(id);
 let connected = false;
 let disconnecting = false;
@@ -21,6 +23,7 @@ const MUTE_KEY = "duovoice.muted";
 const NOISE_ENABLED_KEY = "duovoice.noiseEnabled";
 const NOISE_INTENSITY_KEY = "duovoice.noiseIntensity";
 const FAVORITES_KEY = "duovoice.favorites";
+const AUTO_FAVORITES_KEY = "duovoice.autoConnectFavorites";
 const SCALE_KEY = "duovoice.uiScale";
 const TRAY_SCALE_KEY = "duovoice.trayScale";
 const TRAY_ICON_KEY = "duovoice.trayIconEnabled";
@@ -28,7 +31,7 @@ const CLIENT_NAME_KEY = "duovoice.clientName";
 const LAST_UPDATE_KEY = "duovoice.lastUpdate";
 const DEFAULT_TRAY_ICON_ENABLED = true;
 const DEFAULT_CLOSE_ACTION = "tray";
-const FALLBACK_VERSION = "1.4.7";
+const FALLBACK_VERSION = "1.4.8";
 let appVersion = FALLBACK_VERSION;
 const BASE_WINDOW_WIDTH = 1080;
 const BASE_WINDOW_HEIGHT = 760;
@@ -514,7 +517,9 @@ async function installSelectedVersion() {
 function loadFavorites() {
   try {
     const raw = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
-    return Array.isArray(raw) ? raw.filter(f => f && f.address) : [];
+    return Array.isArray(raw) ? raw
+      .filter(f => f && typeof f.address === "string" && f.address.trim())
+      .map(f => ({ address: f.address, name: typeof f.name === "string" ? f.name : f.address })) : [];
   } catch { return []; }
 }
 
@@ -633,8 +638,7 @@ function loadAudioPreferences() {
   $("volume").value = boost ? savedVolume : Math.min(savedVolume, 100);
   updateVolumeUi();
   updateMuteUi(muted);
-  applyVolume();
-  invoke("set_mute", { muted }).catch(e => reportError("Mute restore", e));
+  return Promise.all([applyVolume(), invoke("set_mute", { muted }).catch(e => { reportError("Mute restore", e); throw e; })]);
 }
 
 function updateVolumeUi() {
@@ -650,7 +654,7 @@ function loadNoisePreferences() {
   $("noiseEnabled").checked = enabled;
   $("noiseIntensity").value = intensity;
   updateNoiseUi();
-  applyNoiseSettings();
+  return applyNoiseSettings();
 }
 
 function updateNoiseUi() {
@@ -670,9 +674,11 @@ async function applyNoiseSettings() {
   updateNoiseUi();
   try {
     await invoke("set_noise_reduction", { enabled, intensity });
+    return true;
   } catch (e) {
     reportError("Noise reduction", e);
     setDetails(`Réduction de bruit : ${e}`);
+    return false;
   }
 }
 
@@ -700,6 +706,7 @@ async function loadDevices() {
     if (savedOutput && [...output.options].some(o => o.value === savedOutput)) output.value = savedOutput;
     appliedInputDevice = input.value || null;
     appliedOutputDevice = output.value || null;
+    return true;
   } catch (e) { reportError("Audio devices", e); setDetails(`Audio indisponible : ${e}`); }
 }
 
@@ -774,6 +781,7 @@ async function updateLatency() {
 }
 
 async function connectToAddress(address) {
+  startupFavorites.stop();
   if (!address || disconnecting) return;
   const button = $("connect");
   button.disabled = true;
@@ -811,6 +819,7 @@ async function connectToAddress(address) {
 }
 
 async function disconnect() {
+  startupFavorites.stop();
   if (disconnecting) return;
   disconnecting = true;
   const oldPeer = connectedPeer;
@@ -1161,6 +1170,17 @@ $("autostart").addEventListener("change", async e => {
   }
 });
 
+$("autoConnectFavorites").checked = localStorage.getItem(AUTO_FAVORITES_KEY) === "true";
+$("autoConnectFavorites").addEventListener("change", () => {
+  const enabled = $("autoConnectFavorites").checked;
+  localStorage.setItem(AUTO_FAVORITES_KEY, String(enabled));
+  // Enabling takes effect on the next launch; disabling stops pending attempts.
+  if (!enabled) {
+    startupFavorites.stop();
+    invoke("cancel_startup_connection").catch(e => reportError("Cancel startup connection", e));
+  }
+});
+
 $("startHidden").checked = localStorage.getItem("duovoice.startHidden") === "true";
 const storedTrayIconPreference = localStorage.getItem(TRAY_ICON_KEY);
 $("trayIconEnabled").checked = storedTrayIconPreference === null
@@ -1315,11 +1335,41 @@ listen("audio-state-changed", refreshFromTray).catch(() => {});
 
 loadManualIps();
 renderFavorites();
-loadClientName();
-loadDevices();
+const startupFavorites = createStartupFavorites({
+  enabled: () => localStorage.getItem(AUTO_FAVORITES_KEY) === "true",
+  favorites: loadFavorites,
+  discover: () => invoke("list_startup_peers"),
+  connect: async address => {
+    const result = await invoke("start_audio", {
+      remote: address, input: $("input").value || null, output: $("output").value || null, automatic: true,
+    });
+    if (result === true) {
+      await refreshFromTray();
+      await emitTo("tray", "audio-state-changed").catch(() => {});
+    }
+    return result;
+  },
+  onError: (error, exhausted) => {
+    reportError("Startup favorite connection", error);
+    if (exhausted) $("autoConnectDetails").textContent = "Connexion automatique impossible. Vérifiez les périphériques audio ou connectez-vous manuellement.";
+  },
+});
+
+async function initializeStartupConnection() {
+  const results = await Promise.allSettled([loadClientName(), loadDevices(), loadAudioPreferences(), loadNoisePreferences()]);
+  // Never open the microphone before restoring devices, mute and noise settings.
+  if (results.some(result => result.status !== "fulfilled") || results[1].value !== true || results[3].value !== true) {
+    startupFavorites.stop();
+    return;
+  }
+  const poll = async () => {
+    await startupFavorites.tick();
+    if (startupFavorites.active) setTimeout(poll, 3000);
+  };
+  setTimeout(poll, 2000);
+}
+initializeStartupConnection().catch(e => reportError("Startup favorites", e));
 loadAutostart();
-loadAudioPreferences();
-loadNoisePreferences();
 initColors();
 loadPeers();
 setInterval(() => { if (!document.hidden) loadPeers(false); }, 3000);

@@ -3,6 +3,9 @@ export const DEFAULT_LANGUAGE = "en";
 export const SUPPORTED_LANGUAGES = ["en", "fr", "es", "de"];
 
 const STRINGS = {
+  "Connexion automatique aux favoris au démarrage": { en: "Automatically connect to favorites at startup", es: "Conectar automáticamente a favoritos al iniciar", de: "Beim Start automatisch mit Favoriten verbinden" },
+  "Au prochain lancement, connexion au premier favori détecté dans l’ordre d’ajout. Une seule liaison à la fois. Toute connexion ou déconnexion manuelle arrête l’automatisme jusqu’au prochain lancement.": { en: "On next launch, connect to the first detected favorite in the order added. One connection at a time. Any manual connection or disconnection stops automation until the next launch.", es: "En el próximo inicio, conectar al primer favorito detectado por orden de adición. Una conexión a la vez. Toda conexión o desconexión manual detiene la automatización hasta el próximo inicio.", de: "Beim nächsten Start mit dem ersten erkannten Favoriten in der Reihenfolge des Hinzufügens verbinden. Eine Verbindung gleichzeitig. Manuelles Verbinden oder Trennen beendet die Automatik bis zum nächsten Start." },
+  "Connexion automatique impossible. Vérifiez les périphériques audio ou connectez-vous manuellement.": { en: "Automatic connection failed. Check audio devices or connect manually.", es: "Falló la conexión automática. Comprueba los dispositivos de audio o conecta manualmente.", de: "Automatische Verbindung fehlgeschlagen. Audiogeräte prüfen oder manuell verbinden." },
   "Intercom local": { en: "Local intercom", es: "Intercomunicador local", de: "Lokale Gegensprechanlage" },
 
   "Ouvrir": { en: "Open", es: "Abrir", de: "Öffnen" },

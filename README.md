@@ -1,4 +1,4 @@
-# DuoVoice 1.4.7
+# DuoVoice 1.4.8
 
 DuoVoice is a lightweight Windows LAN intercom designed for fast, always-available voice communication between two computers on the same local network.
 
@@ -133,3 +133,28 @@ Capture and playback use bounded, preallocated SPSC queues. Noise reduction and 
 Playback reorders UDP frames within a bounded window. Its startup reserve begins at 40 ms, increases after starvation up to 180 ms and slowly decreases during stable playback. Short missing frames are concealed with a fading copy (up to 20 ms); extended interruptions rebuffer instead of repeating speech indefinitely. Backlogs are bounded and stale audio is trimmed after a load spike.
 
 The DV01 mono PCM protocol remains unchanged: compatible with older Windows releases and the Linux preview. Saturated network links or stalled audio drivers can still cause interruptions. Diagnostic counters are written periodically from status refreshes and at disconnect in the existing local log; disk logging stays outside the audio workers; they are also included in `audio_status`.
+
+## Startup favorites (v1.4.8)
+
+Enable **Automatically connect to favorites at startup** in Settings > Startup
+(default: off). The setting applies on the next launch, including launches minimized
+to the tray. DuoVoice waits for network discovery and restores audio devices, mute,
+volume and noise reduction before starting audio.
+
+Only one peer can be connected at a time. The first available favorite in the order
+added is selected. An offline favorite does not block other favorites. A manually
+entered IP is eligible only once DuoVoice actually detects an announcement from that
+address; a saved IP alone is not proof that a remote app is available.
+
+Connection changes from the main window and tray are serialized. Any manual connect
+or disconnect disarms automatic connection until the next launch, even if the manual
+attempt fails. Successful automatic connection also ends the startup session; this
+feature does not reconnect after a disconnection or switch to another favorite.
+Device errors allow at most three attempts per address, spaced by 5 then 15 seconds.
+Unavailable peers are waited for silently while the startup session remains active.
+Disabling the setting cancels pending attempts and leaves an active call running.
+
+The existing audio protocol is unchanged. Discovery confirms the remote app is
+running, not that a two-way audio call has been accepted. As with manual connection,
+the remote app must connect back to this PC (manually or using its own startup
+favorites setting). No remote microphone is activated without that machine's choice.

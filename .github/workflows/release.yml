@@ -2,11 +2,11 @@ name: Release Windows
 
 on:
   push:
-    branches: [windows-v1.4.7]
+    branches: [windows-v1.4.8]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Git tag to release (example: v1.4.7)'
+        description: 'Git tag to release (example: v1.4.8)'
         required: true
         type: string
 
@@ -15,11 +15,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: windows-release-${{ inputs.tag || 'v1.4.7' }}
+  group: windows-release-${{ inputs.tag || 'v1.4.8' }}
   cancel-in-progress: true
 
 env:
-  RELEASE_TAG: ${{ inputs.tag || 'v1.4.7' }}
+  RELEASE_TAG: ${{ inputs.tag || 'v1.4.8' }}
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
@@ -60,33 +60,7 @@ jobs:
               raise RuntimeError(result.stderr)
           print('Release configuration ready')
           PY
-      - name: Reuse completed signed build when audio sources match
-        id: signed
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python - <<'PY'
-          import json, os, subprocess
-          source = '5d581ff904e2b41d9ad51725f55a33611018f77c'
-          ready = False
-          try:
-              subprocess.check_call(['git', 'fetch', '--depth=1', 'origin', source])
-              same = subprocess.run(['git', 'diff', '--quiet', source, os.environ['GITHUB_SHA'], '--', '.', ':!.github/workflows/release.yml']).returncode == 0
-              jobs = json.loads(subprocess.check_output(['gh', 'api', 'repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/38436967342/jobs'], text=True))['jobs']
-              built = any(step['name'] == 'Build and sign Windows installers' and step['conclusion'] == 'success' for job in jobs for step in job['steps'])
-              release = json.loads(subprocess.check_output(['gh', 'release', 'view', os.environ['RELEASE_TAG'], '--json', 'isDraft,assets'], text=True))
-              names = [asset['name'] for asset in release['assets']]
-              complete = 'latest.json' in names and all(any(name.endswith(extension) for name in names) for extension in ['.exe', '.exe.sig', '.msi', '.msi.sig'])
-              ready = same and built and release['isDraft'] and complete
-          except Exception as error:
-              print('A fresh signed build is required:', str(error))
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('ready=' + str(ready).lower() + '\n')
-          print('Reusing signed installers' if ready else 'Building new signed installers')
-          PY
       - name: Build and sign Windows installers
-        if: steps.signed.outputs.ready != 'true'
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,14 +69,16 @@ jobs:
           releaseCommitish: ${{ github.sha }}
           releaseName: DuoVoice ${{ env.RELEASE_TAG }}
           releaseBody: |
-            Mise à jour Windows : amélioration du moteur audio lorsque le CPU ou le réseau est fortement sollicité.
+            Mise à jour Windows : connexion automatique aux favoris au démarrage.
 
-            - Réduction de bruit et envoi réseau déplacés hors des callbacks audio.
-            - Files audio préallouées sans verrou et priorité multimédia des workers Windows.
-            - Buffer adaptatif de 40 à 180 ms, remise en ordre des paquets et atténuation des pertes brèves.
-            - Backlogs audio limités et compteurs de diagnostic dans le journal local.
+            - Option désactivée par défaut dans Paramètres > Démarrage, appliquée au prochain lancement.
+            - Connexion au premier favori détecté dans l’ordre d’ajout, y compris en démarrage minimisé.
+            - Restauration des périphériques et réglages audio avant la connexion.
+            - Tentatives espacées et limitées ; priorité aux actions manuelles dans l’application et le systray.
+            - Une seule liaison à la fois, sans reconnexion forcée après une déconnexion.
 
-            Le protocole réseau reste compatible avec les versions Windows précédentes et la version Linux de développement.
+            Chaque ordinateur doit se connecter à son correspondant, manuellement ou avec cette option activée.
+            Le protocole réseau reste compatible avec les versions précédentes.
             Installateurs Windows EXE/MSI et fichiers de mise à jour signés inclus.
           releaseDraft: true
           prerelease: false
