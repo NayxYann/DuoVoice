@@ -225,6 +225,10 @@ fn spawn(
     // starts (notably during Wayland session startup). Keep the SNI item alive
     // and let ksni reconnect when the watcher appears instead of failing the
     // initial tray setup permanently.
+    // ksni does not call watcher_online for a successful initial registration,
+    // so treat spawn as available unless it reports an offline state. This
+    // keeps KDE Plasma from being misreported as tray-less at normal startup.
+    available.store(true, Ordering::Relaxed);
     match (LinuxTray {
         app: app.clone(),
         language,
@@ -294,7 +298,6 @@ pub fn configure_linux_tray_impl(
     } else if let Some(handle) = handle.take() {
         state.available.store(false, Ordering::Relaxed);
         handle.shutdown().wait();
-        super::show_main_window_inner(&app, false)?;
     }
     state.enabled.store(enabled, Ordering::Relaxed);
     Ok(can_hide(&app))
