@@ -22,6 +22,7 @@ let devices = { inputs:[], outputs:[] };
 let busy = false;
 let polling = false;
 let trayAvailable = false;
+let trayConfiguredAt = Date.now();
 let devicesRefreshAt = 0;
 let connectionRevision = 0;
 const t = key => strings[prefs.language][key] || key;
@@ -137,6 +138,11 @@ async function poll() {
 }
 async function refreshTrayAvailability() {
   const startup = await invoke("linux_startup");
+  if (startup.tray_available) {
+    if ($("message").textContent === t("noTray")) message();
+  } else if (prefs.trayEnabled && Date.now() - trayConfiguredAt > 8000) {
+    message(t("noTray"));
+  }
   if (trayAvailable !== startup.tray_available) {
     trayAvailable = startup.tray_available;
     await invoke("set_close_action",{action:prefs.closeToTray && trayAvailable ? "tray" : "quit"});
@@ -145,11 +151,11 @@ async function refreshTrayAvailability() {
   }
 }
 async function configureTray() {
+  trayConfiguredAt = Date.now();
   trayAvailable = await invoke("configure_linux_tray",{enabled:prefs.trayEnabled,language:prefs.language});
   await invoke("set_close_action",{action:prefs.closeToTray && trayAvailable ? "tray" : "quit"});
   $("closeToTray").disabled = !trayAvailable;
   $("startHidden").disabled = !trayAvailable;
-  if (prefs.trayEnabled && !trayAvailable) message(t("noTray"));
 }
 $("mainTab").onclick = () => tab(false); $("settingsTab").onclick = () => tab(true);
 $("nameForm").addEventListener("submit",safe(async event => {

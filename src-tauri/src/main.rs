@@ -1192,6 +1192,46 @@ fn main() {
 /// Linux gets its own app entry point and window configuration. The existing
 /// Windows entry point and audio engine remain the path used by Windows builds.
 #[cfg(target_os = "linux")]
+#[tauri::command]
+fn list_linux_devices() -> Result<linux::Devices, String> {
+    linux::list_linux_devices_impl()
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn linux_desktop() -> &'static str {
+    linux::linux_desktop_impl()
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn linux_startup(app: tauri::AppHandle) -> linux::Startup {
+    linux::linux_startup_impl(app)
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn configure_linux_tray(
+    app: tauri::AppHandle,
+    enabled: bool,
+    language: String,
+) -> Result<bool, String> {
+    linux::configure_linux_tray_impl(app, enabled, language)
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn linux_autostart_enabled() -> Result<bool, String> {
+    linux::linux_autostart_enabled_impl()
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    linux::set_linux_autostart_impl(app, enabled)
+}
+
+#[cfg(target_os = "linux")]
 pub fn run_linux() {
     app_log("=== DuoVoice Linux starting ===");
     let Some(instance_listener) = acquire_single_instance() else {
@@ -1221,12 +1261,12 @@ pub fn run_linux() {
             ),
         }))
         .invoke_handler(tauri::generate_handler![
-            linux::list_linux_devices,
-            linux::linux_desktop,
-            linux::linux_startup,
-            linux::configure_linux_tray,
-            linux::linux_autostart_enabled,
-            linux::set_linux_autostart,
+            list_linux_devices,
+            linux_desktop,
+            linux_startup,
+            configure_linux_tray,
+            linux_autostart_enabled,
+            set_linux_autostart,
             list_peers,
             add_manual_peer,
             get_client_name,
