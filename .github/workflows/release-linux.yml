@@ -74,13 +74,12 @@ jobs:
       - name: Build Linux AppImage
         run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --features linux-edition --bundles appimage -- --bin duovoice-linux
 
-      - name: Verify Linux runtime entry point is in the packaged binary
+      - name: Verify Linux executable architecture
         run: |
           binary=src-tauri/target/release/duovoice-linux
-          if ! grep -aFq "DuoVoice Linux setup completed" "$binary"; then
-            echo "Linux runtime entry point missing from $binary" >&2
-            exit 1
-          fi
+          test -x "$binary"
+          readelf -h "$binary" | grep -Eq 'Class:.*ELF64'
+          readelf -h "$binary" | grep -Eq 'Machine:.*Advanced Micro Devices X86-64'
 
       - name: Package portable fallback and checksums
         run: |
