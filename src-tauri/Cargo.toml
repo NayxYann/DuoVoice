@@ -1,11 +1,20 @@
 [package]
 name = "duovoice"
 version = "1.4.8"
+default-run = "duovoice"
 description = "Low-latency LAN intercom for Windows"
 authors = ["DuoVoice"]
 edition = "2021"
 rust-version = "1.90"
 build = "build.rs"
+
+[[bin]]
+name = "duovoice-linux"
+path = "src/linux_main.rs"
+required-features = ["linux-edition"]
+
+[features]
+linux-edition = []
 
 [build-dependencies]
 tauri-build = { version = "=2.7.1", features = [] }
@@ -23,3 +32,8 @@ nnnoiseless = "0.5.2"
 
 rtrb = "=0.4.0"
 socket2 = "0.6"
+
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { version = "0.18.2", features = ["pulseaudio"] }
+ksni = { version = "0.3.3", default-features = false, features = ["blocking", "async-io"] }

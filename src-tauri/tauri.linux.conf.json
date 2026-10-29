@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "mainBinaryName": "duovoice-linux",
+  "build": {
+    "features": ["linux-edition"]
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "DuoVoice",
+      "url": "linux.html",
+      "width": 800,
+      "height": 760,
+      "minWidth": 560,
+      "minHeight": 600,
+      "resizable": true,
+      "decorations": true,
+      "visible": true
+    }]
+  },
+  "bundle": {
+    "targets": ["appimage"],
+    "createUpdaterArtifacts": false
+  }
+}

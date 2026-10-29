@@ -18,6 +18,8 @@ use tauri::{
 };
 use tauri_plugin_updater::UpdaterExt;
 mod audio;
+#[cfg(target_os = "linux")]
+mod linux;
 
 const DISCOVERY_PORT: u16 = 39471;
 const AUDIO_PORT: u16 = 39472;
@@ -442,6 +444,12 @@ fn add_manual_peer(state: State<'_, Arc<DiscoveryState>>, address: String) -> Re
 }
 
 fn choose_device(host: &cpal::Host, name: Option<&str>, input: bool) -> Result<cpal::Device, String> {
+    #[cfg(target_os = "linux")]
+    if let Some(target) = name {
+        let id = target.parse::<cpal::DeviceId>().map_err(|e| e.to_string())?;
+        return host.device_by_id(&id).ok_or_else(|| "Périphérique audio indisponible".into());
+    }
+
     if let Some(target) = name {
         let devices = if input { host.input_devices() } else { host.output_devices() };
         if let Ok(mut it) = devices {
@@ -597,6 +605,9 @@ fn start_audio_inner(
 ) -> Result<(), String> {
     stop_audio_inner(state)?;
 
+    #[cfg(target_os = "linux")]
+    let host = linux::audio_host()?;
+    #[cfg(not(target_os = "linux"))]
     let host = cpal::default_host();
     let input_device = choose_device(&host, input.as_deref(), true)?;
     let output_device = choose_device(&host, output.as_deref(), false)?;
@@ -1175,5 +1186,104 @@ fn main() {
     match result {
         Ok(()) => app_log("DuoVoice exited normally"),
         Err(e) => app_log(&format!("DuoVoice startup error: {e}")),
+    }
+}
+
+/// Linux gets its own app entry point and window configuration. The existing
+/// Windows entry point and audio engine remain the path used by Windows builds.
+#[cfg(target_os = "linux")]
+pub fn run_linux() {
+    app_log("=== DuoVoice Linux starting ===");
+    let Some(instance_listener) = acquire_single_instance() else {
+        app_log("Another DuoVoice instance is already running; requesting focus and exiting.");
+        return;
+    };
+    let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
+
+    let result = tauri::Builder::default()
+        .manage(AudioState {
+            startup_connection: Mutex::new(false),
+            engine: Mutex::new(None),
+            close_to_tray: std::sync::atomic::AtomicBool::new(false),
+            volume: Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits())),
+            muted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            noise_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            noise_intensity: Arc::new(std::sync::atomic::AtomicU32::new(0.65f32.to_bits())),
+            remote: Arc::new(Mutex::new(None)),
+        })
+        .manage(Arc::new(DiscoveryState {
+            peers: Mutex::new(HashMap::new()),
+            local_name: Mutex::new(
+                hostname::get().ok()
+                    .and_then(|h| h.into_string().ok())
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or_else(|| "DuoVoice".into())
+            ),
+        }))
+        .invoke_handler(tauri::generate_handler![
+            linux::list_linux_devices,
+            linux::linux_desktop,
+            linux::linux_startup,
+            linux::configure_linux_tray,
+            linux::linux_autostart_enabled,
+            linux::set_linux_autostart,
+            list_peers,
+            add_manual_peer,
+            get_client_name,
+            set_client_name,
+            start_audio,
+            stop_audio,
+            audio_status,
+            set_volume,
+            set_mute,
+            toggle_mute,
+            measure_latency,
+            set_noise_reduction,
+            set_close_action,
+            show_main_window,
+            quit_app,
+            open_project_github,
+            hide_window_to_tray,
+            log_client_error
+        ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                let to_tray = window.state::<AudioState>().close_to_tray.load(std::sync::atomic::Ordering::Relaxed)
+                    && linux::can_hide(app);
+                if to_tray {
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    app.exit(0);
+                }
+            }
+        })
+        .setup(move |app| {
+            let discovery = app.state::<Arc<DiscoveryState>>().inner().clone();
+            start_discovery(discovery);
+
+            let focus_app = app.handle().clone();
+            thread::spawn(move || {
+                for stream in instance_listener.incoming() {
+                    if stream.is_ok() {
+                        if let Err(error) = show_main_window_inner(&focus_app, false) {
+                            app_log(&format!("Single-instance focus error: {error}"));
+                        }
+                    }
+                }
+            });
+
+            linux::setup(app.handle(), launched_from_autostart);
+            let tray_available = linux::can_hide(app.handle());
+            app.state::<AudioState>().close_to_tray.store(tray_available, std::sync::atomic::Ordering::Relaxed);
+            app_log("DuoVoice Linux setup completed");
+            Ok(())
+        })
+        .run(tauri::generate_context!());
+
+    match result {
+        Ok(()) => app_log("DuoVoice Linux exited normally"),
+        Err(error) => app_log(&format!("DuoVoice Linux startup error: {error}")),
     }
 }

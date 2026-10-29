@@ -1,0 +1,103 @@
+name: Release Linux Preview
+
+on:
+  push:
+    tags:
+      - linux-v*-preview.*
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      - name: Verify Linux preview tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          expected="linux-v${version}-preview.1"
+          if [[ "$RELEASE_TAG" != "$expected" ]]; then
+            echo "Expected tag $expected, received $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libasound2-dev \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            libpulse-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf \
+            pkg-config
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check Linux preference helpers
+        run: node --test tests/linux-state.test.mjs
+
+      - name: Build Linux frontend
+        env:
+          TAURI_ENV_PLATFORM: linux
+        run: npm run build
+
+      - name: Test Linux Rust commands and shared audio engine
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features linux-edition --bin duovoice-linux
+
+      - name: Build Linux AppImage
+        run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --bundles appimage -- --bin duovoice-linux
+
+      - name: Package portable fallback and checksums
+        run: |
+          bash scripts/package-linux-portable.sh
+          cd src-tauri/target/release/bundle/appimage
+          sha256sum *.AppImage *-portable.tar.gz > SHA256SUMS
+
+      - name: Publish Linux preview without changing Windows releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          title="DuoVoice Linux v${version} Preview 1"
+          notes=$(mktemp)
+          cat > "$notes" <<'EOF'
+          Linux preview for KDE Plasma and GNOME. It is published as a prerelease under a Linux-only tag, so the Windows stable release and its updater manifest remain unchanged.
+
+          This preview uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio) with ALSA fallback. The native tray is optional; if the desktop does not expose a StatusNotifier tray, DuoVoice stays usable from its main window.
+
+          Make the AppImage executable before launching it. If FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. See the Linux preview section in the repository README for supported baseline and network ports.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --prerelease \
+            --title "$title" \
+            --notes-file "$notes" \
+            src-tauri/target/release/bundle/appimage/*.AppImage \
+            src-tauri/target/release/bundle/appimage/*-portable.tar.gz \
+            src-tauri/target/release/bundle/appimage/SHA256SUMS

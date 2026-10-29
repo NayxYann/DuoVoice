@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "linux",
+  "description": "Linux main window without Windows updater permissions",
+  "platforms": ["linux"],
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-hide"]
+}

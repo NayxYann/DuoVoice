@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DuoVoice</title></head>
+<body>
+  <header><div><h1>DuoVoice <small id="version"></small></h1><p data-i18n="subtitle">Intercom sur le réseau local</p></div><span id="status" class="status" role="status"></span></header>
+  <nav aria-label="Navigation"><button id="mainTab" class="active" data-i18n="main">Connexion et audio</button><button id="settingsTab" data-i18n="settings">Paramètres</button></nav>
+  <div id="message" role="alert" hidden></div>
+  <main>
+    <section id="mainPage">
+      <fieldset><legend data-i18n="identity">Cet ordinateur</legend>
+        <form id="nameForm" class="row"><label for="name" data-i18n="name">Nom de la machine</label><input id="name" maxlength="32" required autocomplete="off"><button data-i18n="save">Enregistrer</button></form>
+      </fieldset>
+      <fieldset><legend data-i18n="computers">Ordinateurs distants</legend>
+        <div class="section-heading"><p data-i18n="discoveryHelp">Ouvre DuoVoice sur les deux ordinateurs, sur le même réseau.</p><button id="refresh" data-i18n="refresh">Actualiser</button></div>
+        <ul id="peers" aria-live="polite"></ul>
+        <form id="ipForm" class="row"><label for="ip" data-i18n="manualIp">Adresse IPv4 manuelle</label><input id="ip" placeholder="192.168.1.20" required autocomplete="off" inputmode="decimal"><button data-i18n="connect">Connecter</button></form>
+        <div class="connection-actions"><span id="latency"></span><button id="disconnect" class="danger" data-i18n="disconnect" disabled>Déconnecter</button></div>
+      </fieldset>
+      <fieldset><legend data-i18n="devices">Périphériques audio</legend>
+        <div class="form-grid"><label for="input" data-i18n="input">Entrée — microphone</label><select id="input"></select><label for="output" data-i18n="output">Sortie — écouteurs / haut-parleurs</label><select id="output"></select></div>
+        <p class="hint" data-i18n="deviceHelp">Les périphériques sont actualisés automatiquement. Les moniteurs de sortie sont masqués.</p>
+      </fieldset>
+      <fieldset><legend data-i18n="audio">Réglages audio</legend>
+        <label class="check"><input id="mute" type="checkbox"><span data-i18n="mute">Couper mon microphone</span></label>
+        <div class="slider-row"><label for="volume" data-i18n="volume">Volume reçu</label><input id="volume" type="range" min="0" max="100" step="1"><output id="volumeValue" for="volume"></output></div>
+        <label class="check"><input id="boost" type="checkbox"><span data-i18n="boost">Autoriser l’amplification jusqu’à 200 %</span></label>
+        <hr>
+        <label class="check"><input id="noise" type="checkbox"><span data-i18n="noise">Réduction de bruit du microphone</span></label>
+        <div class="slider-row"><label for="intensity" data-i18n="intensity">Intensité</label><input id="intensity" type="range" min="0" max="100" step="1"><output id="intensityValue" for="intensity"></output></div>
+      </fieldset>
+    </section>
+    <section id="settingsPage" hidden>
+      <fieldset><legend data-i18n="appearance">Interface</legend><div class="form-grid"><label for="language" data-i18n="language">Langue</label><select id="language"><option value="fr">Français</option><option value="en">English</option></select></div><p class="hint" data-i18n="themeHelp">Le thème clair ou sombre suit les préférences du système.</p></fieldset>
+      <fieldset><legend data-i18n="startup">Démarrage et fermeture</legend>
+        <label class="check"><input id="autostart" type="checkbox"><span data-i18n="autostart">Lancer DuoVoice à l’ouverture de session</span></label>
+        <label class="check"><input id="startHidden" type="checkbox"><span data-i18n="startHidden">Démarrer réduit dans le tray</span></label>
+        <label class="check"><input id="trayEnabled" type="checkbox"><span data-i18n="trayEnabled">Afficher l’icône dans le tray</span></label>
+        <label class="check"><input id="closeToTray" type="checkbox"><span data-i18n="closeToTray">Fermer la fenêtre réduit DuoVoice dans le tray</span></label>
+        <p class="hint" data-i18n="trayHelp">Sans tray disponible, la fenêtre reste accessible et sa fermeture quitte l’application.</p>
+      </fieldset>
+      <fieldset><legend data-i18n="about">À propos</legend><p data-i18n="aboutText">DuoVoice pour Linux · compatible avec DuoVoice Windows sur le réseau local.</p><p class="hint" data-i18n="updates">Cette version n’intègre pas de mise à jour automatique. Remplace l’AppImage pour changer de version.</p><button id="quit" class="danger" data-i18n="quit">Quitter DuoVoice</button></fieldset>
+    </section>
+  </main>
+  <script type="module" src="/src/linux.js"></script>
+</body>
+</html>
