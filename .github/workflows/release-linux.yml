@@ -72,14 +72,28 @@ jobs:
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features linux-edition --bin duovoice-linux
 
       - name: Build Linux AppImage
-        run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --features linux-edition --bundles appimage -- --bin duovoice-linux
-
-      - name: Verify Linux executable architecture
         run: |
-          binary=src-tauri/target/release/duovoice-linux
+          cargo build --locked --manifest-path src-tauri/Cargo.toml --release --features linux-edition --bin duovoice-linux
+          npm run tauri -- bundle --config src-tauri/tauri.linux.conf.json --bundles appimage
+
+      - name: Verify Linux commands in the packaged binary
+        run: |
+          appimage=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          test "${#appimage[@]}" -eq 1
+          chmod +x "${appimage[0]}"
+          workdir=$(mktemp -d)
+          trap 'rm -rf "$workdir"' EXIT
+          (cd "$workdir" && "${GITHUB_WORKSPACE}/${appimage[0]}" --appimage-extract >/dev/null)
+          binary="$workdir/squashfs-root/usr/bin/duovoice-linux"
           test -x "$binary"
           readelf -h "$binary" | grep -Eq 'Class:.*ELF64'
           readelf -h "$binary" | grep -Eq 'Machine:.*Advanced Micro Devices X86-64'
+          for marker in "DuoVoice Linux starting" "list_linux_devices" "configure_linux_tray"; do
+            if ! grep -aFq "$marker" "$binary"; then
+              echo "Linux runtime command missing from packaged binary: $marker" >&2
+              exit 1
+            fi
+          done
 
       - name: Package portable fallback and checksums
         run: |
