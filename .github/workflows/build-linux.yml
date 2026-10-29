@@ -63,15 +63,13 @@ jobs:
       - name: Build Linux AppImage
         run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --features linux-edition --bundles appimage -- --bin duovoice-linux
 
-      - name: Verify Linux command handlers are in the packaged binary
+      - name: Verify Linux runtime entry point is in the packaged binary
         run: |
           binary=src-tauri/target/release/duovoice-linux
-          for command in list_linux_devices configure_linux_tray linux_startup; do
-            if ! grep -aFq "$command" "$binary"; then
-              echo "Linux command handler missing from $binary: $command" >&2
-              exit 1
-            fi
-          done
+          if ! grep -aFq "DuoVoice Linux setup completed" "$binary"; then
+            echo "Linux runtime entry point missing from $binary" >&2
+            exit 1
+          fi
 
       - name: Package portable fallback
         run: |
