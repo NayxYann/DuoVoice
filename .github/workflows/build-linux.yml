@@ -96,7 +96,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./package.json').version")
-          tag="linux-v${version}-preview.4"
+          tag="linux-v${version}-preview.5"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Linux preview $tag already exists; skipping publication."
             exit 0
@@ -104,7 +104,7 @@ jobs:
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "DuoVoice Linux v${version} Preview 4" \
+            --title "DuoVoice Linux v${version} Preview 5" \
             --notes "Linux preview for KDE Plasma and GNOME. It does not replace the Windows stable release or updater manifest. Requires a PulseAudio-compatible service (PipeWire-Pulse or PulseAudio), with ALSA fallback. The tray is optional. Make the AppImage executable; the portable archive is available when FUSE is unavailable. See the Linux preview section in README for requirements and network ports." \
             src-tauri/target/release/bundle/appimage/*.AppImage \
             src-tauri/target/release/bundle/appimage/*-portable.tar.gz \

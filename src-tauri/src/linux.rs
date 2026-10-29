@@ -63,6 +63,17 @@ fn is_capture_source(id: &str) -> bool {
     !id.ends_with(".monitor")
 }
 
+fn tray_icon_argb(rgba: &[u8]) -> Vec<u8> {
+    let background = rgba.get(..3).map(|p| [p[0], p[1], p[2]]);
+    rgba.chunks_exact(4)
+        .flat_map(|p| {
+            let rgb = [p[0], p[1], p[2]];
+            let alpha = if Some(rgb) == background { 0 } else { p[3] };
+            [alpha, p[0], p[1], p[2]]
+        })
+        .collect()
+}
+
 #[derive(Serialize)]
 pub struct Device {
     id: String,
@@ -158,11 +169,10 @@ impl ksni::Tray for LinuxTray {
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         let image = tauri::include_image!("icons/icon.png");
-        let data = image
-            .rgba()
-            .chunks_exact(4)
-            .flat_map(|p| [p[3], p[0], p[1], p[2]])
-            .collect();
+        // The app icon has a solid dark canvas. StatusNotifier hosts place
+        // this pixmap on the panel, so make its corner color transparent to
+        // keep the DuoVoice mark visible in both light and dark Plasma themes.
+        let data = tray_icon_argb(image.rgba());
         vec![ksni::Icon {
             width: image.width() as i32,
             height: image.height() as i32,
@@ -305,7 +315,7 @@ pub fn configure_linux_tray_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::is_capture_source;
+    use super::{is_capture_source, tray_icon_argb};
     #[test]
     fn excludes_monitor_sources_but_keeps_microphones_and_virtual_capture() {
         assert!(!is_capture_source(
@@ -316,6 +326,15 @@ mod tests {
         ));
         assert!(is_capture_source("alsa_input.usb.microphone"));
         assert!(is_capture_source("noise_cancelled_microphone"));
+    }
+
+    #[test]
+    fn status_notifier_icon_uses_transparent_background_and_argb_order() {
+        let rgba = [24, 24, 24, 255, 235, 235, 235, 255];
+        assert_eq!(
+            tray_icon_argb(&rgba),
+            [0, 24, 24, 24, 255, 235, 235, 235]
+        );
     }
 }
 
