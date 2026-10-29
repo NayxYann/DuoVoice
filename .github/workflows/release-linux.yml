@@ -67,10 +67,10 @@ jobs:
         run: npm run build
 
       - name: Test Linux Rust commands and shared audio engine
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features linux-edition --bin duovoice-linux
 
       - name: Build Linux AppImage
-        run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --bundles appimage
+        run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --bundles appimage -- --bin duovoice-linux
 
       - name: Package portable fallback and checksums
         run: |
