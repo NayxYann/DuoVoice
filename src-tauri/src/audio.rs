@@ -27,6 +27,7 @@ pub struct Metrics {
     trimmed: AtomicU64,
     reserve: AtomicU64,
     stream_errors: AtomicU64,
+    failed: AtomicBool,
     last_logged: AtomicU64,
 }
 
@@ -47,6 +48,9 @@ pub struct Snapshot {
 }
 
 impl Metrics {
+    pub fn failed(&self) -> bool {
+        self.failed.load(Ordering::Relaxed)
+    }
     // Called by the UI status command: disk I/O must not stall an audio worker.
     pub fn log_if_due(&self) {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
@@ -76,7 +80,10 @@ impl Metrics {
 }
 
 pub fn error_callback(metrics: Arc<Metrics>) -> impl FnMut(cpal::Error) + Send + 'static {
-    move |_error| { metrics.stream_errors.fetch_add(1, Ordering::Relaxed); }
+    move |_error| {
+        metrics.stream_errors.fetch_add(1, Ordering::Relaxed);
+        metrics.failed.store(true, Ordering::Relaxed);
+    }
 }
 
 pub struct Capture {
@@ -325,8 +332,25 @@ pub fn receive(mut output: Producer<Packet>, socket: UdpSocket, remote: SocketAd
                 }
             }
             Err(error) if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::Interrupted) => {},
-            Err(error) => { super::app_log(&format!("Audio receive error: {error}")); break; }
+            Err(_error) => {
+                metrics.failed.store(true, Ordering::Relaxed);
+                break;
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Metrics;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn new_audio_session_is_not_failed_until_a_stream_error_occurs() {
+        let metrics = Metrics::default();
+        assert!(!metrics.failed());
+        metrics.failed.store(true, Ordering::Relaxed);
+        assert!(metrics.failed());
     }
 }
 

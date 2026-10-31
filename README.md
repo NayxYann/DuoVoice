@@ -101,13 +101,13 @@ The Linux edition is an opt-in preview with a separate application entry point, 
 
 - KDE Plasma gets a Breeze-inspired layout; GNOME gets an Adwaita-inspired layout. The system's light or dark preference is followed, and native window decorations are used.
 - The full connection, microphone, output, mute, received volume, RNNoise and latency controls are available in the main window. A tray icon is optional; DuoVoice stays usable when the desktop does not provide a compatible tray service.
-- Audio uses PipeWire-Pulse or PulseAudio to follow the desktop's selected devices, with ALSA as a fallback. Device discovery keeps devices visible even when a driver cannot report a default format; the connect step reports the specific device error. The Linux UI filters output-monitor sources from microphone choices.
+- Audio uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio), so capture and playback stay managed by the session mixer. Direct ALSA fallback is disabled because it can bypass that mixer and interfere with other applications. The Linux UI filters output-monitor sources from microphone choices.
 - The preview supports English and French. It does not include automatic Linux updates or version rollback; install a newer AppImage manually.
 - The Linux build targets x86_64 systems with glibc 2.35 or newer, such as Ubuntu/Kubuntu 22.04 and Debian 12 or later. Tauri's Linux WebKitGTK 4.1 baseline and a working desktop audio service are required. Other distributions need validation before being considered supported.
 
-Make the AppImage executable in the file manager or run `chmod +x DuoVoice*.AppImage`, then launch it. If AppImage mounting fails because FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. For first use, open DuoVoice on both computers and connect each to the other. Allow UDP ports `39471` and `39472` through both firewalls if needed.
+Make the AppImage executable in the file manager or run `chmod +x DuoVoice*.AppImage`, then launch it. If AppImage mounting fails because FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. For first use, open DuoVoice on both computers and connect each to the other. Allow UDP ports `39471` and `39472` through both firewalls if needed. If an audio stream reports an error, DuoVoice stops the session and releases its devices instead of keeping a failed stream open.
 
-The native tray uses StatusNotifier and retries when the desktop watcher appears after DuoVoice starts. KDE Plasma normally provides it; GNOME may require an AppIndicator/StatusNotifier extension. Without a working tray, the main window remains available and closing it exits the application.
+The native tray uses StatusNotifier. KDE Plasma normally provides it; GNOME may require an AppIndicator/StatusNotifier extension. Without a working tray, the main window remains available and closing it exits the application.
 
 **Build Linux** creates an AppImage and portable fallback for review. **Release Linux Preview** publishes only a prerelease with a Linux-specific tag; it does not replace or update the Windows stable release.
 

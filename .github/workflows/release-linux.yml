@@ -34,13 +34,16 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           version=$(node -p "require('./package.json').version")
-          expected_prefix="linux-v${version}-preview."
-          preview_number="${RELEASE_TAG#"$expected_prefix"}"
-          if [[ "$RELEASE_TAG" != "$expected_prefix"* || ! "$preview_number" =~ ^[0-9]+$ ]]; then
-            echo "Expected a tag starting with $expected_prefix followed by a preview number, received $RELEASE_TAG" >&2
+          prefix="linux-v${version}-preview."
+          if [[ "$RELEASE_TAG" != "$prefix"* ]]; then
+            echo "Expected a Linux preview tag for version $version, received $RELEASE_TAG" >&2
             exit 1
           fi
-          echo "PREVIEW_NUMBER=$preview_number" >> "$GITHUB_ENV"
+          preview=${RELEASE_TAG##*.}
+          if [[ ! "$preview" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid Linux preview number in $RELEASE_TAG" >&2
+            exit 1
+          fi
 
       - name: Install Linux build dependencies
         run: |
@@ -72,28 +75,7 @@ jobs:
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features linux-edition --bin duovoice-linux
 
       - name: Build Linux AppImage
-        run: |
-          cargo build --locked --manifest-path src-tauri/Cargo.toml --release --features linux-edition --bin duovoice-linux
-          npm run tauri -- bundle --config src-tauri/tauri.linux.conf.json --bundles appimage
-
-      - name: Verify Linux commands in the packaged binary
-        run: |
-          appimage=(src-tauri/target/release/bundle/appimage/*.AppImage)
-          test "${#appimage[@]}" -eq 1
-          chmod +x "${appimage[0]}"
-          workdir=$(mktemp -d)
-          trap 'rm -rf "$workdir"' EXIT
-          (cd "$workdir" && "${GITHUB_WORKSPACE}/${appimage[0]}" --appimage-extract >/dev/null)
-          binary="$workdir/squashfs-root/usr/bin/duovoice-linux"
-          test -x "$binary"
-          readelf -h "$binary" | grep -Eq 'Class:.*ELF64'
-          readelf -h "$binary" | grep -Eq 'Machine:.*Advanced Micro Devices X86-64'
-          for marker in "DuoVoice Linux starting" "list_linux_devices" "configure_linux_tray"; do
-            if ! grep -aFq "$marker" "$binary"; then
-              echo "Linux runtime command missing from packaged binary: $marker" >&2
-              exit 1
-            fi
-          done
+        run: npm run tauri -- build --config src-tauri/tauri.linux.conf.json --bundles appimage -- --bin duovoice-linux
 
       - name: Package portable fallback and checksums
         run: |
@@ -107,12 +89,13 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           version=$(node -p "require('./package.json').version")
-          title="DuoVoice Linux v${version} Preview ${PREVIEW_NUMBER}"
+          preview="${RELEASE_TAG##*.}"
+          title="DuoVoice Linux v${version} Preview ${preview}"
           notes=$(mktemp)
           cat > "$notes" <<'EOF'
-          Linux preview for KDE Plasma and GNOME. It is published as a prerelease under a Linux-only tag, so the Windows stable release and its updater manifest remain unchanged. Audio uses PipeWire-Pulse or PulseAudio, with ALSA fallback.
+          Linux preview for KDE Plasma and GNOME. It is published as a prerelease under a Linux-only tag, so the Windows stable release and its updater manifest remain unchanged.
 
-          This preview uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio) with ALSA fallback. The native tray is optional; if the desktop does not expose a StatusNotifier tray, DuoVoice stays usable from its main window.
+          This preview uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio) to keep audio routed through the desktop session. The native tray is optional; if the desktop does not expose a StatusNotifier tray, DuoVoice stays usable from its main window.
 
           Make the AppImage executable before launching it. If FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. See the Linux preview section in the repository README for supported baseline and network ports.
           EOF

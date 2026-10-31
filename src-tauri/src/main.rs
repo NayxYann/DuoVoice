@@ -329,6 +329,42 @@ mod tray_position_tests {
     }
 }
 
+#[cfg(test)]
+mod audio_protocol_tests {
+    use super::{push_packet, read_packet, FRAME_SAMPLES, SAMPLE_RATE};
+    use std::net::{Ipv4Addr, UdpSocket};
+    use std::time::Duration;
+
+    #[test]
+    fn dv01_packet_round_trips_with_the_windows_wire_format() {
+        let receiver = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        receiver.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+        let sender = UdpSocket::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let expected: [i16; FRAME_SAMPLES] = std::array::from_fn(|i| (i as i16).wrapping_mul(-97));
+        let mut sequence = 0;
+        push_packet(&sender, receiver.local_addr().unwrap(), &mut sequence, &expected).unwrap();
+
+        let mut bytes = [0; 12 + FRAME_SAMPLES * 2];
+        let (length, _) = receiver.recv_from(&mut bytes).unwrap();
+        let packet = read_packet(&bytes[..length]).unwrap();
+        assert_eq!(packet.seq, 0);
+        assert_eq!(packet.samples, expected);
+        assert_eq!(sequence, 1);
+        assert_eq!(SAMPLE_RATE, 48_000);
+    }
+
+    #[test]
+    fn dv01_rejects_truncated_or_wrong_rate_packets() {
+        let mut packet = [0; 12 + FRAME_SAMPLES * 2];
+        packet[..4].copy_from_slice(b"DV01");
+        packet[8..10].copy_from_slice(&48_000u16.to_be_bytes());
+        packet[10..12].copy_from_slice(&(FRAME_SAMPLES as u16).to_be_bytes());
+        assert!(read_packet(&packet[..packet.len() - 1]).is_none());
+        packet[8..10].copy_from_slice(&44_100u16.to_be_bytes());
+        assert!(read_packet(&packet).is_none());
+    }
+}
+
 fn position_tray_popup(
     window: &tauri::WebviewWindow,
     click: tauri::PhysicalPosition<f64>,
@@ -807,6 +843,7 @@ fn set_close_action(state: State<'_, AudioState>, action: String) -> Result<(), 
 struct AudioStatus {
     diagnostics: Option<audio::Snapshot>,
     connected: bool,
+    stream_failed: bool,
     muted: bool,
     remote: Option<String>,
 }
@@ -817,10 +854,12 @@ fn audio_status(state: State<'_, AudioState>) -> AudioStatus {
     let metrics = engine.as_ref().map(|engine| engine.metrics.clone());
     let connected = engine.is_some();
     drop(engine);
+    let stream_failed = metrics.as_ref().is_some_and(|metrics| metrics.failed());
     if let Some(metrics) = metrics.as_ref() { metrics.log_if_due(); }
     AudioStatus {
         diagnostics: metrics.map(|metrics| metrics.snapshot()),
         connected,
+        stream_failed,
         muted: state.muted.load(std::sync::atomic::Ordering::Relaxed),
         remote: state.remote.lock().unwrap().map(|addr| addr.ip().to_string()),
     }
@@ -1192,46 +1231,6 @@ fn main() {
 /// Linux gets its own app entry point and window configuration. The existing
 /// Windows entry point and audio engine remain the path used by Windows builds.
 #[cfg(target_os = "linux")]
-#[tauri::command]
-fn list_linux_devices() -> Result<linux::Devices, String> {
-    linux::list_linux_devices_impl()
-}
-
-#[cfg(target_os = "linux")]
-#[tauri::command]
-fn linux_desktop() -> &'static str {
-    linux::linux_desktop_impl()
-}
-
-#[cfg(target_os = "linux")]
-#[tauri::command]
-fn linux_startup(app: tauri::AppHandle) -> linux::Startup {
-    linux::linux_startup_impl(app)
-}
-
-#[cfg(target_os = "linux")]
-#[tauri::command]
-fn configure_linux_tray(
-    app: tauri::AppHandle,
-    enabled: bool,
-    language: String,
-) -> Result<bool, String> {
-    linux::configure_linux_tray_impl(app, enabled, language)
-}
-
-#[cfg(target_os = "linux")]
-#[tauri::command]
-fn linux_autostart_enabled() -> Result<bool, String> {
-    linux::linux_autostart_enabled_impl()
-}
-
-#[cfg(target_os = "linux")]
-#[tauri::command]
-fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    linux::set_linux_autostart_impl(app, enabled)
-}
-
-#[cfg(target_os = "linux")]
 pub fn run_linux() {
     app_log("=== DuoVoice Linux starting ===");
     let Some(instance_listener) = acquire_single_instance() else {
@@ -1261,12 +1260,12 @@ pub fn run_linux() {
             ),
         }))
         .invoke_handler(tauri::generate_handler![
-            list_linux_devices,
-            linux_desktop,
-            linux_startup,
-            configure_linux_tray,
-            linux_autostart_enabled,
-            set_linux_autostart,
+            linux::list_linux_devices,
+            linux::linux_desktop,
+            linux::linux_startup,
+            linux::configure_linux_tray,
+            linux::linux_autostart_enabled,
+            linux::set_linux_autostart,
             list_peers,
             add_manual_peer,
             get_client_name,

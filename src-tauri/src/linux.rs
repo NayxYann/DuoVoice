@@ -2,57 +2,22 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use ksni::blocking::TrayMethods;
 use serde::Serialize;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
-};
+use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use tauri::Manager;
 
 pub fn audio_host() -> Result<cpal::Host, String> {
-    // KDE Wayland exposes its session devices through PipeWire-Pulse. Prefer
-    // that desktop-aware route over raw ALSA and use ALSA only when the
-    // PulseAudio-compatible service cannot enumerate any devices.
-    let mut errors = Vec::new();
-    for id in [cpal::HostId::PulseAudio, cpal::HostId::Alsa] {
-        match cpal::host_from_id(id) {
-            Ok(host) => {
-                let inputs = host.input_devices().map(|items| items.count());
-                let outputs = host.output_devices().map(|items| items.count());
-                if inputs.as_ref().is_ok_and(|count| *count > 0)
-                    || outputs.as_ref().is_ok_and(|count| *count > 0)
-                {
-                    return Ok(host);
-                }
-                errors.push(format!(
-                    "{}: inputs={}, outputs={}",
-                    id.name(),
-                    inputs
-                        .map(|count| count.to_string())
-                        .unwrap_or_else(|e| e.to_string()),
-                    outputs
-                        .map(|count| count.to_string())
-                        .unwrap_or_else(|e| e.to_string())
-                ));
-            }
-            Err(error) => errors.push(format!("{}: {error}", id.name())),
-        }
-    }
-    Err(format!(
-        "No usable Linux audio backend ({})",
-        errors.join("; ")
-    ))
+    // Use the session audio server (PipeWire-Pulse or PulseAudio). Opening ALSA
+    // directly can bypass the session mixer and disrupt audio for other apps.
+    cpal::host_from_id(cpal::HostId::PulseAudio)
+        .map_err(|e| format!("No PulseAudio-compatible audio service available (PipeWire-Pulse or PulseAudio): {e}"))
 }
 
-pub fn linux_desktop_impl() -> &'static str {
-    let current = std::env::var("XDG_CURRENT_DESKTOP")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+#[tauri::command]
+pub fn linux_desktop() -> &'static str {
+    let current = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_ascii_lowercase();
     if current.split(':').any(|name| name.contains("gnome")) {
         "gnome"
-    } else if current
-        .split(':')
-        .any(|name| name.contains("kde") || name.contains("plasma"))
-    {
+    } else if current.split(':').any(|name| name.contains("kde") || name.contains("plasma")) {
         "kde"
     } else {
         "generic"
@@ -61,17 +26,6 @@ pub fn linux_desktop_impl() -> &'static str {
 
 fn is_capture_source(id: &str) -> bool {
     !id.ends_with(".monitor")
-}
-
-fn tray_icon_argb(rgba: &[u8]) -> Vec<u8> {
-    let background = rgba.get(..3).map(|p| [p[0], p[1], p[2]]);
-    rgba.chunks_exact(4)
-        .flat_map(|p| {
-            let rgb = [p[0], p[1], p[2]];
-            let alpha = if Some(rgb) == background { 0 } else { p[3] };
-            [alpha, p[0], p[1], p[2]]
-        })
-        .collect()
 }
 
 #[derive(Serialize)]
@@ -86,50 +40,27 @@ pub struct Devices {
     outputs: Vec<Device>,
 }
 
-pub fn list_linux_devices_impl() -> Result<Devices, String> {
+#[tauri::command]
+pub fn list_linux_devices() -> Result<Devices, String> {
     let host = audio_host()?;
     let collect = |input: bool| -> Result<Vec<Device>, String> {
-        let devices = if input {
-            host.input_devices()
-        } else {
-            host.output_devices()
-        }
-        .map_err(|e| {
-            format!(
-                "Could not enumerate {} devices via {}: {e}",
-                if input { "microphone" } else { "output" },
-                host.id().name()
-            )
-        })?;
+        let devices = if input { host.input_devices() } else { host.output_devices() }
+            .map_err(|e| e.to_string())?;
         let mut result = Vec::new();
         for device in devices {
-            let Ok(id) = device.id() else {
-                continue;
-            };
-            if input && !is_capture_source(id.id()) {
-                continue;
-            }
+            let (Ok(id), Ok(description)) = (device.id(), device.description()) else { continue; };
+            if input && !is_capture_source(id.id()) { continue; }
+            let usable = if input { device.default_input_config() } else { device.default_output_config() };
+            if usable.is_err() { continue; }
             let id = id.to_string();
             if !result.iter().any(|d: &Device| d.id == id) {
-                let name = device
-                    .description()
-                    .map(|d| d.name().to_owned())
-                    .unwrap_or_else(|_| id.clone());
-                result.push(Device { id, name });
+                result.push(Device { id, name: description.name().to_owned() });
             }
         }
-        result.sort_by(|a, b| {
-            a.name
-                .to_lowercase()
-                .cmp(&b.name.to_lowercase())
-                .then(a.id.cmp(&b.id))
-        });
+        result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then(a.id.cmp(&b.id)));
         Ok(result)
     };
-    Ok(Devices {
-        inputs: collect(true)?,
-        outputs: collect(false)?,
-    })
+    Ok(Devices { inputs: collect(true)?, outputs: collect(false)? })
 }
 
 pub struct TrayState {
@@ -158,33 +89,16 @@ impl LinuxTray {
 }
 
 impl ksni::Tray for LinuxTray {
-    fn id(&self) -> String {
-        "fr.duovoice.intercom".into()
-    }
-    fn title(&self) -> String {
-        "DuoVoice".into()
-    }
-    fn icon_name(&self) -> String {
-        "audio-input-microphone".into()
-    }
+    fn id(&self) -> String { "fr.duovoice.intercom".into() }
+    fn title(&self) -> String { "DuoVoice".into() }
+    fn icon_name(&self) -> String { "audio-input-microphone".into() }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         let image = tauri::include_image!("icons/icon.png");
-        // The app icon has a solid dark canvas. StatusNotifier hosts place
-        // this pixmap on the panel, so make its corner color transparent to
-        // keep the DuoVoice mark visible in both light and dark Plasma themes.
-        let data = tray_icon_argb(image.rgba());
-        vec![ksni::Icon {
-            width: image.width() as i32,
-            height: image.height() as i32,
-            data,
-        }]
+        let data = image.rgba().chunks_exact(4).flat_map(|p| [p[3], p[0], p[1], p[2]]).collect();
+        vec![ksni::Icon { width: image.width() as i32, height: image.height() as i32, data }]
     }
-    fn activate(&mut self, _x: i32, _y: i32) {
-        self.open(false);
-    }
-    fn watcher_online(&self) {
-        self.available.store(true, Ordering::Relaxed);
-    }
+    fn activate(&mut self, _x: i32, _y: i32) { self.open(false); }
+    fn watcher_online(&self) { self.available.store(true, Ordering::Relaxed); }
     fn watcher_offline(&self, _reason: ksni::OfflineReason) -> bool {
         self.available.store(false, Ordering::Relaxed);
         // Never leave the app hidden when the desktop loses its tray service.
@@ -196,62 +110,34 @@ impl ksni::Tray for LinuxTray {
         let french = self.language == "fr";
         vec![
             StandardItem {
-                label: if french {
-                    "Ouvrir DuoVoice"
-                } else {
-                    "Open DuoVoice"
-                }
-                .into(),
+                label: if french { "Ouvrir DuoVoice" } else { "Open DuoVoice" }.into(),
                 icon_name: "window-restore".into(),
                 activate: Box::new(|tray: &mut Self| tray.open(false)),
                 ..Default::default()
-            }
-            .into(),
+            }.into(),
             StandardItem {
                 label: if french { "Paramètres" } else { "Settings" }.into(),
                 icon_name: "configure".into(),
                 activate: Box::new(|tray: &mut Self| tray.open(true)),
                 ..Default::default()
-            }
-            .into(),
+            }.into(),
             ksni::MenuItem::Separator,
             StandardItem {
                 label: if french { "Quitter" } else { "Quit" }.into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| tray.app.exit(0)),
                 ..Default::default()
-            }
-            .into(),
+            }.into(),
         ]
     }
 }
 
-fn spawn(
-    app: &tauri::AppHandle,
-    available: std::sync::Arc<AtomicBool>,
-    language: String,
-) -> Result<ksni::blocking::Handle<LinuxTray>, String> {
-    // Plasma may publish its StatusNotifier watcher a little after the app
-    // starts (notably during Wayland session startup). Keep the SNI item alive
-    // and let ksni reconnect when the watcher appears instead of failing the
-    // initial tray setup permanently.
-    // ksni does not call watcher_online for a successful initial registration,
-    // so treat spawn as available unless it reports an offline state. This
-    // keeps KDE Plasma from being misreported as tray-less at normal startup.
-    available.store(true, Ordering::Relaxed);
-    match (LinuxTray {
-        app: app.clone(),
-        language,
-        available: available.clone(),
-    })
-    .assume_sni_available(true)
-    .spawn()
-    {
+fn spawn(app: &tauri::AppHandle, available: std::sync::Arc<AtomicBool>, language: String)
+    -> Result<ksni::blocking::Handle<LinuxTray>, String>
+{
+    match (LinuxTray { app: app.clone(), language, available: available.clone() }).spawn() {
         Ok(handle) => Ok(handle),
-        Err(error) => {
-            available.store(false, Ordering::Relaxed);
-            Err(error.to_string())
-        }
+        Err(error) => { available.store(false, Ordering::Relaxed); Err(error.to_string()) }
     }
 }
 
@@ -259,18 +145,10 @@ pub fn setup(app: &tauri::AppHandle, autostart: bool) {
     let available = std::sync::Arc::new(AtomicBool::new(false));
     let handle = match spawn(app, available.clone(), "fr".into()) {
         Ok(handle) => Some(handle),
-        Err(error) => {
-            super::app_log(&format!("Linux tray unavailable: {error}"));
-            None
-        }
+        Err(error) => { super::app_log(&format!("Linux tray unavailable: {error}")); None }
     };
     let enabled = handle.is_some();
-    app.manage(TrayState {
-        handle: Mutex::new(handle),
-        available,
-        enabled: AtomicBool::new(enabled),
-        autostart,
-    });
+    app.manage(TrayState { handle: Mutex::new(handle), available, enabled: AtomicBool::new(enabled), autostart });
 }
 
 pub fn can_hide(app: &tauri::AppHandle) -> bool {
@@ -284,19 +162,14 @@ pub struct Startup {
     tray_available: bool,
 }
 
-pub fn linux_startup_impl(app: tauri::AppHandle) -> Startup {
+#[tauri::command]
+pub fn linux_startup(app: tauri::AppHandle) -> Startup {
     let state = app.state::<TrayState>();
-    Startup {
-        autostart: state.autostart,
-        tray_available: can_hide(&app),
-    }
+    Startup { autostart: state.autostart, tray_available: can_hide(&app) }
 }
 
-pub fn configure_linux_tray_impl(
-    app: tauri::AppHandle,
-    enabled: bool,
-    language: String,
-) -> Result<bool, String> {
+#[tauri::command]
+pub fn configure_linux_tray(app: tauri::AppHandle, enabled: bool, language: String) -> Result<bool, String> {
     let state = app.state::<TrayState>();
     let mut handle = state.handle.lock().map_err(|e| e.to_string())?;
     if enabled {
@@ -308,6 +181,7 @@ pub fn configure_linux_tray_impl(
     } else if let Some(handle) = handle.take() {
         state.available.store(false, Ordering::Relaxed);
         handle.shutdown().wait();
+        super::show_main_window_inner(&app, false)?;
     }
     state.enabled.store(enabled, Ordering::Relaxed);
     Ok(can_hide(&app))
@@ -315,32 +189,18 @@ pub fn configure_linux_tray_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_capture_source, tray_icon_argb};
+    use super::is_capture_source;
     #[test]
     fn excludes_monitor_sources_but_keeps_microphones_and_virtual_capture() {
-        assert!(!is_capture_source(
-            "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"
-        ));
-        assert!(!is_capture_source(
-            "bluez_output.12_34_56.a2dp-sink.monitor"
-        ));
+        assert!(!is_capture_source("alsa_output.pci-0000_00_1f.3.analog-stereo.monitor"));
+        assert!(!is_capture_source("bluez_output.12_34_56.a2dp-sink.monitor"));
         assert!(is_capture_source("alsa_input.usb.microphone"));
         assert!(is_capture_source("noise_cancelled_microphone"));
-    }
-
-    #[test]
-    fn status_notifier_icon_uses_transparent_background_and_argb_order() {
-        let rgba = [24, 24, 24, 255, 235, 235, 235, 255];
-        assert_eq!(
-            tray_icon_argb(&rgba),
-            [0, 24, 24, 24, 255, 235, 235, 235]
-        );
     }
 }
 
 fn autostart_file() -> Result<std::path::PathBuf, String> {
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .filter(|p| !p.is_empty())
+    let config = std::env::var_os("XDG_CONFIG_HOME").filter(|p| !p.is_empty())
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|p| std::path::PathBuf::from(p).join(".config")))
         .ok_or_else(|| "Home directory unavailable".to_string())?;
@@ -348,37 +208,24 @@ fn autostart_file() -> Result<std::path::PathBuf, String> {
 }
 
 fn desktop_exec(path: &str) -> Result<String, String> {
-    if path.contains(['\n', '\r', '=']) {
-        return Err("Unsupported launch path".into());
-    }
+    if path.contains(['\n', '\r', '=']) { return Err("Unsupported launch path".into()); }
     // Two escape layers: Exec quoting, then Desktop Entry string escaping.
-    let quoted: String = path
-        .chars()
-        .flat_map(|c| match c {
-            '%' => vec!['%', '%'],
-            '\\' | '"' | '`' | '$' => vec!['\\', c],
-            _ => vec![c],
-        })
-        .collect();
-    Ok(format!(
-        "\"{}\" --autostart",
-        quoted.replace('\\', "\\\\").replace('\t', "\\t")
-    ))
+    let quoted: String = path.chars().flat_map(|c| match c {
+        '%' => vec!['%', '%'],
+        '\\' | '"' | '`' | '$' => vec!['\\', c],
+        _ => vec![c],
+    }).collect();
+    Ok(format!("\"{}\" --autostart", quoted.replace('\\', "\\\\").replace('\t', "\\t")))
 }
 
 fn portable_launcher(executable: &std::path::Path) -> std::path::PathBuf {
     // The extracted archive must launch AppRun to set its bundled library paths.
     if let Some(bin) = executable.parent() {
         if bin.file_name().is_some_and(|p| p == "bin") {
-            if let Some(usr) = bin
-                .parent()
-                .filter(|p| p.file_name().is_some_and(|n| n == "usr"))
-            {
+            if let Some(usr) = bin.parent().filter(|p| p.file_name().is_some_and(|n| n == "usr")) {
                 if let Some(root) = usr.parent() {
                     let launcher = root.join("AppRun");
-                    if launcher.is_file() {
-                        return launcher;
-                    }
+                    if launcher.is_file() { return launcher; }
                 }
             }
         }
@@ -386,7 +233,8 @@ fn portable_launcher(executable: &std::path::Path) -> std::path::PathBuf {
     executable.to_path_buf()
 }
 
-pub fn linux_autostart_enabled_impl() -> Result<bool, String> {
+#[tauri::command]
+pub fn linux_autostart_enabled() -> Result<bool, String> {
     match std::fs::read_to_string(autostart_file()?) {
         Ok(contents) => Ok(!contents.lines().any(|line| line == "Hidden=true")),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -394,7 +242,8 @@ pub fn linux_autostart_enabled_impl() -> Result<bool, String> {
     }
 }
 
-pub fn set_linux_autostart_impl(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+#[tauri::command]
+pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let file = autostart_file()?;
     if !enabled {
         return match std::fs::remove_file(file) {
@@ -420,14 +269,8 @@ mod autostart_tests {
     use super::desktop_exec;
     #[test]
     fn quotes_spaces_and_escapes_desktop_field_codes_and_shell_characters() {
-        assert_eq!(
-            desktop_exec("/home/yann/My Apps/DuoVoice.AppImage").unwrap(),
-            "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart"
-        );
-        assert_eq!(
-            desktop_exec("/home/yann/50%/$x").unwrap(),
-            "\"/home/yann/50%%/\\\\$x\" --autostart"
-        );
+        assert_eq!(desktop_exec("/home/yann/My Apps/DuoVoice.AppImage").unwrap(), "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart");
+        assert_eq!(desktop_exec("/home/yann/50%/$x").unwrap(), "\"/home/yann/50%%/\\\\$x\" --autostart");
         assert!(desktop_exec("/home/yann/app\nHidden=true").is_err());
     }
 }
