@@ -10,8 +10,10 @@ use std::{
 use super::{Packet, FRAME_SAMPLES};
 
 pub const PACKET_CAPACITY: usize = 64;
-const MIN_RESERVE: usize = 4;
-const MAX_RESERVE: usize = 18;
+// Each packet is 10 ms. Keep the normal one-way playout delay low, while
+// allowing bounded headroom for short LAN/Wi-Fi scheduling jitter.
+const MIN_RESERVE: usize = 3;
+const MAX_RESERVE: usize = 10;
 
 #[derive(Default)]
 pub struct Metrics {
@@ -233,7 +235,10 @@ impl Playback {
             self.missing = 0;
             self.stable_since = self.now;
         }
-        if self.now.saturating_duration_since(self.stable_since) >= Duration::from_secs(10) && self.reserve > MIN_RESERVE {
+        // Do not let one transient underrun leave the call with a large delay
+        // for minutes. Increase on trouble, then shed the extra reserve fairly
+        // quickly once packet delivery is stable again.
+        if self.now.saturating_duration_since(self.stable_since) >= Duration::from_secs(3) && self.reserve > MIN_RESERVE {
             self.reserve -= 1;
             self.stable_since = self.now;
             if self.held > self.reserve + 1 {

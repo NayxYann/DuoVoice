@@ -95,7 +95,7 @@ jobs:
           cat > "$notes" <<'EOF'
           Linux preview for KDE Plasma and GNOME. It is published as a prerelease under a Linux-only tag, so the Windows stable release and its updater manifest remain unchanged.
 
-          This preview uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio) to keep audio routed through the desktop session. The native tray is optional; if the desktop does not expose a StatusNotifier tray, DuoVoice stays usable from its main window.
+          Reduces Linux audio jitter-buffer delay and reports playback buffer depth and underruns. The normal reserve is lower, buffer growth is capped, and recovery is faster after packet loss. Audio still uses the desktop PulseAudio-compatible service (PipeWire-Pulse or PulseAudio).
 
           Make the AppImage executable before launching it. If FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. See the Linux preview section in the repository README for supported baseline and network ports.
           EOF

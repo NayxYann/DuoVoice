@@ -183,7 +183,7 @@ function updateAudioHealth(status) {
   if (diagnostics.send_failures>0 && diagnostics.sent_packets===0) health.textContent=t("sendFailed");
   else if (diagnostics.sent_packets===0) health.textContent=t("micPackets");
   else if (diagnostics.received_packets===0) health.textContent=t("noIncoming");
-  else health.textContent=`${t("audioFlow")} (${diagnostics.sent_packets} ${prefs.language === "fr" ? "envoyés" : "sent"}, ${diagnostics.received_packets} ${prefs.language === "fr" ? "reçus" : "received"})`;
+  else health.textContent=`${t("audioFlow")} (${diagnostics.sent_packets} ${prefs.language === "fr" ? "envoyés" : "sent"}, ${diagnostics.received_packets} ${prefs.language === "fr" ? "reçus" : "received"}; ${diagnostics.buffer_ms} ms, ${diagnostics.playback_underruns} ${prefs.language === "fr" ? "coupures" : "underruns"})`;
 }
 async function poll() {
   if (polling || busy) return;
