@@ -26,11 +26,6 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-          cache-on-failure: true
-
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -97,3 +92,4 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/appimage/*-portable.tar.gz
           if-no-files-found: error
+
