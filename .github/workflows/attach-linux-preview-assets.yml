@@ -1,0 +1,40 @@
+name: Attach Linux preview assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Linux prerelease tag
+        required: true
+        default: linux-v1.4.8-preview.9
+      artifact_run_id:
+        description: Successful Build Linux workflow run ID
+        required: true
+        default: "41231273960"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download built Linux files
+        uses: actions/download-artifact@v7
+        with:
+          name: DuoVoice-Linux-x86_64
+          path: dist
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Add assets to the existing prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          cd dist
+          sha256sum *.AppImage *-portable.tar.gz > SHA256SUMS
+          gh release upload "$RELEASE_TAG" \
+            *.AppImage *-portable.tar.gz SHA256SUMS \
+            --clobber
