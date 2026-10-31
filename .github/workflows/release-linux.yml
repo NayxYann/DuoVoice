@@ -64,7 +64,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Check Linux preference helpers
-        run: node --test tests/linux-state.test.mjs
+        run: node --test tests/linux-*.test.mjs
 
       - name: Build Linux frontend
         env:
