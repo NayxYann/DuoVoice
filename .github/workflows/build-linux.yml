@@ -70,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./package.json').version")
-          tag="linux-v${version}-preview.7"
+          tag="linux-v${version}-preview.8"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Linux preview $tag already exists; skipping publication."
             exit 0
@@ -78,8 +78,8 @@ jobs:
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "DuoVoice Linux v${version} Preview 7" \
-            --notes "Fixes Preview 6 packaging the wrong application entry point, which left Linux commands and tray functionality unavailable. Checks the packaged Linux backend before publishing. This Linux preview does not replace the Windows stable release or updater manifest. Uses the desktop's PulseAudio-compatible service (PipeWire-Pulse or PulseAudio) to keep audio routed through the session mixer. Make the AppImage executable; the portable archive is available when FUSE is unavailable. See the Linux preview section in README for requirements and network ports." \
+            --title "DuoVoice Linux v${version} Preview 8" \
+            --notes "Fixes Linux tray integration and adds automatic favorite connection at startup. Adds live audio packet diagnostics to distinguish microphone capture and network receive problems. The Linux audio path stays on the desktop PulseAudio-compatible service (PipeWire-Pulse or PulseAudio). This Linux preview does not replace the Windows stable release or updater manifest. Make the AppImage executable; the portable archive is available when FUSE is unavailable. See the Linux preview section in README for requirements and network ports." \
             src-tauri/target/release/bundle/appimage/*.AppImage \
             src-tauri/target/release/bundle/appimage/*-portable.tar.gz \
             src-tauri/target/release/bundle/appimage/SHA256SUMS

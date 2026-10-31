@@ -18,6 +18,14 @@ test("saved audio settings and stable device identifiers survive restart",() => 
   assert.equal(prefs.volume,1.8);
   assert.equal(prefs.trayEnabled,false);
 });
+test("favorites persist safely and discard invalid or duplicate addresses",() => {
+  const prefs=normalizePreferences({autoConnectFavorites:true,favorites:[
+    {name:"Studio",address:"192.168.1.20"},{name:"Duplicate",address:"192.168.1.20"},{name:"Bad",address:"999.1.1.1"},null,
+  ]});
+  assert.equal(prefs.autoConnectFavorites,true);
+  assert.deepEqual(prefs.favorites,[{name:"Studio",address:"192.168.1.20"}]);
+  assert.deepEqual(normalizePreferences(JSON.parse(JSON.stringify(prefs))).favorites,prefs.favorites);
+});
 test("manual connection accepts IPv4 addresses and rejects malformed input",() => {
   for(const address of ["192.168.1.20","10.0.0.2"," 172.16.0.15 "]) assert.ok(validIPv4(address));
   for(const address of ["256.1.2.3","1.2.3","1.2.3.4.5","1e2.0.0.1","0.0.0.0","255.255.255.255","<script>","host.local",""]) assert.equal(validIPv4(address),false,address);

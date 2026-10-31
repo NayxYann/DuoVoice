@@ -16,6 +16,8 @@ const MAX_RESERVE: usize = 18;
 #[derive(Default)]
 pub struct Metrics {
     received: AtomicU64,
+    sent: AtomicU64,
+    captured_non_silent: AtomicU64,
     capture_dropped: AtomicU64,
     capture_trimmed: AtomicU64,
     send_failed: AtomicU64,
@@ -34,6 +36,8 @@ pub struct Metrics {
 #[derive(Serialize, Debug)]
 pub struct Snapshot {
     received_packets: u64,
+    sent_packets: u64,
+    captured_non_silent_samples: u64,
     capture_dropped_samples: u64,
     capture_trimmed_samples: u64,
     send_failures: u64,
@@ -64,6 +68,8 @@ impl Metrics {
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             received_packets: self.received.load(Ordering::Relaxed),
+            sent_packets: self.sent.load(Ordering::Relaxed),
+            captured_non_silent_samples: self.captured_non_silent.load(Ordering::Relaxed),
             capture_dropped_samples: self.capture_dropped.load(Ordering::Relaxed),
             capture_trimmed_samples: self.capture_trimmed.load(Ordering::Relaxed),
             send_failures: self.send_failed.load(Ordering::Relaxed),
@@ -101,9 +107,12 @@ impl Capture {
     pub fn write(&mut self, samples: impl Iterator<Item = i16>) {
         let muted = self.muted.load(Ordering::Relaxed);
         let mut dropped = 0;
+        let mut non_silent = 0;
         for sample in samples {
+            if sample.unsigned_abs() > 64 { non_silent += 1; }
             if self.producer.push(if muted { 0 } else { sample }).is_err() { dropped += 1; }
         }
+        self.metrics.captured_non_silent.fetch_add(non_silent, Ordering::Relaxed);
         if dropped != 0 { self.metrics.capture_dropped.fetch_add(dropped, Ordering::Relaxed); }
         if let Some(worker) = self.wake.get() { worker.unpark(); }
     }
@@ -309,6 +318,8 @@ pub fn transmit(mut input: Consumer<i16>, socket: UdpSocket, remote: SocketAddr,
         } else { denoiser = None; delayed_dry = None; processed = samples; }
         if super::push_packet(&socket, remote, &mut sequence, &processed).is_err() {
             metrics.send_failed.fetch_add(1, Ordering::Relaxed);
+        } else {
+            metrics.sent.fetch_add(1, Ordering::Relaxed);
         }
     }
 }

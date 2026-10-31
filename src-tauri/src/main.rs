@@ -1252,7 +1252,9 @@ pub fn run_linux() {
 
     let result = tauri::Builder::default()
         .manage(AudioState {
-            startup_connection: Mutex::new(false),
+            // The frontend may auto-connect to a saved favorite during startup.
+            // Any manual connect or disconnect disarms this through the shared command.
+            startup_connection: Mutex::new(true),
             engine: Mutex::new(None),
             close_to_tray: std::sync::atomic::AtomicBool::new(false),
             volume: Arc::new(std::sync::atomic::AtomicU32::new(1.0f32.to_bits())),
@@ -1278,6 +1280,7 @@ pub fn run_linux() {
             linux::linux_autostart_enabled,
             linux::set_linux_autostart,
             list_peers,
+            list_startup_peers,
             add_manual_peer,
             get_client_name,
             set_client_name,
