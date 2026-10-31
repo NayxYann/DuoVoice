@@ -690,7 +690,11 @@ fn start_audio_inner(
     let mut capture = audio::Capture::new(capture_producer, wake.clone(), metrics.clone(), state.muted.clone());
     let mut playback = audio::Playback::new(packet_consumer, metrics.clone());
     let input_format = in_cfg.sample_format();
-    let input_config: StreamConfig = in_cfg.into();
+    let mut input_config: StreamConfig = in_cfg.into();
+    // PulseAudio/PipeWire's default CPAL buffer can add several hundred ms.
+    // Ask for a 10 ms period to keep the Linux path interactive.
+    #[cfg(target_os = "linux")]
+    { input_config.buffer_size = cpal::BufferSize::Fixed(FRAME_SAMPLES as u32); }
     let input_channels = input_config.channels as usize;
     let input_stream = match input_format {
             SampleFormat::F32 => input_device.build_input_stream(input_config,
@@ -709,7 +713,9 @@ fn start_audio_inner(
             _ => return Err("Format d'entrée non pris en charge".into()),
     }.map_err(|e| format!("Ouverture du microphone impossible: {e}"))?;
     let output_format = out_cfg.sample_format();
-    let output_config: StreamConfig = out_cfg.into();
+    let mut output_config: StreamConfig = out_cfg.into();
+    #[cfg(target_os = "linux")]
+    { output_config.buffer_size = cpal::BufferSize::Fixed(FRAME_SAMPLES as u32); }
     let output_channels = output_config.channels as usize;
     let volume = state.volume.clone();
     let output_stream = match output_format {

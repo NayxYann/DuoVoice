@@ -99,11 +99,17 @@ jobs:
 
           Make the AppImage executable before launching it. If FUSE is unavailable, extract the portable archive and launch `DuoVoice/AppRun`. See the Linux preview section in the repository README for supported baseline and network ports.
           EOF
-          gh release create "$RELEASE_TAG" \
-            --verify-tag \
-            --prerelease \
-            --title "$title" \
-            --notes-file "$notes" \
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --prerelease \
+              --title "$title" \
+              --notes-file "$notes"
+          fi
+          gh release upload "$RELEASE_TAG" \
             src-tauri/target/release/bundle/appimage/*.AppImage \
             src-tauri/target/release/bundle/appimage/*-portable.tar.gz \
-            src-tauri/target/release/bundle/appimage/SHA256SUMS
+            src-tauri/target/release/bundle/appimage/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
