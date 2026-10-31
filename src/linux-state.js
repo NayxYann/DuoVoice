@@ -1,9 +1,10 @@
-export const DEFAULTS = Object.freeze({ language:"fr", name:"", input:"", output:"", ip:"", favorites:[], autoConnectFavorites:false, volume:1, boost:false, muted:false, noise:false, intensity:0.65, trayEnabled:true, closeToTray:true, startHidden:true });
+export const DEFAULTS = Object.freeze({ language:"fr", name:"", input:"", output:"", ip:"", lastRemote:"", favorites:[], autoConnectFavorites:false, volume:1, boost:false, muted:false, noise:false, intensity:0.65, trayEnabled:true, closeToTray:true, startHidden:true });
 export function normalizePreferences(value) {
   const source = value && typeof value === "object" ? value : {};
   const result = { ...DEFAULTS };
   result.favorites = [];
   for (const key of ["name","input","output","ip"]) if (typeof source[key] === "string") result[key] = source[key];
+  if (typeof source.lastRemote === "string" && validIPv4(source.lastRemote)) result.lastRemote = source.lastRemote.trim();
   for (const key of ["boost","muted","noise","trayEnabled","closeToTray","startHidden","autoConnectFavorites"]) if (typeof source[key] === "boolean") result[key] = source[key];
   if (Array.isArray(source.favorites)) {
     const seen = new Set();

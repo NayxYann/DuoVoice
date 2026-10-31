@@ -2,7 +2,7 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use serde::Serialize;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
-use tauri::{menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIconBuilder, Manager};
+use tauri::{menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIconBuilder, Emitter, Manager};
 
 pub fn audio_host() -> Result<cpal::Host, String> {
     // Use the session audio server (PipeWire-Pulse or PulseAudio). Opening ALSA
@@ -68,11 +68,13 @@ pub struct TrayState {
     available: std::sync::Arc<AtomicBool>,
     pub enabled: AtomicBool,
     autostart: bool,
+    start_hidden: bool,
 }
 
 struct TrayMenu {
     open: MenuItem<tauri::Wry>,
     settings: MenuItem<tauri::Wry>,
+    connection: MenuItem<tauri::Wry>,
     quit: MenuItem<tauri::Wry>,
 }
 
@@ -82,10 +84,12 @@ fn spawn(app: &tauri::AppHandle, language: &str) -> Result<(tauri::tray::TrayIco
         .map_err(|e| e.to_string())?;
     let settings = MenuItem::with_id(app, "settings", if french { "Paramètres" } else { "Settings" }, true, None::<&str>)
         .map_err(|e| e.to_string())?;
+    let connection = MenuItem::with_id(app, "toggle-last-connection", if french { "Se connecter au dernier PC" } else { "Connect to last PC" }, false, None::<&str>)
+        .map_err(|e| e.to_string())?;
     let separator = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
     let quit = MenuItem::with_id(app, "quit", if french { "Quitter" } else { "Quit" }, true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let menu = Menu::with_items(app, &[&open, &settings, &separator, &quit]).map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(app, &[&open, &settings, &separator, &connection, &quit]).map_err(|e| e.to_string())?;
     let icon = app.default_window_icon().cloned()
         .ok_or_else(|| "Icône DuoVoice introuvable".to_string())?;
     let tray = TrayIconBuilder::with_id("duovoice-linux-tray")
@@ -103,15 +107,20 @@ fn spawn(app: &tauri::AppHandle, language: &str) -> Result<(tauri::tray::TrayIco
                     super::app_log(&format!("Tray settings: {error}"));
                 }
             }
+            "toggle-last-connection" => {
+                if let Err(error) = app.emit("tray-toggle-last-connection", ()) {
+                    super::app_log(&format!("Tray connection toggle: {error}"));
+                }
+            }
             "quit" => app.exit(0),
             _ => {}
         })
         .build(app)
         .map_err(|e| e.to_string())?;
-    Ok((tray, TrayMenu { open, settings, quit }))
+    Ok((tray, TrayMenu { open, settings, connection, quit }))
 }
 
-pub fn setup(app: &tauri::AppHandle, autostart: bool) {
+pub fn setup(app: &tauri::AppHandle, autostart: bool, start_hidden: bool) {
     let available = std::sync::Arc::new(AtomicBool::new(false));
     let (handle, menu) = match spawn(app, "fr") {
         Ok((handle, menu)) => (Some(handle), Some(menu)),
@@ -122,7 +131,7 @@ pub fn setup(app: &tauri::AppHandle, autostart: bool) {
     };
     let enabled = handle.is_some();
     available.store(enabled, Ordering::Relaxed);
-    app.manage(TrayState { handle: Mutex::new(handle), menu: Mutex::new(menu), available, enabled: AtomicBool::new(enabled), autostart });
+    app.manage(TrayState { handle: Mutex::new(handle), menu: Mutex::new(menu), available, enabled: AtomicBool::new(enabled), autostart, start_hidden });
 }
 
 pub fn can_hide(app: &tauri::AppHandle) -> bool {
@@ -133,13 +142,14 @@ pub fn can_hide(app: &tauri::AppHandle) -> bool {
 #[derive(Serialize)]
 pub struct Startup {
     autostart: bool,
+    start_hidden: bool,
     tray_available: bool,
 }
 
 #[tauri::command]
 pub fn linux_startup(app: tauri::AppHandle) -> Startup {
     let state = app.state::<TrayState>();
-    Startup { autostart: state.autostart, tray_available: can_hide(&app) }
+    Startup { autostart: state.autostart, start_hidden: state.start_hidden, tray_available: can_hide(&app) }
 }
 
 #[tauri::command]
@@ -156,15 +166,33 @@ pub fn configure_linux_tray(app: tauri::AppHandle, enabled: bool, language: Stri
             let french = language == "fr";
             menu.open.set_text(if french { "Ouvrir DuoVoice" } else { "Open DuoVoice" }).map_err(|e| e.to_string())?;
             menu.settings.set_text(if french { "Paramètres" } else { "Settings" }).map_err(|e| e.to_string())?;
+            menu.connection.set_text(if french { "Se connecter au dernier PC" } else { "Connect to last PC" }).map_err(|e| e.to_string())?;
             menu.quit.set_text(if french { "Quitter" } else { "Quit" }).map_err(|e| e.to_string())?;
         }
         if let Some(tray) = handle.as_ref() { tray.set_visible(true).map_err(|e| e.to_string())?; }
     } else {
         if let Some(tray) = handle.as_ref() { tray.set_visible(false).map_err(|e| e.to_string())?; }
-        super::show_main_window_inner(&app, false)?;
     }
     state.enabled.store(enabled, Ordering::Relaxed);
     Ok(can_hide(&app))
+}
+
+#[tauri::command]
+pub fn set_linux_tray_connection(app: tauri::AppHandle, connected: bool, has_last_connection: bool, language: String) -> Result<(), String> {
+    let state = app.state::<TrayState>();
+    let menu = state.menu.lock().map_err(|e| e.to_string())?;
+    if let Some(menu) = menu.as_ref() {
+        let text = if connected {
+            if language == "fr" { "Se déconnecter" } else { "Disconnect" }
+        } else if language == "fr" {
+            "Se connecter au dernier PC"
+        } else {
+            "Connect to last PC"
+        };
+        menu.connection.set_text(text).map_err(|e| e.to_string())?;
+        menu.connection.set_enabled(connected || has_last_connection).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -187,7 +215,7 @@ fn autostart_file() -> Result<std::path::PathBuf, String> {
     Ok(config.join("autostart").join("DuoVoice.desktop"))
 }
 
-fn desktop_exec(path: &str) -> Result<String, String> {
+fn desktop_exec(path: &str, start_hidden: bool) -> Result<String, String> {
     if path.contains(['\n', '\r', '=']) { return Err("Unsupported launch path".into()); }
     // Two escape layers: Exec quoting, then Desktop Entry string escaping.
     let quoted: String = path.chars().flat_map(|c| match c {
@@ -195,7 +223,8 @@ fn desktop_exec(path: &str) -> Result<String, String> {
         '\\' | '"' | '`' | '$' => vec!['\\', c],
         _ => vec![c],
     }).collect();
-    Ok(format!("\"{}\" --autostart", quoted.replace('\\', "\\\\").replace('\t', "\\t")))
+    let hidden_arg = if start_hidden { " --start-hidden" } else { "" };
+    Ok(format!("\"{}\" --autostart{hidden_arg}", quoted.replace('\\', "\\\\").replace('\t', "\\t")))
 }
 
 fn portable_launcher(executable: &std::path::Path) -> std::path::PathBuf {
@@ -223,7 +252,7 @@ pub fn linux_autostart_enabled() -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool, start_hidden: bool) -> Result<(), String> {
     let file = autostart_file()?;
     if !enabled {
         return match std::fs::remove_file(file) {
@@ -236,7 +265,7 @@ pub fn set_linux_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), S
         Some(path) => std::path::PathBuf::from(path),
         None => portable_launcher(&std::env::current_exe().map_err(|e| e.to_string())?),
     };
-    let exec = desktop_exec(path.to_str().ok_or("Launch path is not UTF-8")?)?;
+    let exec = desktop_exec(path.to_str().ok_or("Launch path is not UTF-8")?, start_hidden)?;
     std::fs::create_dir_all(file.parent().unwrap()).map_err(|e| e.to_string())?;
     let contents = format!("[Desktop Entry]\nType=Application\nName=DuoVoice\nExec={exec}\nTerminal=false\nX-GNOME-Autostart-enabled=true\n");
     let temporary = file.with_extension("desktop.tmp");
@@ -249,8 +278,9 @@ mod autostart_tests {
     use super::desktop_exec;
     #[test]
     fn quotes_spaces_and_escapes_desktop_field_codes_and_shell_characters() {
-        assert_eq!(desktop_exec("/home/yann/My Apps/DuoVoice.AppImage").unwrap(), "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart");
-        assert_eq!(desktop_exec("/home/yann/50%/$x").unwrap(), "\"/home/yann/50%%/\\\\$x\" --autostart");
-        assert!(desktop_exec("/home/yann/app\nHidden=true").is_err());
+        assert_eq!(desktop_exec("/home/yann/My Apps/DuoVoice.AppImage", false).unwrap(), "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart");
+        assert_eq!(desktop_exec("/home/yann/My Apps/DuoVoice.AppImage", true).unwrap(), "\"/home/yann/My Apps/DuoVoice.AppImage\" --autostart --start-hidden");
+        assert_eq!(desktop_exec("/home/yann/50%/$x", false).unwrap(), "\"/home/yann/50%%/\\\\$x\" --autostart");
+        assert!(desktop_exec("/home/yann/app\nHidden=true", false).is_err());
     }
 }

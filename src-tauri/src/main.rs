@@ -1255,6 +1255,7 @@ pub fn run_linux() {
         return;
     };
     let launched_from_autostart = std::env::args().any(|arg| arg == "--autostart");
+    let launched_start_hidden = std::env::args().any(|arg| arg == "--start-hidden");
 
     let result = tauri::Builder::default()
         .manage(AudioState {
@@ -1283,6 +1284,7 @@ pub fn run_linux() {
             linux::linux_desktop,
             linux::linux_startup,
             linux::configure_linux_tray,
+            linux::set_linux_tray_connection,
             linux::linux_autostart_enabled,
             linux::set_linux_autostart,
             list_peers,
@@ -1333,7 +1335,7 @@ pub fn run_linux() {
                 }
             });
 
-            linux::setup(app.handle(), launched_from_autostart);
+            linux::setup(app.handle(), launched_from_autostart, launched_start_hidden);
             let tray_available = linux::can_hide(app.handle());
             app.state::<AudioState>().close_to_tray.store(tray_available, std::sync::atomic::Ordering::Relaxed);
             app_log("DuoVoice Linux setup completed");

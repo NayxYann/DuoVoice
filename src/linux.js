@@ -28,11 +28,20 @@ let devicesRefreshAt = 0;
 let connectionRevision = 0;
 let connectedAt = null;
 let startupFavorites = null;
+let trayConnectionSignature = "";
 const t = key => strings[prefs.language][key] || key;
 function message(text = "") { $("message").textContent = text; $("message").hidden = !text; }
 function save() {
   try { localStorage.setItem("duovoice.linux.preferences",JSON.stringify(prefs)); }
   catch { message(t("storage")); }
+}
+function updateTrayConnectionMenu(force = false) {
+  const signature = `${Boolean(remote)}|${Boolean(prefs.lastRemote)}|${prefs.language}`;
+  if (!force && signature === trayConnectionSignature) return;
+  trayConnectionSignature = signature;
+  invoke("set_linux_tray_connection",{
+    connected:Boolean(remote),hasLastConnection:Boolean(prefs.lastRemote),language:prefs.language
+  }).catch(() => {});
 }
 function safe(action) {
   return async event => { try { await action(event); } catch(error) { message(String(error)); } };
@@ -102,9 +111,11 @@ async function connect(address,{automatic=false}={}) {
     const started = await invoke("start_audio",{remote:address,input:prefs.input || null,output:prefs.output || null,automatic});
     if (automatic && started !== true) return started;
     remote = address;
+    prefs.lastRemote = address; save();
     connectedAt = Date.now();
+    updateTrayConnectionMenu();
     return true;
-  } catch(error) { remote = null; connectedAt = null; throw error; }
+  } catch(error) { remote = null; connectedAt = null; updateTrayConnectionMenu(); throw error; }
   finally { busy = false; renderPeers(); renderStatus(); }
 }
 async function disconnect(manual = true) {
@@ -112,12 +123,23 @@ async function disconnect(manual = true) {
   if (manual) startupFavorites?.stop();
   connectionRevision++;
   busy = true; renderPeers(); renderStatus();
-  try { await invoke("stop_audio"); remote = null; connectedAt = null; $("audioHealth").hidden = true; }
+  try { await invoke("stop_audio"); remote = null; connectedAt = null; $("audioHealth").hidden = true; updateTrayConnectionMenu(); }
   finally { busy = false; renderPeers(); renderStatus(); }
 }
-async function refreshDevices() {
+async function refreshDevices({quiet = false} = {}) {
   const revision = connectionRevision;
-  const next = await invoke("list_linux_devices");
+  let next;
+  try { next = await invoke("list_linux_devices"); }
+  catch(error) {
+    // PipeWire-Pulse may restart while an existing CPAL stream keeps playing.
+    // Keep the last device list and retry on the next poll instead of showing a false audio failure.
+    if (quiet) {
+      devicesRefreshAt = Date.now();
+      invoke("log_client_error",{message:`Temporary PulseAudio-compatible device enumeration failure: ${String(error)}`}).catch(() => {});
+      return;
+    }
+    throw error;
+  }
   if (busy || revision !== connectionRevision) return;
   let missing = false;
   for (const key of ["input","output"]) {
@@ -198,8 +220,9 @@ async function poll() {
       if(status.connected && !connectedAt) connectedAt=Date.now();
       if(!status.connected) connectedAt=null;
       remote = status.connected ? status.remote?.split(":")[0] : null; renderStatus(); updateAudioHealth(status);
+      updateTrayConnectionMenu();
     }
-    if (Date.now() - devicesRefreshAt > 10000) await refreshDevices();
+    if (Date.now() - devicesRefreshAt > 10000) await refreshDevices({quiet:true});
     await refreshTrayAvailability();
     if (remote && !busy && revision === connectionRevision) {
       try { const value = await invoke("measure_latency"); if (busy || revision !== connectionRevision) return; $("latency").textContent = `${t("latency")} : ${Math.round(value)} ms`; }
@@ -229,6 +252,7 @@ async function configureTray() {
   await invoke("set_close_action",{action:prefs.closeToTray && trayAvailable ? "tray" : "quit"});
   $("closeToTray").disabled = !trayAvailable;
   $("startHidden").disabled = !trayAvailable;
+  updateTrayConnectionMenu(true);
 }
 $("mainTab").onclick = () => tab(false); $("settingsTab").onclick = () => tab(true);
 $("nameForm").addEventListener("submit",safe(async event => {
@@ -260,11 +284,15 @@ for (const id of ["noise","intensity"]) $(id).addEventListener(id === "intensity
 }));
 $("language").addEventListener("change",safe(async () => { prefs.language=$("language").value; save(); renderLanguage(); await configureTray(); }));
 $("autostart").addEventListener("change",safe(async () => {
-  try { await invoke("set_linux_autostart",{enabled:$("autostart").checked}); }
+  try { await invoke("set_linux_autostart",{enabled:$("autostart").checked,startHidden:prefs.startHidden}); }
   catch(error) { $("autostart").checked = !$("autostart").checked; throw error; }
 }));
 $("autoConnectFavorites").addEventListener("change",()=>{prefs.autoConnectFavorites=$("autoConnectFavorites").checked;save();resetStartupFavorites();});
-for (const id of ["trayEnabled","closeToTray","startHidden"]) $(id).addEventListener("change",safe(async () => { prefs[id]=$(id).checked; save(); await configureTray(); }));
+for (const id of ["trayEnabled","closeToTray","startHidden"]) $(id).addEventListener("change",safe(async () => {
+  prefs[id]=$(id).checked; save();
+  if(id === "startHidden" && $("autostart").checked) await invoke("set_linux_autostart",{enabled:true,startHidden:prefs.startHidden});
+  await configureTray();
+}));
 
 async function initialize() {
   try { document.documentElement.dataset.desktop = await invoke("linux_desktop"); }
@@ -274,6 +302,10 @@ async function initialize() {
   $("mute").checked=prefs.muted; $("language").value=prefs.language; $("ip").value=prefs.ip;
   renderLanguage(); renderAudio();
   await listen("open-settings",() => tab(true)); await listen("open-main",() => tab(false));
+  await listen("tray-toggle-last-connection",safe(async () => {
+    if(remote) await disconnect();
+    else if(prefs.lastRemote) await connect(prefs.lastRemote);
+  }));
   try { $("version").textContent=`v${await getVersion()}`; } catch { /* version is cosmetic */ }
   try {
     if(prefs.name) { try { prefs.name=await invoke("set_client_name",{name:prefs.name}); } catch { prefs.name=""; } }
@@ -283,9 +315,9 @@ async function initialize() {
     catch(error) { trayAvailable=false; message(`${t("noTray")} ${String(error)}`); }
     $("autostart").checked=await invoke("linux_autostart_enabled");
     const startup=await invoke("linux_startup");
-    if(startup.autostart && prefs.startHidden && trayAvailable) await invoke("hide_window_to_tray");
+    if(startup.autostart && startup.start_hidden && trayAvailable) await invoke("hide_window_to_tray");
   } catch(error) { message(String(error)); }
-  try { await refreshDevices(); if(!devices.inputs.length) message(t("noInput")); } catch(error) { message(String(error)); }
+  try { await refreshDevices({quiet:true}); if(!devices.inputs.length) message(t("noInput")); } catch(error) { message(String(error)); }
   await poll(); setInterval(poll,3000);
 }
 initialize().catch(error => message(String(error)));
