@@ -33,8 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          cd dist
-          sha256sum *.AppImage *-portable.tar.gz > SHA256SUMS
+          sha256sum dist/*.AppImage dist/*-portable.tar.gz > dist/SHA256SUMS
           gh release upload "$RELEASE_TAG" \
-            *.AppImage *-portable.tar.gz SHA256SUMS \
+            dist/*.AppImage dist/*-portable.tar.gz dist/SHA256SUMS \
             --clobber
