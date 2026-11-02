@@ -7,8 +7,24 @@ use tauri::{menu::{Menu, MenuItem, PredefinedMenuItem}, tray::TrayIconBuilder, E
 pub fn audio_host() -> Result<cpal::Host, String> {
     // Use the session audio server (PipeWire-Pulse or PulseAudio). Opening ALSA
     // directly can bypass the session mixer and disrupt audio for other apps.
-    cpal::host_from_id(cpal::HostId::PulseAudio)
-        .map_err(|e| format!("No PulseAudio-compatible audio service available (PipeWire-Pulse or PulseAudio): {e}"))
+    // KDE/GTK changes can briefly restart PipeWire-Pulse. Retry host creation a
+    // few times so a transient reset does not fail device discovery or startup.
+    let mut last_error = None;
+    for attempt in 0..4 {
+        match cpal::host_from_id(cpal::HostId::PulseAudio) {
+            Ok(host) => return Ok(host),
+            Err(error) => {
+                last_error = Some(error.to_string());
+                if attempt < 3 {
+                    std::thread::sleep(std::time::Duration::from_millis(150 * (1 << attempt)));
+                }
+            }
+        }
+    }
+    Err(format!(
+        "No PulseAudio-compatible audio service available (PipeWire-Pulse or PulseAudio) after retries: {}",
+        last_error.unwrap_or_else(|| "unknown audio service error".into())
+    ))
 }
 
 #[tauri::command]
