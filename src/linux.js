@@ -24,6 +24,7 @@ let busy = false;
 let polling = false;
 let trayAvailable = false;
 let trayConfiguredAt = Date.now();
+const DEVICE_REFRESH_INTERVAL_MS = 60_000;
 let devicesRefreshAt = 0;
 let connectionRevision = 0;
 let connectedAt = null;
@@ -222,7 +223,7 @@ async function poll() {
       remote = status.connected ? status.remote?.split(":")[0] : null; renderStatus(); updateAudioHealth(status);
       updateTrayConnectionMenu();
     }
-    if (Date.now() - devicesRefreshAt > 10000) await refreshDevices({quiet:true});
+    if (Date.now() - devicesRefreshAt > DEVICE_REFRESH_INTERVAL_MS) await refreshDevices({quiet:true});
     await refreshTrayAvailability();
     if (remote && !busy && revision === connectionRevision) {
       try { const value = await invoke("measure_latency"); if (busy || revision !== connectionRevision) return; $("latency").textContent = `${t("latency")} : ${Math.round(value)} ms`; }
