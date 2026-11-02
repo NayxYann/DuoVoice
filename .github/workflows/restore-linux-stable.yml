@@ -1,0 +1,32 @@
+name: Restore Linux v1.4.8
+
+on:
+  push:
+    branches: [codex/linux-restore-1.4.8]
+
+permissions:
+  contents: write
+
+jobs:
+  restore-linux-assets:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download and verify the last published Linux build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir restore
+          gh release download linux-v1.4.8-preview.10 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "DuoVoice_1.4.8_amd64.AppImage" \
+            --pattern "DuoVoice_1.4.8_linux-x86_64-portable.tar.gz" \
+            --pattern "SHA256SUMS" \
+            --dir restore
+          cd restore
+          sha256sum --check SHA256SUMS
+          gh release upload v1.4.8 \
+            DuoVoice_1.4.8_amd64.AppImage \
+            DuoVoice_1.4.8_linux-x86_64-portable.tar.gz \
+            SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
