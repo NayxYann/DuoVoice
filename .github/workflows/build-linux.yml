@@ -2,7 +2,7 @@ name: Build Linux
 
 on:
   push:
-    branches: [codex/linux-isolated-preview]
+    branches: [codex/linux-isolated-preview, codex/linux-audio-publish-1.4.8-v2]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -64,6 +64,19 @@ jobs:
           cd src-tauri/target/release/bundle/appimage
           sha256sum *.AppImage *-portable.tar.gz > SHA256SUMS
 
+      - name: Replace Linux assets on v1.4.8
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/linux-audio-publish-1.4.8-v2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node -e "if (require('./package.json').version !== '1.4.8') process.exit(1)"
+          gh release view v1.4.8 >/dev/null
+          gh release upload v1.4.8 \
+            src-tauri/target/release/bundle/appimage/*.AppImage \
+            src-tauri/target/release/bundle/appimage/*-portable.tar.gz \
+            src-tauri/target/release/bundle/appimage/SHA256SUMS \
+            --clobber
+
       - name: Upload Linux preview artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -71,5 +84,5 @@ jobs:
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/appimage/*-portable.tar.gz
+            src-tauri/target/release/bundle/appimage/SHA256SUMS
           if-no-files-found: error
-
