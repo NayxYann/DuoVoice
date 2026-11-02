@@ -2,7 +2,7 @@ name: Build Linux
 
 on:
   push:
-    branches: [codex/linux-isolated-preview]
+    branches: [codex/linux-isolated-preview, codex/linux-audio-publish-1.4.8]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -68,6 +68,23 @@ jobs:
           bash scripts/package-linux-portable.sh
           cd src-tauri/target/release/bundle/appimage
           sha256sum *.AppImage *-portable.tar.gz > SHA256SUMS
+
+      - name: Replace Linux assets in v1.4.8 release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/linux-audio-publish-1.4.8'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [[ "$version" != "1.4.8" ]]; then
+            echo "Expected package version 1.4.8, got $version" >&2
+            exit 1
+          fi
+          gh release view v1.4.8 >/dev/null
+          gh release upload v1.4.8 \
+            src-tauri/target/release/bundle/appimage/*.AppImage \
+            src-tauri/target/release/bundle/appimage/*-portable.tar.gz \
+            src-tauri/target/release/bundle/appimage/SHA256SUMS \
+            --clobber
 
       - name: Publish Linux preview from the isolated branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/linux-isolated-preview'
